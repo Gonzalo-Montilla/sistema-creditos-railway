@@ -23,12 +23,15 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 # SECURITY WARNING: keep the secret key used in production secret!
 import os
-SECRET_KEY = os.environ.get('SECRET_KEY', 'django-production-secret-key-railway-2024-safe')
+
+# Configuración robusta para Railway
+SECRET_KEY = os.getenv('SECRET_KEY', 'django-insecure-railway-production-key-2024-safe-default')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = os.environ.get('DEBUG', 'False').lower() == 'true'
+DEBUG = os.getenv('DEBUG', 'False').lower() in ['true', '1', 'yes']
 
-ALLOWED_HOSTS = ['*']  # Para Railway
+# Hosts permitidos - Railway y desarrollo
+ALLOWED_HOSTS = ['*']
 
 
 # Application definition
