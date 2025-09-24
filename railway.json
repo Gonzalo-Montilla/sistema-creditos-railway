@@ -3,8 +3,6 @@
     "builder": "NIXPACKS"
   },
   "deploy": {
-    "startCommand": "gunicorn creditos.wsgi --log-file -",
-    "healthcheckPath": "/",
-    "healthcheckTimeout": 100
+    "startCommand": "gunicorn creditos.wsgi --host 0.0.0.0 --port $PORT"
   }
 }

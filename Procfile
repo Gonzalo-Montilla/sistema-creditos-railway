@@ -1,1 +1,2 @@
-web: python manage.py migrate && gunicorn creditos.wsgi:application --bind 0.0.0.0:$PORT
+web: gunicorn creditos.wsgi --host 0.0.0.0 --port $PORT
+release: python manage.py migrate

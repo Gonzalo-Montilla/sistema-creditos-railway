@@ -33,6 +33,10 @@ DEBUG = os.getenv('DEBUG', 'False').lower() in ['true', '1', 'yes']
 # Hosts permitidos - Railway y desarrollo
 ALLOWED_HOSTS = ['*']
 
+# Configuración adicional para producción
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+SECURE_SSL_REDIRECT = False  # Railway maneja SSL
+
 
 # Application definition
 
