@@ -137,8 +137,16 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/5.2/howto/static-files/
 
 STATIC_URL = '/static/'
-STATICFILES_DIRS = [BASE_DIR / 'static']
-STATIC_ROOT = BASE_DIR / 'staticfiles'
+
+# Configuración para Railway
+if os.getenv('RAILWAY_ENVIRONMENT'):
+    # Producción en Railway
+    STATIC_ROOT = '/app/staticfiles'
+    STATICFILES_DIRS = []
+else:
+    # Desarrollo local
+    STATICFILES_DIRS = [BASE_DIR / 'static']
+    STATIC_ROOT = BASE_DIR / 'staticfiles'
 
 # WhiteNoise configuration
 STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
