@@ -13,7 +13,6 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 from pathlib import Path
 import os
 import dj_database_url
-from decouple import config
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -23,10 +22,11 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = config('SECRET_KEY', default='django-insecure-@()a_6f47ow!4ejnut2rpzs=vww^ti^jp+6*-@22d&s1r%3#uv')
+import os
+SECRET_KEY = os.environ.get('SECRET_KEY', 'django-production-secret-key-railway-2024-safe')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = config('DEBUG', default=True, cast=bool)
+DEBUG = os.environ.get('DEBUG', 'False').lower() == 'true'
 
 ALLOWED_HOSTS = ['*']  # Para Railway
 
@@ -77,8 +77,8 @@ WSGI_APPLICATION = 'creditos.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
 
-# Usar PostgreSQL en producción (Railway) y SQLite en desarrollo
-DATABASE_URL = config('DATABASE_URL', default=None)
+# Configuración de base de datos
+DATABASE_URL = os.environ.get('DATABASE_URL')
 
 if DATABASE_URL:
     # Producción - Railway con PostgreSQL
