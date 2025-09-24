@@ -74,4 +74,11 @@ urlpatterns = [
     path('tareas/actualizar/<int:tarea_id>/', views.actualizar_tarea, name='actualizar_tarea'),
     path('tareas/supervisor/', views.panel_supervisor, name='panel_supervisor'),
     path('tareas/generar/', views.generar_tareas_diarias, name='generar_tareas_diarias'),
+    
+    # Gestión de Usuarios
+    path('usuarios/', views.lista_usuarios, name='lista_usuarios'),
+    path('nuevo-usuario/', views.nuevo_usuario, name='nuevo_usuario'),
+    path('editar-usuario/<int:user_id>/', views.editar_usuario, name='editar_usuario'),
+    path('eliminar-usuario/<int:user_id>/', views.eliminar_usuario, name='eliminar_usuario'),
+    path('cambiar-password/<int:user_id>/', views.cambiar_password_usuario, name='cambiar_password_usuario'),
 ]

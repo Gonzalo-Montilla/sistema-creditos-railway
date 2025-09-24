@@ -490,6 +490,13 @@
                                 Cobradores
                             </a>
                         </li>
+                        <li class="nav-item">
+                            <a class="nav-link {% if 'usuario' in request.resolver_match.url_name %}active{% endif %}" 
+                               href="{% url 'lista_usuarios' %}">
+                                <i class="bi bi-people-fill me-2"></i>
+                                Usuarios
+                            </a>
+                        </li>
                     </ul>
                     
                     <hr class="my-3" style="border-color: rgba(255, 255, 255, 0.3);">

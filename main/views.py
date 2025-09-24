@@ -1675,6 +1675,179 @@ def cartera_vencida(request):
     
     return render(request, 'cartera/cartera_vencida.html', context)
 
+# ========================================
+# VISTAS PARA GESTIÓN DE USUARIOS
+# ========================================
+
+@login_required
+def lista_usuarios(request):
+    """Lista todos los usuarios del sistema"""
+    from django.contrib.auth.models import User
+    from django.core.paginator import Paginator
+    
+    usuarios = User.objects.all().order_by('-date_joined')
+    
+    # Paginación
+    paginator = Paginator(usuarios, 15)
+    page_number = request.GET.get('page')
+    usuarios_paginados = paginator.get_page(page_number)
+    
+    context = {
+        'usuarios': usuarios_paginados,
+        'total_usuarios': usuarios.count(),
+    }
+    
+    return render(request, 'usuarios/lista_usuarios.html', context)
+
+@login_required
+def nuevo_usuario(request):
+    """Crear nuevo usuario"""
+    from django.contrib.auth.models import User
+    from django.contrib.auth.forms import UserCreationForm
+    from django import forms
+    
+    class UsuarioForm(UserCreationForm):
+        email = forms.EmailField(required=True, label='Email')
+        first_name = forms.CharField(max_length=30, required=True, label='Nombre')
+        last_name = forms.CharField(max_length=30, required=True, label='Apellido')
+        is_staff = forms.BooleanField(required=False, label='Es administrador')
+        
+        class Meta:
+            model = User
+            fields = ('username', 'email', 'first_name', 'last_name', 'password1', 'password2', 'is_staff')
+            labels = {
+                'username': 'Nombre de usuario',
+            }
+            help_texts = {
+                'username': 'Requerido. 150 caracteres o menos. Solo letras, dígitos y @/./+/-/_ permitidos.',
+            }
+        
+        def __init__(self, *args, **kwargs):
+            super().__init__(*args, **kwargs)
+            self.fields['password1'].label = 'Contraseña'
+            self.fields['password2'].label = 'Confirmar contraseña'
+            self.fields['password1'].help_text = (
+                'Tu contraseña debe tener al menos 8 caracteres, '
+                'no puede ser demasiado común y no puede ser completamente numérica.'
+            )
+            self.fields['password2'].help_text = 'Ingresa la misma contraseña para verificación.'
+            
+            # Agregar clases CSS
+            for field_name, field in self.fields.items():
+                if field_name != 'is_staff':
+                    field.widget.attrs.update({
+                        'class': 'form-control',
+                        'placeholder': field.label
+                    })
+                else:
+                    field.widget.attrs.update({'class': 'form-check-input'})
+    
+    if request.method == 'POST':
+        form = UsuarioForm(request.POST)
+        if form.is_valid():
+            usuario = form.save()
+            usuario.is_superuser = form.cleaned_data['is_staff']
+            usuario.save()
+            messages.success(request, f'Usuario "{usuario.username}" creado exitosamente')
+            return redirect('lista_usuarios')
+    else:
+        form = UsuarioForm()
+    
+    return render(request, 'usuarios/nuevo_usuario.html', {'form': form})
+
+@login_required
+def editar_usuario(request, user_id):
+    """Editar usuario existente"""
+    from django.contrib.auth.models import User
+    from django import forms
+    
+    usuario = get_object_or_404(User, id=user_id)
+    
+    class EditarUsuarioForm(forms.ModelForm):
+        class Meta:
+            model = User
+            fields = ['username', 'email', 'first_name', 'last_name', 'is_active', 'is_staff']
+            labels = {
+                'username': 'Nombre de usuario',
+                'email': 'Email',
+                'first_name': 'Nombre',
+                'last_name': 'Apellido', 
+                'is_active': 'Usuario activo',
+                'is_staff': 'Es administrador',
+            }
+        
+        def __init__(self, *args, **kwargs):
+            super().__init__(*args, **kwargs)
+            # Agregar clases CSS
+            for field_name, field in self.fields.items():
+                if field_name not in ['is_active', 'is_staff']:
+                    field.widget.attrs.update({
+                        'class': 'form-control',
+                        'placeholder': field.label
+                    })
+                else:
+                    field.widget.attrs.update({'class': 'form-check-input'})
+    
+    if request.method == 'POST':
+        form = EditarUsuarioForm(request.POST, instance=usuario)
+        if form.is_valid():
+            usuario = form.save()
+            usuario.is_superuser = form.cleaned_data['is_staff']
+            usuario.save()
+            messages.success(request, f'Usuario "{usuario.username}" actualizado exitosamente')
+            return redirect('lista_usuarios')
+    else:
+        form = EditarUsuarioForm(instance=usuario)
+    
+    return render(request, 'usuarios/editar_usuario.html', {
+        'form': form, 
+        'usuario': usuario
+    })
+
+@login_required
+def eliminar_usuario(request, user_id):
+    """Eliminar usuario"""
+    from django.contrib.auth.models import User
+    
+    usuario = get_object_or_404(User, id=user_id)
+    
+    # No permitir eliminar al usuario actual
+    if usuario == request.user:
+        messages.error(request, 'No puedes eliminar tu propio usuario')
+        return redirect('lista_usuarios')
+    
+    if request.method == 'POST':
+        username = usuario.username
+        usuario.delete()
+        messages.success(request, f'Usuario "{username}" eliminado exitosamente')
+        return redirect('lista_usuarios')
+    
+    return render(request, 'usuarios/confirmar_eliminar_usuario.html', {
+        'usuario': usuario
+    })
+
+@login_required
+def cambiar_password_usuario(request, user_id):
+    """Cambiar contraseña de usuario"""
+    from django.contrib.auth.models import User
+    from django.contrib.auth.forms import SetPasswordForm
+    
+    usuario = get_object_or_404(User, id=user_id)
+    
+    if request.method == 'POST':
+        form = SetPasswordForm(usuario, request.POST)
+        if form.is_valid():
+            form.save()
+            messages.success(request, f'Contraseña de "{usuario.username}" cambiada exitosamente')
+            return redirect('lista_usuarios')
+    else:
+        form = SetPasswordForm(usuario)
+    
+    return render(request, 'usuarios/cambiar_password.html', {
+        'form': form,
+        'usuario': usuario
+    })
+
 @login_required
 def actualizar_cartera(request):
     """Actualiza el estado de cartera de todos los créditos"""
