@@ -1,0 +1,509 @@
+{% extends 'base.html' %}
+
+{% block title %}Nuevo Crédito - Sistema de Créditos{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1 class="page-title mb-0">
+        <i class="fas fa-plus-circle"></i> Nuevo Crédito
+    </h1>
+    <a href="{% url 'creditos' %}" class="btn btn-secondary">
+        <i class="fas fa-arrow-left"></i> Volver
+    </a>
+</div>
+
+<div class="row">
+    <div class="col-md-8">
+        <!-- Formulario Principal -->
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="fas fa-edit"></i> Información del Crédito</h5>
+            </div>
+            <div class="card-body">
+                <form method="post" id="creditoForm">
+                    {% csrf_token %}
+                    
+                    <!-- Búsqueda de Cliente por Cédula -->
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="{{ form.cedula_cliente.id_for_label }}" class="form-label">
+                                    <i class="fas fa-search"></i> {{ form.cedula_cliente.label }} *
+                                </label>
+                                {{ form.cedula_cliente }}
+                                <div class="form-text">
+                                    <small class="text-muted">Escriba la cédula para buscar el cliente</small>
+                                </div>
+                                {% if form.cedula_cliente.errors %}
+                                    <div class="text-danger">{{ form.cedula_cliente.errors }}</div>
+                                {% endif %}
+                            </div>
+                        </div>
+                        
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label class="form-label">
+                                    <i class="fas fa-user-check"></i> Cliente Encontrado
+                                </label>
+                                <div class="card bg-light border" id="cliente-info" style="display: none;">
+                                    <div class="card-body py-2">
+                                        <div class="d-flex align-items-center">
+                                            <div id="cliente-foto-container" class="me-3" style="display: none;">
+                                                <img id="cliente-foto" src="" alt="Foto del Cliente" 
+                                                     class="rounded-circle border border-primary" 
+                                                     style="width: 50px; height: 50px; object-fit: cover;">
+                                            </div>
+                                            <div class="flex-grow-1">
+                                                <div id="cliente-nombre" class="fw-bold text-primary"></div>
+                                                <div id="cliente-detalles" class="small text-muted"></div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="text-muted" id="cliente-placeholder">
+                                    <i class="fas fa-info-circle"></i> Ingrese una cédula para ver la información del cliente
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Campo oculto para el cliente -->
+                    {{ form.cliente }}
+                    
+                    <!-- Monto y Tasa -->
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="{{ form.monto.id_for_label }}" class="form-label">
+                                    <i class="fas fa-dollar-sign"></i> Monto del Crédito *
+                                </label>
+                                {{ form.monto }}
+                                {% if form.monto.errors %}
+                                    <div class="text-danger">{{ form.monto.errors }}</div>
+                                {% endif %}
+                            </div>
+                        </div>
+                        
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="{{ form.tasa_interes.id_for_label }}" class="form-label">
+                                    <i class="fas fa-percentage"></i> Tasa de Interés Anual (%) *
+                                </label>
+                                {{ form.tasa_interes }}
+                                <div class="form-text">
+                                    <small class="text-muted">
+                                        <i class="fas fa-lightbulb"></i> 
+                                        Se calculará automáticamente la tasa equivalente por período
+                                    </small>
+                                </div>
+                                {% if form.tasa_interes.errors %}
+                                    <div class="text-danger">{{ form.tasa_interes.errors }}</div>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Tipo de Plazo y Cantidad de Cuotas -->
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="{{ form.tipo_plazo.id_for_label }}" class="form-label">
+                                    <i class="fas fa-calendar-alt"></i> Tipo de Plazo *
+                                </label>
+                                {{ form.tipo_plazo }}
+                                {% if form.tipo_plazo.errors %}
+                                    <div class="text-danger">{{ form.tipo_plazo.errors }}</div>
+                                {% endif %}
+                            </div>
+                        </div>
+                        
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="{{ form.cantidad_cuotas.id_for_label }}" class="form-label">
+                                    <i class="fas fa-list-ol"></i> Cantidad de Cuotas *
+                                </label>
+                                {{ form.cantidad_cuotas }}
+                                <div class="form-text">
+                                    <small class="text-muted" id="plazo-equivalente">Equivalente a: --</small>
+                                </div>
+                                {% if form.cantidad_cuotas.errors %}
+                                    <div class="text-danger">{{ form.cantidad_cuotas.errors }}</div>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Cobrador y Estado -->
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="{{ form.cobrador.id_for_label }}" class="form-label">
+                                    <i class="bi bi-cash-coin"></i> Cobrador Asignado
+                                </label>
+                                {{ form.cobrador }}
+                                <div class="form-text">
+                                    <small class="text-muted">
+                                        <i class="fas fa-info-circle"></i> 
+                                        Opcional: Asigne un cobrador para gestionar este crédito
+                                    </small>
+                                </div>
+                                {% if form.cobrador.errors %}
+                                    <div class="text-danger">{{ form.cobrador.errors }}</div>
+                                {% endif %}
+                            </div>
+                        </div>
+                        
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="{{ form.estado.id_for_label }}" class="form-label">
+                                    <i class="fas fa-flag"></i> Estado *
+                                </label>
+                                {{ form.estado }}
+                                {% if form.estado.errors %}
+                                    <div class="text-danger">{{ form.estado.errors }}</div>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                        <a href="{% url 'creditos' %}" class="btn btn-secondary me-md-2">
+                            <i class="fas fa-times"></i> Cancelar
+                        </a>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-save"></i> Crear Crédito
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-4">
+        <!-- Calculadora de Crédito -->
+        <div class="card">
+            <div class="card-header bg-primary text-white">
+                <h6 class="mb-0">
+                    <i class="fas fa-calculator"></i> Calculadora de Crédito
+                </h6>
+            </div>
+            <div class="card-body">
+                <div class="text-center">
+                    <div class="mb-3">
+                        <small class="text-muted">Complete los campos para ver cálculos</small>
+                    </div>
+                </div>
+                
+                <div id="calculadora-resultados" style="display: none;">
+                    <div class="row g-3">
+                        <div class="col-12">
+                            <div class="bg-light p-3 rounded">
+                                <div class="text-center">
+                                    <small class="text-muted">Valor de Cada Cuota</small>
+                                    <div class="fs-4 fw-bold text-success" id="valor-cuota">$0</div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="col-12">
+                            <div class="bg-warning bg-opacity-10 p-2 rounded text-center">
+                                <small class="text-muted">Tasa Equivalente por Período</small>
+                                <div class="fw-bold text-warning" id="tasa-periodo">0%</div>
+                            </div>
+                        </div>
+                        
+                        <div class="col-6">
+                            <div class="text-center">
+                                <small class="text-muted">Total Interés</small>
+                                <div class="fw-bold text-info" id="total-interes">$0</div>
+                            </div>
+                        </div>
+                        
+                        <div class="col-6">
+                            <div class="text-center">
+                                <small class="text-muted">Total a Pagar</small>
+                                <div class="fw-bold text-primary" id="total-pagar">$0</div>
+                            </div>
+                        </div>
+                        
+                        <div class="col-12">
+                            <hr>
+                            <div class="alert alert-info alert-sm">
+                                <div class="small" id="descripcion-pago">
+                                    <i class="fas fa-info-circle"></i> Los cálculos se actualizarán automáticamente
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Ayuda -->
+        <div class="card mt-3">
+            <div class="card-header">
+                <h6 class="mb-0">
+                    <i class="fas fa-question-circle"></i> Ayuda
+                </h6>
+            </div>
+            <div class="card-body">
+                <div class="small">
+                    <p><strong>Tipos de Plazo:</strong></p>
+                    <ul class="mb-2">
+                        <li><strong>Diario:</strong> Pagos todos los días</li>
+                        <li><strong>Semanal:</strong> Pagos cada 7 días</li>
+                        <li><strong>Quincenal:</strong> Pagos cada 15 días</li>
+                        <li><strong>Mensual:</strong> Pagos cada mes</li>
+                    </ul>
+                    <p><strong>Nota:</strong> El sistema calculará automáticamente las fechas de pago una vez que se desembolse el crédito.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Configuración global
+let timeoutId = null;
+const API_DELAY = 300; // ms
+
+// Función para buscar cliente por cédula
+function buscarCliente(cedula) {
+    if (!cedula || cedula.length < 3) {
+        mostrarClientePlaceholder();
+        return;
+    }
+    
+    // Simular búsqueda AJAX (en un proyecto real usarías fetch)
+    // Por ahora, validaremos en el cliente
+    
+    fetch(`/buscar-cliente/?cedula=${encodeURIComponent(cedula)}`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                mostrarClienteEncontrado(data.cliente);
+                // Asignar cliente al campo oculto
+                document.getElementById('id_cliente').value = data.cliente.id;
+            } else {
+                mostrarClienteNoEncontrado(cedula);
+            }
+        })
+        .catch(error => {
+            console.error('Error en búsqueda:', error);
+            mostrarClienteNoEncontrado(cedula);
+        });
+}
+
+function mostrarClienteEncontrado(cliente) {
+    document.getElementById('cliente-placeholder').style.display = 'none';
+    document.getElementById('cliente-info').style.display = 'block';
+    document.getElementById('cliente-info').className = 'card bg-light border'; // Restaurar estilo normal
+    
+    // Mostrar información del cliente
+    document.getElementById('cliente-nombre').textContent = `${cliente.nombres} ${cliente.apellidos}`;
+    document.getElementById('cliente-detalles').innerHTML = `
+        <i class="fas fa-id-card"></i> Cédula: ${cliente.cedula}<br>
+        <i class="fas fa-phone"></i> Celular: ${cliente.celular}<br>
+        <i class="fas fa-map-marker-alt"></i> ${cliente.barrio}
+    `;
+    
+    // Manejar la foto del rostro
+    const fotoContainer = document.getElementById('cliente-foto-container');
+    const fotoImg = document.getElementById('cliente-foto');
+    
+    if (cliente.foto_rostro) {
+        fotoImg.src = cliente.foto_rostro;
+        fotoContainer.style.display = 'block';
+        
+        // Agregar manejo de error para la imagen
+        fotoImg.onerror = function() {
+            console.log('Error al cargar la foto del cliente');
+            this.src = 'data:image/svg+xml;base64,' + btoa(`
+                <svg xmlns="http://www.w3.org/2000/svg" width="50" height="50" viewBox="0 0 24 24" fill="#6c757d">
+                    <path d="M12 2C13.1 2 14 2.9 14 4C14 5.1 13.1 6 12 6C10.9 6 10 5.1 10 4C10 2.9 10.9 2 12 2ZM21 9V7L15 13.5C14.8 13.8 14.3 14 14 14C13.7 14 13.2 13.8 13 13.5L7 7V9C7 10.1 7.9 11 9 11V12.5L10.5 17H13.5L15 12.5V11C16.1 11 17 10.1 17 9Z"/>
+                </svg>
+            `);
+            this.style.backgroundColor = '#f8f9fa';
+        };
+    } else {
+        // Si no hay foto, mostrar un avatar por defecto
+        fotoImg.src = 'data:image/svg+xml;base64,' + btoa(`
+            <svg xmlns="http://www.w3.org/2000/svg" width="50" height="50" viewBox="0 0 24 24" fill="#007bff">
+                <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
+            </svg>
+        `);
+        fotoImg.style.backgroundColor = '#e3f2fd';
+        fotoContainer.style.display = 'block';
+    }
+}
+
+function mostrarClienteNoEncontrado(cedula) {
+    document.getElementById('cliente-placeholder').style.display = 'none';
+    document.getElementById('cliente-info').style.display = 'block';
+    document.getElementById('cliente-info').className = 'card bg-danger text-white border';
+    document.getElementById('cliente-nombre').textContent = 'Cliente no encontrado';
+    document.getElementById('cliente-detalles').innerHTML = `
+        <i class="fas fa-exclamation-triangle"></i> No se encontró un cliente con cédula "${cedula}"<br>
+        <small>Verifique que el cliente esté registrado y activo</small>
+    `;
+    
+    // Ocultar la foto
+    document.getElementById('cliente-foto-container').style.display = 'none';
+    
+    // Limpiar campo oculto
+    document.getElementById('id_cliente').value = '';
+}
+
+function mostrarClientePlaceholder() {
+    document.getElementById('cliente-placeholder').style.display = 'block';
+    document.getElementById('cliente-info').style.display = 'none';
+    document.getElementById('cliente-info').className = 'card bg-light border';
+    
+    // Ocultar la foto
+    document.getElementById('cliente-foto-container').style.display = 'none';
+    
+    // Limpiar campo oculto
+    document.getElementById('id_cliente').value = '';
+}
+
+// Calculadora de crédito
+function calcularCredito() {
+    const monto = parseFloat(document.getElementById('monto').value) || 0;
+    const tasaAnual = parseFloat(document.getElementById('tasa_interes').value) || 0;
+    const tipoplazo = document.getElementById('tipo_plazo').value;
+    const cuotas = parseInt(document.getElementById('cantidad_cuotas').value) || 0;
+    
+    if (monto <= 0 || tasaAnual < 0 || cuotas <= 0) {
+        document.getElementById('calculadora-resultados').style.display = 'none';
+        return;
+    }
+    
+    // Calcular tasa por período
+    let tasaPeriodo;
+    let tasaPeriodoPorcentaje;
+    let textoTipo;
+    let textoSingular;
+    
+    switch(tipoplazo) {
+        case 'DIARIO':
+            tasaPeriodo = tasaAnual / 365 / 100;
+            tasaPeriodoPorcentaje = tasaAnual / 365;
+            textoTipo = 'diarios';
+            textoSingular = 'diario';
+            break;
+        case 'SEMANAL':
+            tasaPeriodo = tasaAnual / 52 / 100;
+            tasaPeriodoPorcentaje = tasaAnual / 52;
+            textoTipo = 'semanales';
+            textoSingular = 'semanal';
+            break;
+        case 'QUINCENAL':
+            tasaPeriodo = tasaAnual / 24 / 100;
+            tasaPeriodoPorcentaje = tasaAnual / 24;
+            textoTipo = 'quincenales';
+            textoSingular = 'quincenal';
+            break;
+        case 'MENSUAL':
+        default:
+            tasaPeriodo = tasaAnual / 12 / 100;
+            tasaPeriodoPorcentaje = tasaAnual / 12;
+            textoTipo = 'mensuales';
+            textoSingular = 'mensual';
+            break;
+    }
+    
+    // Calcular cuota usando fórmula de amortización francesa
+    let valorCuota;
+    if (tasaPeriodo > 0) {
+        const factor = (tasaPeriodo * Math.pow(1 + tasaPeriodo, cuotas)) / (Math.pow(1 + tasaPeriodo, cuotas) - 1);
+        valorCuota = monto * factor;
+    } else {
+        valorCuota = monto / cuotas;
+    }
+    
+    const montoTotal = valorCuota * cuotas;
+    const totalInteres = montoTotal - monto;
+    
+    // Mostrar resultados
+    document.getElementById('valor-cuota').textContent = '$' + valorCuota.toLocaleString('es-CO', {maximumFractionDigits: 0});
+    document.getElementById('total-interes').textContent = '$' + totalInteres.toLocaleString('es-CO', {maximumFractionDigits: 0});
+    document.getElementById('total-pagar').textContent = '$' + montoTotal.toLocaleString('es-CO', {maximumFractionDigits: 0});
+    
+    // Mostrar tasa equivalente por período
+    document.getElementById('tasa-periodo').textContent = tasaPeriodoPorcentaje.toFixed(2) + '% ' + textoSingular;
+    document.getElementById('tasa-periodo').title = `Tasa anual ${tasaAnual}% equivale a ${tasaPeriodoPorcentaje.toFixed(4)}% ${textoSingular}`;
+    
+    document.getElementById('descripcion-pago').innerHTML = `
+        <i class="fas fa-info-circle"></i>
+        <strong>Crédito de $${monto.toLocaleString('es-CO', {maximumFractionDigits: 0})}</strong><br>
+        📅 ${cuotas} cuotas ${textoTipo} de <strong>$${valorCuota.toLocaleString('es-CO', {maximumFractionDigits: 0})}</strong><br>
+        📈 Tasa: ${tasaAnual}% anual (${tasaPeriodoPorcentaje.toFixed(2)}% ${textoSingular})<br>
+        💰 Total interés: $${totalInteres.toLocaleString('es-CO', {maximumFractionDigits: 0})}
+    `;
+    
+    document.getElementById('calculadora-resultados').style.display = 'block';
+    
+    // Actualizar equivalencia en meses
+    actualizarEquivalencia();
+}
+
+function actualizarEquivalencia() {
+    const tipoplazo = document.getElementById('tipo_plazo').value;
+    const cuotas = parseInt(document.getElementById('cantidad_cuotas').value) || 0;
+    const equivalenteEl = document.getElementById('plazo-equivalente');
+    
+    if (cuotas <= 0) {
+        equivalenteEl.textContent = 'Equivalente a: --';
+        return;
+    }
+    
+    let meses;
+    switch(tipoplazo) {
+        case 'DIARIO':
+            meses = Math.round((cuotas / 30) * 10) / 10;
+            break;
+        case 'SEMANAL':
+            meses = Math.round((cuotas / 4.33) * 10) / 10;
+            break;
+        case 'QUINCENAL':
+            meses = Math.round((cuotas / 2) * 10) / 10;
+            break;
+        case 'MENSUAL':
+        default:
+            meses = cuotas;
+            break;
+    }
+    
+    equivalenteEl.textContent = `Equivalente a: ${meses} meses aprox.`;
+}
+
+// Event listeners
+document.addEventListener('DOMContentLoaded', function() {
+    // Búsqueda de cliente por cédula
+    const cedulaInput = document.getElementById('cedula_cliente');
+    if (cedulaInput) {
+        cedulaInput.addEventListener('input', function() {
+            clearTimeout(timeoutId);
+            timeoutId = setTimeout(() => {
+                buscarCliente(this.value.trim());
+            }, API_DELAY);
+        });
+    }
+    
+    // Calculadora de crédito
+    const campos = ['monto', 'tasa_interes', 'tipo_plazo', 'cantidad_cuotas'];
+    campos.forEach(campo => {
+        const element = document.getElementById(campo);
+        if (element) {
+            element.addEventListener('input', calcularCredito);
+            element.addEventListener('change', calcularCredito);
+        }
+    });
+    
+    // Calcular equivalencia inicial
+    actualizarEquivalencia();
+});
+</script>
+{% endblock %}

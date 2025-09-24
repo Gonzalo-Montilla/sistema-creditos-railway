@@ -1,0 +1,211 @@
+{% extends 'base.html' %}
+
+{% block title %}Dashboard - Sistema de Créditos{% endblock %}
+
+{% block content %}
+<h1 class="page-title">
+    <i class="fas fa-tachometer-alt"></i> Dashboard Principal
+</h1>
+
+<div class="row g-4 mb-5">
+    <div class="col-xl-3 col-md-6">
+        <div class="metric-card primary" onclick="window.location='{% url "clientes" %}'">
+            <i class="fas fa-users fa-3x"></i>
+            <div class="metric-number">{{ total_clientes }}</div>
+            <h5>Total Clientes</h5>
+            <p>Clientes registrados</p>
+        </div>
+    </div>
+    
+    <div class="col-xl-3 col-md-6">
+        <div class="metric-card success" onclick="window.location='{% url "creditos" %}'">
+            <i class="fas fa-credit-card fa-3x"></i>
+            <div class="metric-number">{{ total_creditos }}</div>
+            <h5>Créditos Activos</h5>
+            <p>Créditos en proceso</p>
+        </div>
+    </div>
+    
+    <div class="col-xl-3 col-md-6">
+        <div class="metric-card warning" onclick="window.location='{% url "pagos" %}'">
+            <i class="fas fa-money-bill-wave fa-3x"></i>
+            <div class="metric-number">{{ total_pagos }}</div>
+            <h5>Pagos Realizados</h5>
+            <p>Pagos este mes</p>
+        </div>
+    </div>
+    
+    <div class="col-xl-3 col-md-6">
+        <div class="metric-card danger">
+            <i class="fas fa-exclamation-triangle fa-3x"></i>
+            <div class="metric-number">{{ creditos_vencidos }}</div>
+            <h5>Créditos Vencidos</h5>
+            <p>Requieren atención</p>
+        </div>
+    </div>
+</div>
+
+<div class="row g-4">
+    <div class="col-md-6">
+        <div class="card h-100">
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0">
+                    <i class="fas fa-chart-line"></i> Resumen Financiero
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="row text-center">
+                    <div class="col-6">
+                        <h3 class="text-success">${{ monto_total_prestado|floatformat:0 }}</h3>
+                        <p class="text-muted">Total Prestado</p>
+                    </div>
+                    <div class="col-6">
+                        <h3 class="text-primary">${{ monto_total_recaudado|floatformat:0 }}</h3>
+                        <p class="text-muted">Total Recaudado</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-6">
+        <div class="card h-100">
+            <div class="card-header bg-success text-white">
+                <h5 class="mb-0">
+                    <i class="fas fa-tasks"></i> Acciones Rápidas
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="d-grid gap-2">
+                    <a href="{% url 'nuevo_cliente' %}" class="btn btn-outline-primary">
+                        <i class="fas fa-user-plus"></i> Nuevo Cliente
+                    </a>
+                    <a href="{% url 'nuevo_credito' %}" class="btn btn-outline-success">
+                        <i class="fas fa-plus-circle"></i> Nuevo Crédito
+                    </a>
+                    <a href="{% url 'nuevo_pago' %}" class="btn btn-outline-warning">
+                        <i class="fas fa-money-check"></i> Registrar Pago
+                    </a>
+                    <a href="{% url 'recaudacion_cobradores' %}" class="btn btn-outline-info">
+                        <i class="bi bi-graph-up"></i> Ver Recaudación
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-4 mt-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header bg-info text-white">
+                <h5 class="mb-0">
+                    <i class="fas fa-clock"></i> Actividad Reciente
+                </h5>
+            </div>
+            <div class="card-body">
+                {% if actividad_reciente %}
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>Fecha</th>
+                                <th>Cliente</th>
+                                <th>Acción</th>
+                                <th>Monto</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for actividad in actividad_reciente %}
+                            <tr>
+                                <td>{{ actividad.fecha|date:"d/m/Y H:i" }}</td>
+                                <td>{{ actividad.cliente }}</td>
+                                <td>{{ actividad.accion }}</td>
+                                <td class="text-success">${{ actividad.monto|floatformat:0 }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="text-center text-muted py-4">
+                    <i class="fas fa-inbox fa-3x mb-3"></i>
+                    <p>No hay actividad reciente</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // Efectos y animaciones para el dashboard
+    document.addEventListener('DOMContentLoaded', function() {
+        // Animación de entrada de las tarjetas
+        const cards = document.querySelectorAll('.metric-card');
+        cards.forEach((card, index) => {
+            card.style.opacity = '0';
+            card.style.transform = 'translateY(30px)';
+            
+            setTimeout(() => {
+                card.style.transition = 'all 0.5s cubic-bezier(0.4, 0, 0.2, 1)';
+                card.style.opacity = '1';
+                card.style.transform = 'translateY(0)';
+            }, index * 150);
+        });
+        
+        // Contador animado para los números
+        const numbers = document.querySelectorAll('.metric-number');
+        numbers.forEach((number, index) => {
+            const targetValue = parseInt(number.textContent);
+            let currentValue = 0;
+            const increment = Math.ceil(targetValue / 30);
+            
+            setTimeout(() => {
+                const counter = setInterval(() => {
+                    currentValue += increment;
+                    if (currentValue >= targetValue) {
+                        currentValue = targetValue;
+                        clearInterval(counter);
+                    }
+                    number.textContent = currentValue;
+                }, 30);
+            }, index * 150 + 200);
+        });
+        
+        // Efecto de ripple al hacer clic en las tarjetas
+        cards.forEach(card => {
+            card.addEventListener('click', function(e) {
+                const ripple = document.createElement('div');
+                ripple.style.position = 'absolute';
+                ripple.style.borderRadius = '50%';
+                ripple.style.background = 'rgba(255, 255, 255, 0.3)';
+                ripple.style.transform = 'scale(0)';
+                ripple.style.animation = 'ripple 0.6s linear';
+                ripple.style.left = e.offsetX - 25 + 'px';
+                ripple.style.top = e.offsetY - 25 + 'px';
+                ripple.style.width = '50px';
+                ripple.style.height = '50px';
+                ripple.style.pointerEvents = 'none';
+                
+                this.appendChild(ripple);
+                
+                setTimeout(() => {
+                    ripple.remove();
+                }, 600);
+            });
+        });
+    });
+</script>
+
+<style>
+    @keyframes ripple {
+        to {
+            transform: scale(4);
+            opacity: 0;
+        }
+    }
+</style>
+{% endblock %}

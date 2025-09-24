@@ -1,0 +1,991 @@
+{% extends 'base.html' %}
+
+{% block title %}Agenda Diaria - {{ cobrador.nombre_completo }} - Sistema de Créditos{% endblock %}
+
+{% block extra_head %}
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<style>
+    /* Estilos optimizados para móvil */
+    @media (max-width: 768px) {
+        .container {
+            padding-left: 8px;
+            padding-right: 8px;
+        }
+        
+        .card {
+            margin-bottom: 8px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .btn-group {
+            width: 100%;
+        }
+        
+        .btn-group .btn {
+            font-size: 11px;
+            padding: 6px 10px;
+            border-radius: 4px;
+        }
+        
+        .task-card {
+            margin-bottom: 12px;
+            border-radius: 10px;
+            border: none;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        
+        .task-card .card-body {
+            padding: 1rem 0.75rem;
+        }
+        
+        .stats-card {
+            margin-bottom: 8px;
+            border-radius: 8px;
+        }
+        
+        .stats-card .card-body {
+            padding: 0.75rem;
+        }
+        
+        .stats-card .h4, .stats-card .h5 {
+            margin-bottom: 0.25rem;
+        }
+        
+        .client-info {
+            font-size: 13px;
+        }
+        
+        .amount-highlight {
+            font-size: 16px;
+        }
+        
+        .btn-action {
+            min-width: 70px;
+            font-size: 10px;
+            padding: 4px 8px;
+        }
+        
+        .progress-circle {
+            width: 50px;
+            height: 50px;
+        }
+        
+        .progress-circle .h5 {
+            font-size: 1rem;
+        }
+        
+        .progress-circle small {
+            font-size: 0.7rem;
+        }
+        
+        .floating-action-btn {
+            bottom: 20px;
+            right: 15px;
+            width: 50px;
+            height: 50px;
+        }
+    }
+    
+    /* Extra small devices */
+    @media (max-width: 576px) {
+        .container {
+            padding-left: 5px;
+            padding-right: 5px;
+        }
+        
+        .task-card .row {
+            margin: 0;
+        }
+        
+        .task-card .col-8, .task-card .col-4 {
+            padding-left: 0.5rem;
+            padding-right: 0.5rem;
+        }
+        
+        .btn-group-vertical .btn {
+            font-size: 9px;
+            padding: 3px 6px;
+            margin-bottom: 2px;
+        }
+        
+        .client-info {
+            font-size: 12px;
+            line-height: 1.3;
+        }
+        
+        .amount-highlight {
+            font-size: 15px;
+        }
+        
+        .badge {
+            font-size: 0.65rem;
+            padding: 0.25em 0.4em;
+        }
+    }
+    
+    .task-card {
+        border-left: 4px solid;
+        transition: all 0.3s ease;
+    }
+    
+    .task-card.pendiente {
+        border-left-color: #6c757d;
+        background-color: #f8f9fa;
+    }
+    
+    .task-card.en-proceso {
+        border-left-color: #ffc107;
+        background-color: #fff3cd;
+    }
+    
+    .task-card.cobrado {
+        border-left-color: #28a745;
+        background-color: #d4edda;
+    }
+    
+    .task-card.no-encontrado {
+        border-left-color: #dc3545;
+        background-color: #f8d7da;
+    }
+    
+    .task-card.reprogramado {
+        border-left-color: #17a2b8;
+        background-color: #d1ecf1;
+    }
+    
+    .progress-circle {
+        position: relative;
+        width: 60px;
+        height: 60px;
+        margin: 0 auto;
+    }
+    
+    .floating-action-btn {
+        position: fixed;
+        bottom: 80px;
+        right: 20px;
+        width: 56px;
+        height: 56px;
+        border-radius: 50%;
+        z-index: 1000;
+    }
+    
+    .client-info {
+        font-size: 14px;
+    }
+    
+    .amount-highlight {
+        font-size: 18px;
+        font-weight: bold;
+        color: #28a745;
+    }
+    
+    .btn-action {
+        min-width: 80px;
+        font-size: 12px;
+        padding: 5px 10px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+{% csrf_token %}
+<div class="container mt-3">
+    <!-- Header con información del cobrador -->
+    <div class="card mb-3">
+        <div class="card-body py-3">
+            <div class="row align-items-center">
+                <div class="col-8">
+                    <h5 class="mb-1">{{ cobrador.nombre_completo }}</h5>
+                    <small class="text-muted">
+                        <i class="fas fa-calendar"></i> {{ fecha|date:"d/m/Y" }}
+                    </small>
+                </div>
+                <div class="col-4 text-right">
+                    <div class="progress-circle">
+                        <div class="text-center">
+                            <div class="h5 mb-0 text-primary">{{ porcentaje_completado|floatformat:0 }}%</div>
+                            <small class="text-muted">Completado</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Estadísticas rápidas -->
+    <div class="row mb-3">
+        <div class="col-6">
+            <div class="card stats-card bg-primary text-white">
+                <div class="card-body py-2 text-center">
+                    <div class="h4 mb-0">{{ total_tareas }}</div>
+                    <small>Total Tareas</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-6">
+            <div class="card stats-card bg-success text-white">
+                <div class="card-body py-2 text-center">
+                    <div class="h4 mb-0">{{ tareas_completadas }}</div>
+                    <small>Completadas</small>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="row mb-3">
+        <div class="col-12">
+            <div class="card stats-card bg-info text-white">
+                <div class="card-body py-2 text-center">
+                    <div class="h5 mb-0">${{ monto_cobrado|floatformat:0 }}</div>
+                    <small>Recaudado de ${{ monto_total_cobrar|floatformat:0 }}</small>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Controles de fecha -->
+    <div class="row mb-3">
+        <div class="col-12">
+            <div class="btn-group btn-group-sm w-100" role="group">
+                <a href="?fecha={{ fecha|date:'Y-m-d'|add:'-1 day' }}" class="btn btn-outline-secondary">
+                    <i class="fas fa-chevron-left"></i> Anterior
+                </a>
+                <button type="button" class="btn btn-outline-primary" data-toggle="modal" data-target="#fechaModal">
+                    {{ fecha|date:"d/m/Y" }}
+                </button>
+                <a href="?fecha={{ fecha|date:'Y-m-d'|add:'1 day' }}" class="btn btn-outline-secondary">
+                    Siguiente <i class="fas fa-chevron-right"></i>
+                </a>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Lista de tareas -->
+    {% if tareas %}
+        {% for tarea in tareas %}
+        <div class="task-card card {{ tarea.estado|lower }}" data-tarea-id="{{ tarea.id }}">
+            <div class="card-body py-3">
+                <div class="row">
+                    <div class="col-8">
+                        <div class="client-info">
+                            <strong>{{ tarea.cuota.credito.cliente.nombre_completo }}</strong>
+                            {% if tarea.cuota.credito.cliente.telefono %}
+                                <br><small class="text-muted">
+                                    <i class="fas fa-phone"></i> {{ tarea.cuota.credito.cliente.telefono }}
+                                </small>
+                            {% endif %}
+                            {% if tarea.cuota.credito.cliente.direccion %}
+                                <br><small class="text-muted">
+                                    <i class="fas fa-map-marker-alt"></i> {{ tarea.cuota.credito.cliente.direccion|truncatechars:30 }}
+                                </small>
+                            {% endif %}
+                        </div>
+                        
+                        <div class="mt-2">
+                            <span class="amount-highlight">${{ tarea.monto_a_cobrar|floatformat:0 }}</span>
+                            <small class="text-muted"> - Cuota #{{ tarea.cuota.numero_cuota }}</small>
+                        </div>
+                        
+                        {% if tarea.estado == 'COBRADO' %}
+                            <div class="mt-1">
+                                <small class="text-success">
+                                    <i class="fas fa-check-circle"></i> 
+                                    Cobrado: ${{ tarea.monto_cobrado|floatformat:0 }}
+                                    {% if tarea.fecha_visita %}
+                                        {{ tarea.fecha_visita|time:"H:i" }}
+                                    {% endif %}
+                                </small>
+                            </div>
+                        {% endif %}
+                        
+                        {% if tarea.observaciones %}
+                            <div class="mt-1">
+                                <small class="text-info">
+                                    <i class="fas fa-sticky-note"></i> {{ tarea.observaciones|truncatechars:50 }}
+                                </small>
+                            </div>
+                        {% endif %}
+                    </div>
+                    
+                    <div class="col-4 text-right">
+                        <div class="mb-2">
+                            <span class="badge bg-{{ tarea.color_estado }}{% if tarea.color_estado == 'warning' %} text-dark{% endif %}">
+                                {{ tarea.get_estado_display }}
+                            </span>
+                            {% if tarea.prioridad == 'ALTA' %}
+                                <span class="badge bg-danger">Alta</span>
+                            {% elif tarea.prioridad == 'MEDIA' %}
+                                <span class="badge bg-warning text-dark">Media</span>
+                            {% endif %}
+                        </div>
+                        
+                        {% if puede_editar and tarea.estado != 'COBRADO' %}
+                            <div class="btn-group-vertical btn-group-sm d-none d-md-block" role="group">
+                                <button class="btn btn-success btn-action" onclick="marcarCobrado({{ tarea.id }})">
+                                    <i class="fas fa-dollar-sign"></i> Cobrar
+                                </button>
+                                <button class="btn btn-warning btn-action" onclick="cambiarEstado({{ tarea.id }}, 'NO_ENCONTRADO')">
+                                    <i class="fas fa-user-times"></i> No
+                                </button>
+                                <button class="btn btn-info btn-action" onclick="reprogramar({{ tarea.id }})">
+                                    <i class="fas fa-clock"></i> +
+                                </button>
+                            </div>
+                            
+                            <!-- Botones móviles - horizontales -->
+                            <div class="btn-group btn-group-sm d-md-none w-100" role="group">
+                                <button class="btn btn-success btn-sm" onclick="console.log('Botón móvil cobrar clickeado'); marcarCobrado({{ tarea.id }})" title="Cobrar">
+                                    <i class="fas fa-dollar-sign"></i>
+                                </button>
+                                <button class="btn btn-warning btn-sm" onclick="cambiarEstado({{ tarea.id }}, 'NO_ENCONTRADO')" title="No encontrado">
+                                    <i class="fas fa-user-times"></i>
+                                </button>
+                                <button class="btn btn-info btn-sm" onclick="reprogramar({{ tarea.id }})" title="Reprogramar">
+                                    <i class="fas fa-clock"></i>
+                                </button>
+                            </div>
+                        {% endif %}
+                        
+                        {% if tarea.cuota.credito.cliente.telefono %}
+                            <div class="mt-2">
+                                <a href="tel:{{ tarea.cuota.credito.cliente.telefono }}" 
+                                   class="btn btn-outline-primary btn-sm btn-action">
+                                    <i class="fas fa-phone"></i>
+                                </a>
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    {% else %}
+        <div class="text-center py-5">
+            <i class="fas fa-calendar-times fa-3x text-muted mb-3"></i>
+            <h5 class="text-muted">No hay tareas para este día</h5>
+            <p class="text-muted">Las tareas se generan automáticamente cada día.</p>
+        </div>
+    {% endif %}
+</div>
+
+<!-- Botón flotante de actualización -->
+<button class="btn btn-primary floating-action-btn" onclick="location.reload()">
+    <i class="fas fa-sync-alt"></i>
+</button>
+
+<!-- Modal de selección de fecha -->
+<div class="modal fade" id="fechaModal" tabindex="-1">
+    <div class="modal-dialog modal-sm">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Seleccionar Fecha</h5>
+                <button type="button" class="close" data-dismiss="modal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <input type="date" class="form-control" id="fechaInput" value="{{ fecha|date:'Y-m-d' }}">
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary" onclick="cambiarFecha()">Cambiar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal de cobro COMPLETO -->
+<div class="modal fade" id="modalCobro" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-success text-white">
+                <h5 class="modal-title">
+                    <i class="fas fa-dollar-sign"></i> Registrar Cobro Completo
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <!-- Información del cliente -->
+                <div class="card mb-3">
+                    <div class="card-header bg-light">
+                        <h6 class="mb-0"><i class="fas fa-user"></i> Información del Cliente</h6>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <strong id="clienteNombre">Cargando...</strong><br>
+                                <small class="text-muted"><i class="fas fa-phone"></i> <span id="clienteTelefono">-</span></small>
+                            </div>
+                            <div class="col-md-6 text-end">
+                                <strong>Cuota #<span id="numeroCuota">-</span></strong><br>
+                                <small class="text-muted"><i class="fas fa-calendar"></i> <span id="fechaVencimiento">-</span></small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <form id="formCobroCompleto">
+                    {% csrf_token %}
+                    <input type="hidden" id="tareaId" name="tarea_id">
+                    
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="form-group mb-3">
+                                <label class="form-label">Monto Sugerido</label>
+                                <div class="input-group">
+                                    <span class="input-group-text bg-secondary text-white">$</span>
+                                    <input type="number" class="form-control" id="montoSugerido" readonly>
+                                </div>
+                                <small class="form-text text-muted">Monto original de la cuota</small>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="form-group mb-3">
+                                <label class="form-label">Monto Recibido *</label>
+                                <div class="input-group">
+                                    <span class="input-group-text bg-success text-white">$</span>
+                                    <input type="number" class="form-control" id="montoRecibido" 
+                                           name="monto_recibido" step="0.01" required>
+                                </div>
+                                <small class="form-text text-muted">Monto efectivamente cobrado</small>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="form-group mb-3">
+                        <label class="form-label">Observaciones del Cobro</label>
+                        <textarea class="form-control" id="observacionesCobro" name="observaciones" rows="2" 
+                                  placeholder="Ej: Pago completo, Cliente satisfecho, Pago parcial por situación familiar, etc."></textarea>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-8">
+                            <div class="form-check mb-3">
+                                <input type="checkbox" class="form-check-input" id="usarGps" checked>
+                                <label class="form-check-label" for="usarGps">
+                                    <i class="fas fa-map-marker-alt"></i> Registrar ubicación GPS
+                                </label>
+                                <small class="form-text text-muted d-block">Ayuda a verificar el cobro</small>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div id="statusUbicacion" class="small text-muted"></div>
+                        </div>
+                    </div>
+                    
+                    <input type="hidden" id="latitud" name="latitud">
+                    <input type="hidden" id="longitud" name="longitud">
+                </form>
+                
+                <!-- Información de la acción -->
+                <div class="alert alert-info">
+                    <i class="fas fa-info-circle"></i>
+                    <strong>Al procesar este cobro se realizará automáticamente:</strong>
+                    <ul class="mb-0 mt-2">
+                        <li>✓ Registro del pago en el sistema</li>
+                        <li>✓ Actualización del estado de la cuota</li>
+                        <li>✓ Actualización del crédito del cliente</li>
+                        <li>✓ Generación del comprobante de pago</li>
+                        <li>✓ Marca de la tarea como cobrada</li>
+                    </ul>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">
+                    <i class="fas fa-times"></i> Cancelar
+                </button>
+                <button type="button" class="btn btn-success btn-lg" onclick="procesarCobroCompleto()" id="btnProcesarCobro">
+                    <i class="fas fa-check-circle"></i> Procesar Cobro Completo
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal de reprogramación -->
+<div class="modal fade" id="reprogramarModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Reprogramar Visita</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="reprogramarForm">
+                    <input type="hidden" id="reprogramarTareaId" name="tarea_id">
+                    
+                    <div class="form-group">
+                        <label>Nueva Fecha *</label>
+                        <input type="date" class="form-control" id="fechaReprogramacion" 
+                               name="fecha_reprogramacion" required>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>Motivo de Reprogramación</label>
+                        <textarea class="form-control" id="motivoReprogramacion" 
+                                  name="observaciones" rows="2" placeholder="Ej: Cliente no estaba en casa"></textarea>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-info" onclick="procesarReprogramacion()">
+                    <i class="fas fa-calendar-alt"></i> Reprogramar
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Espaciado adicional para separar del footer -->
+<div class="py-5"></div>
+<div class="mb-5"></div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let currentTaskId = null;
+
+// Función de prueba simple
+function testCobrar(tareaId) {
+    alert('Botón cobrar funciona! Tarea ID: ' + tareaId);
+    console.log('testCobrar ejecutado con tareaId:', tareaId);
+}
+
+function cambiarFecha() {
+    const fecha = document.getElementById('fechaInput').value;
+    window.location.href = '?fecha=' + fecha;
+}
+
+function marcarCobrado(tareaId) {
+    console.log('🎯 marcarCobrado llamado con tareaId:', tareaId);
+    
+    try {
+        currentTaskId = tareaId;
+        
+        // Obtener datos de la tarjeta de tarea
+        const taskCard = document.querySelector(`[data-tarea-id="${tareaId}"]`);
+        console.log('📋 Tarjeta encontrada:', taskCard);
+        
+        if (!taskCard) {
+            alert('Error: No se encontró la tarjeta de tarea');
+            return;
+        }
+        
+        // Extraer datos del cliente y tarea desde la tarjeta
+        const clienteNombre = taskCard.querySelector('.client-info strong')?.textContent || 'Cliente no encontrado';
+        const clienteTelefono = taskCard.querySelector('.client-info small')?.textContent || 'Teléfono no disponible';
+        const montoElement = taskCard.querySelector('.amount-highlight');
+        const montoSugerido = montoElement ? 
+            parseFloat(montoElement.textContent.replace('$', '').replace(',', '').replace('.', '').trim()) / 100 : 
+            100000;
+        
+        // Obtener número de cuota desde la tarjeta si está disponible
+        const cuotaElement = taskCard.querySelector('.cuota-info') || taskCard.querySelector('[data-cuota]');
+        const numeroCuota = cuotaElement ? 
+            (cuotaElement.dataset.cuota || cuotaElement.textContent.match(/\d+/)?.[0] || '1') : 
+            '1';
+        
+        console.log('💰 Datos extraídos:', { clienteNombre, clienteTelefono, montoSugerido, numeroCuota });
+        
+        // Llenar el modal con los datos obtenidos
+        document.getElementById('tareaId').value = tareaId;
+        document.getElementById('clienteNombre').textContent = clienteNombre;
+        document.getElementById('clienteTelefono').textContent = clienteTelefono;
+        document.getElementById('numeroCuota').textContent = numeroCuota;
+        document.getElementById('montoSugerido').value = montoSugerido;
+        document.getElementById('montoRecibido').value = montoSugerido; // Prellenar con el monto sugerido
+        document.getElementById('observacionesCobro').value = '';
+        
+        // Limpiar campos ocultos de ubicación
+        document.getElementById('latitud').value = '';
+        document.getElementById('longitud').value = '';
+        document.getElementById('statusUbicacion').innerHTML = '';
+        
+        // Restaurar botón de procesar
+        restaurarBotonCobro();
+        
+        console.log('🚀 Intentando abrir modal modalCobro...');
+        
+        // Abrir el modal usando Bootstrap 5
+        const modalElement = document.getElementById('modalCobro');
+        console.log('🗺 Modal element found:', modalElement);
+        
+        if (modalElement) {
+            try {
+                const modal = new bootstrap.Modal(modalElement);
+                modal.show();
+                console.log('✅ Modal abierto con Bootstrap 5');
+            } catch (e1) {
+                console.log('❌ Bootstrap 5 failed, trying jQuery:', e1);
+                try {
+                    $('#modalCobro').modal('show');
+                    console.log('✅ Modal abierto con jQuery');
+                } catch (e2) {
+                    console.log('❌ jQuery failed, trying manual:', e2);
+                    modalElement.classList.add('show');
+                    modalElement.style.display = 'block';
+                    modalElement.style.backgroundColor = 'rgba(0,0,0,0.5)';
+                    console.log('✅ Modal mostrado manualmente');
+                }
+            }
+        } else {
+            alert('Modal modalCobro no encontrado!');
+        }
+        
+    } catch (error) {
+        console.error('❌ Error en marcarCobrado:', error);
+        alert('Error: ' + error.message);
+    }
+}
+
+function obtenerUbicacionActual() {
+    const statusDiv = document.getElementById('ubicacionStatus');
+    
+    if (navigator.geolocation) {
+        statusDiv.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Obteniendo ubicación...';
+        statusDiv.className = 'small text-info';
+        
+        navigator.geolocation.getCurrentPosition(
+            function(position) {
+                document.getElementById('latitud').value = position.coords.latitude;
+                document.getElementById('longitud').value = position.coords.longitude;
+                statusDiv.innerHTML = '<i class="fas fa-check text-success"></i> Ubicación obtenida';
+                statusDiv.className = 'small text-success';
+            },
+            function(error) {
+                statusDiv.innerHTML = '<i class="fas fa-exclamation-triangle text-warning"></i> No se pudo obtener ubicación';
+                statusDiv.className = 'small text-warning';
+                console.warn('Error obteniendo ubicación:', error);
+            },
+            {
+                enableHighAccuracy: true,
+                timeout: 10000,
+                maximumAge: 60000
+            }
+        );
+    } else {
+        statusDiv.innerHTML = '<i class="fas fa-times text-danger"></i> Geolocalización no soportada';
+        statusDiv.className = 'small text-danger';
+    }
+}
+
+function cambiarEstado(tareaId, nuevoEstado) {
+    if (confirm('¿Está seguro de cambiar el estado de esta tarea?')) {
+        actualizarTarea(tareaId, {
+            estado: nuevoEstado,
+            observaciones: nuevoEstado === 'NO_ENCONTRADO' ? 'Cliente no encontrado' : ''
+        });
+    }
+}
+
+function reprogramar(tareaId) {
+    currentTaskId = tareaId;
+    document.getElementById('reprogramarTareaId').value = tareaId;
+    
+    // Sugerir mañana por defecto
+    const mañana = new Date();
+    mañana.setDate(mañana.getDate() + 1);
+    document.getElementById('fechaReprogramacion').value = mañana.toISOString().split('T')[0];
+    
+    const modalReprogramar = new bootstrap.Modal(document.getElementById('reprogramarModal'));
+    modalReprogramar.show();
+}
+
+function procesarCobroCompleto() {
+    // Validar datos antes del envío
+    const montoIngresado = parseFloat(document.getElementById('montoRecibido').value);
+    const montoSugerido = parseFloat(document.getElementById('montoSugerido').value);
+    
+    if (isNaN(montoIngresado) || montoIngresado <= 0) {
+        alert('Por favor, ingrese un monto válido');
+        return;
+    }
+    
+    if (montoIngresado > montoSugerido * 2) {
+        if (!confirm(`El monto ingresado ($${montoIngresado}) es muy superior al monto sugerido ($${montoSugerido}). ¿Desea continuar?`)) {
+            return;
+        }
+    }
+    
+    // Deshabilitar botón para evitar doble envío
+    const btnProcesar = document.getElementById('btnProcesarCobro');
+    btnProcesar.disabled = true;
+    btnProcesar.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Procesando...';
+    
+    // Obtener ubicación si está habilitada
+    if (navigator.geolocation && document.getElementById('usarGps').checked) {
+        const statusDiv = document.getElementById('statusUbicacion');
+        statusDiv.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Obteniendo ubicación...';
+        statusDiv.className = 'small text-info';
+        
+        navigator.geolocation.getCurrentPosition(
+            function(position) {
+                document.getElementById('latitud').value = position.coords.latitude;
+                document.getElementById('longitud').value = position.coords.longitude;
+                statusDiv.innerHTML = '<i class="fas fa-check"></i> Ubicación obtenida';
+                statusDiv.className = 'small text-success';
+                enviarFormularioCobroCompleto();
+            },
+            function(error) {
+                console.warn('Error obteniendo ubicación:', error);
+                statusDiv.innerHTML = '<i class="fas fa-exclamation-triangle"></i> Sin ubicación';
+                statusDiv.className = 'small text-warning';
+                enviarFormularioCobroCompleto();
+            },
+            { timeout: 10000, maximumAge: 300000 }
+        );
+    } else {
+        enviarFormularioCobroCompleto();
+    }
+}
+
+function enviarFormularioCobroCompleto() {
+    const tareaId = document.getElementById('tareaId').value;
+    const formData = new FormData();
+    
+    // Recopilar datos del formulario
+    formData.append('monto_recibido', document.getElementById('montoRecibido').value);
+    formData.append('observaciones', document.getElementById('observacionesCobro').value || '');
+    formData.append('latitud', document.getElementById('latitud').value || '');
+    formData.append('longitud', document.getElementById('longitud').value || '');
+    formData.append('csrfmiddlewaretoken', document.querySelector('[name=csrfmiddlewaretoken]').value);
+    
+    console.log('🚀 Enviando formulario de cobro completo para tarea:', tareaId);
+    
+    // Enviar petición al backend
+    fetch(`/tareas/cobrar/${tareaId}/`, {
+        method: 'POST',
+        body: formData,
+        headers: {
+            'X-Requested-With': 'XMLHttpRequest'
+        }
+    })
+    .then(response => {
+        console.log('📝 Respuesta recibida:', response.status, response.statusText);
+        return response.json();
+    })
+    .then(data => {
+        console.log('📊 Datos de respuesta:', data);
+        if (data.success) {
+            // 🎯 USAR EL MISMO FLUJO QUE nuevo_pago
+            alert('Pago registrado exitosamente! Redirigiendo a confirmación...');
+            // Redirigir a la página de confirmación (la misma que funciona en nuevo_pago)
+            window.location.href = data.redirect_url;
+        } else {
+            alert('Error: ' + (data.error || 'Error desconocido'));
+            restaurarBotonCobro();
+        }
+    })
+    .catch(error => {
+        console.error('❌ Error:', error);
+        alert('Error de conexión. Por favor, intente nuevamente.');
+        restaurarBotonCobro();
+    });
+}
+        
+// Funciones eliminadas - se usa el mismo flujo que nuevo_pago
+        
+function restaurarBotonCobro() {
+    const btnProcesar = document.getElementById('btnProcesarCobro');
+    if (btnProcesar) {
+        btnProcesar.disabled = false;
+        btnProcesar.innerHTML = '<i class="fas fa-check-circle"></i> Procesar Cobro Completo';
+    }
+}
+
+function procesarReprogramacion() {
+    const form = document.getElementById('reprogramarForm');
+    const formData = new FormData(form);
+    
+    formData.append('estado', 'REPROGRAMADO');
+    
+    enviarActualizacion(currentTaskId, formData);
+}
+
+function enviarActualizacion(tareaId, formData) {
+    console.log('🚀 Enviando actualización para tarea:', tareaId);
+    console.log('📄 FormData contenido:', Array.from(formData.entries()));
+    
+    // Obtener CSRF token
+    let csrfToken = document.querySelector('[name=csrfmiddlewaretoken]');
+    if (!csrfToken) {
+        // Buscar en meta tag o cookie como alternativa
+        csrfToken = document.querySelector('meta[name=csrf-token]');
+        if (!csrfToken) {
+            console.error('❌ No se encontró CSRF token');
+            mostrarMensaje('error', 'Error: Token de seguridad no encontrado');
+            return;
+        }
+    }
+    
+    const csrfValue = csrfToken.value || csrfToken.getAttribute('content');
+    console.log('🔒 CSRF Token encontrado:', csrfValue ? '✓' : '❌');
+    
+    fetch(`/tareas/actualizar/${tareaId}/`, {
+        method: 'POST',
+        body: formData,
+        headers: {
+            'X-CSRFToken': csrfValue
+        }
+    })
+    .then(response => {
+        console.log('📡 Respuesta recibida:', response.status, response.statusText);
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+        return response.json();
+    })
+    .then(data => {
+        console.log('📊 Datos de respuesta:', data);
+        
+        if (data.success) {
+            console.log('✅ Éxito! Procesando respuesta...');
+            
+            // Cerrar modales
+            const modals = document.querySelectorAll('.modal');
+            modals.forEach(modalEl => {
+                const modalInstance = bootstrap.Modal.getInstance(modalEl);
+                if (modalInstance) {
+                    modalInstance.hide();
+                }
+            });
+            
+            // Actualizar la tarjeta de tarea
+            actualizarTarjetaTarea(tareaId, data.tarea);
+            
+            // Mostrar mensaje de éxito con información del pago si existe
+            if (data.pago) {
+                console.log('💰 Pago creado:', data.pago);
+                mostrarMensaje('success', data.pago.mensaje, data.pago);
+                
+                // Recargar después de más tiempo para que vean el comprobante
+                setTimeout(() => {
+                    location.reload();
+                }, 4000);
+            } else {
+                mostrarMensaje('success', 'Tarea actualizada exitosamente');
+                
+                setTimeout(() => {
+                    location.reload();
+                }, 1000);
+            }
+        } else {
+            console.error('❌ Error en respuesta:', data.error);
+            mostrarMensaje('error', data.error || 'Error al actualizar la tarea');
+        }
+    })
+    .catch(error => {
+        console.error('❌ Error en fetch:', error);
+        mostrarMensaje('error', 'Error de conexión: ' + error.message);
+    });
+}
+
+function actualizarTarjetaTarea(tareaId, tareaData) {
+    const taskCard = document.querySelector(`[data-tarea-id="${tareaId}"]`);
+    if (taskCard) {
+        // Actualizar clases de estado
+        taskCard.className = `task-card card ${tareaData.estado.toLowerCase()}`;
+        
+        // Actualizar badge de estado
+        const badge = taskCard.querySelector('.badge');
+        if (badge) {
+            badge.className = `badge badge-${tareaData.color_estado}`;
+            badge.textContent = tareaData.estado_display;
+        }
+        
+        // Si fue cobrado, agregar información de cobro
+        if (tareaData.estado === 'COBRADO') {
+            const clientInfo = taskCard.querySelector('.client-info');
+            const cobroInfo = document.createElement('div');
+            cobroInfo.className = 'mt-1';
+            cobroInfo.innerHTML = `
+                <small class="text-success">
+                    <i class="fas fa-check-circle"></i> 
+                    Cobrado: $${tareaData.monto_cobrado}
+                    ${tareaData.fecha_visita ? tareaData.fecha_visita : ''}
+                </small>
+            `;
+            clientInfo.appendChild(cobroInfo);
+            
+            // Ocultar botones de acción
+            const btnGroup = taskCard.querySelector('.btn-group-vertical');
+            if (btnGroup) {
+                btnGroup.style.display = 'none';
+            }
+        }
+    }
+}
+
+function actualizarTarea(tareaId, data) {
+    const formData = new FormData();
+    for (const key in data) {
+        formData.append(key, data[key]);
+    }
+    
+    enviarActualizacion(tareaId, formData);
+}
+
+function mostrarMensaje(tipo, mensaje, pago = null) {
+    // Crear div de alerta temporal
+    const alerta = document.createElement('div');
+    alerta.className = `alert alert-${tipo === 'success' ? 'success' : 'danger'} alert-dismissible fade show`;
+    alerta.style.position = 'fixed';
+    alerta.style.top = '20px';
+    alerta.style.right = '20px';
+    alerta.style.zIndex = '9999';
+    alerta.style.minWidth = '320px';
+    alerta.style.maxWidth = '400px';
+    
+    let contenido = mensaje;
+    
+    // Si hay información de pago, mostrarla de forma especial
+    if (pago && tipo === 'success') {
+        contenido = `
+            <div class="d-flex align-items-center mb-2">
+                <i class="fas fa-check-circle fa-2x text-success me-3"></i>
+                <div>
+                    <strong>¡Cobro Procesado!</strong><br>
+                    <small>${pago.cliente} - Cuota #${pago.cuota}</small>
+                </div>
+            </div>
+            <div class="border-top pt-2">
+                <div class="row text-center">
+                    <div class="col-6">
+                        <strong>$${pago.monto.toLocaleString()}</strong><br>
+                        <small class="text-muted">Monto</small>
+                    </div>
+                    <div class="col-6">
+                        <strong>ID: ${pago.id}</strong><br>
+                        <small class="text-muted">Comprobante</small>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+    
+    alerta.innerHTML = `
+        ${contenido}
+        <button type="button" class="close" onclick="this.parentElement.remove()" aria-label="Cerrar">
+            <span aria-hidden="true">&times;</span>
+        </button>
+    `;
+    
+    document.body.appendChild(alerta);
+    
+    // Auto-eliminar después de 5 segundos (más tiempo para leer la info del pago)
+    const timeout = pago ? 8000 : 3000;
+    setTimeout(() => {
+        if (alerta.parentNode) {
+            alerta.parentNode.removeChild(alerta);
+        }
+    }, timeout);
+}
+
+// Actualizar fecha/hora cada minuto
+setInterval(() => {
+    // Aquí podrías actualizar elementos de tiempo si es necesario
+}, 60000);
+</script>
+{% endblock %}

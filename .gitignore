@@ -1,0 +1,22 @@
+# Archivos de Django
+*.pyc
+__pycache__/
+db.sqlite3
+media/
+staticfiles/
+
+# Variables de entorno
+.env
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Sistema
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log

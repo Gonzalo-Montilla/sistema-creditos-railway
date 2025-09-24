@@ -1,0 +1,417 @@
+{% extends 'base.html' %}
+
+{% block title %}Editar Codeudor{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2><i class="bi bi-pencil-square"></i> Editar Codeudor</h2>
+    <a href="{% url 'detalle_cliente' codeudor.cliente.id %}" class="btn btn-secondary">
+        <i class="bi bi-arrow-left"></i> Volver
+    </a>
+</div>
+
+<!-- Información del Cliente -->
+<div class="card mb-4">
+    <div class="card-header">
+        <h5 class="mb-0"><i class="bi bi-person"></i> Cliente Principal</h5>
+    </div>
+    <div class="card-body">
+        <div class="row">
+            <div class="col-md-6">
+                <p><strong>Nombres:</strong> {{ codeudor.cliente.nombres }}</p>
+                <p><strong>Apellidos:</strong> {{ codeudor.cliente.apellidos }}</p>
+            </div>
+            <div class="col-md-6">
+                <p><strong>Cédula:</strong> {{ codeudor.cliente.cedula }}</p>
+                <p><strong>Celular:</strong> {{ codeudor.cliente.celular }}</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Formulario del Codeudor -->
+<div class="card">
+    <div class="card-header">
+        <h5 class="mb-0"><i class="bi bi-person-plus-fill"></i> Información del Codeudor</h5>
+    </div>
+    <div class="card-body">
+        <form method="post" enctype="multipart/form-data">
+            {% csrf_token %}
+            
+            <div class="row mb-3">
+                <div class="col-md-6">
+                    <label for="{{ form.nombres.id_for_label }}" class="form-label">
+                        <i class="bi bi-person"></i> {{ form.nombres.label }}
+                    </label>
+                    {{ form.nombres }}
+                    {% if form.nombres.errors %}
+                        <div class="text-danger">
+                            {% for error in form.nombres.errors %}
+                                <small>{{ error }}</small>
+                            {% endfor %}
+                        </div>
+                    {% endif %}
+                </div>
+                <div class="col-md-6">
+                    <label for="{{ form.apellidos.id_for_label }}" class="form-label">
+                        <i class="bi bi-person"></i> {{ form.apellidos.label }}
+                    </label>
+                    {{ form.apellidos }}
+                    {% if form.apellidos.errors %}
+                        <div class="text-danger">
+                            {% for error in form.apellidos.errors %}
+                                <small>{{ error }}</small>
+                            {% endfor %}
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <div class="row mb-3">
+                <div class="col-md-6">
+                    <label for="{{ form.cedula.id_for_label }}" class="form-label">
+                        <i class="bi bi-card-text"></i> {{ form.cedula.label }}
+                    </label>
+                    {{ form.cedula }}
+                    {% if form.cedula.errors %}
+                        <div class="text-danger">
+                            {% for error in form.cedula.errors %}
+                                <small>{{ error }}</small>
+                            {% endfor %}
+                        </div>
+                    {% endif %}
+                </div>
+                <div class="col-md-6">
+                    <label for="{{ form.celular.id_for_label }}" class="form-label">
+                        <i class="bi bi-phone"></i> {{ form.celular.label }}
+                    </label>
+                    {{ form.celular }}
+                    {% if form.celular.errors %}
+                        <div class="text-danger">
+                            {% for error in form.celular.errors %}
+                                <small>{{ error }}</small>
+                            {% endfor %}
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <div class="row mb-3">
+                <div class="col-md-8">
+                    <label for="{{ form.direccion.id_for_label }}" class="form-label">
+                        <i class="bi bi-geo-alt"></i> {{ form.direccion.label }}
+                    </label>
+                    {{ form.direccion }}
+                    {% if form.direccion.errors %}
+                        <div class="text-danger">
+                            {% for error in form.direccion.errors %}
+                                <small>{{ error }}</small>
+                            {% endfor %}
+                        </div>
+                    {% endif %}
+                </div>
+                <div class="col-md-4">
+                    <label for="{{ form.barrio.id_for_label }}" class="form-label">
+                        <i class="bi bi-map"></i> {{ form.barrio.label }}
+                    </label>
+                    {{ form.barrio }}
+                    {% if form.barrio.errors %}
+                        <div class="text-danger">
+                            {% for error in form.barrio.errors %}
+                                <small>{{ error }}</small>
+                            {% endfor %}
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <hr class="my-4">
+            <h6 class="text-primary mb-3"><i class="bi bi-camera"></i> Actualizar Documentos del Codeudor</h6>
+            <p class="text-muted mb-4">
+                <i class="bi bi-info-circle"></i> 
+                Toma nuevas fotos con la cámara para actualizar los documentos del codeudor
+            </p>
+            
+            <div class="row mb-4">
+                <div class="col-md-4">
+                    <div class="photo-capture-container">
+                        <label class="form-label fw-bold">
+                            <i class="bi bi-person-badge"></i> Foto del Rostro
+                        </label>
+                        
+                        <!-- Vista actual si existe -->
+                        {% if codeudor.foto_rostro %}
+                            <div class="current-photo-preview mb-3">
+                                <div class="current-photo-label">
+                                    <i class="bi bi-check-circle text-success"></i> 
+                                    <span>Foto actual</span>
+                                    <button type="button" class="btn btn-sm btn-outline-primary ms-2" onclick="viewCurrentPhoto('{{ codeudor.foto_rostro.url }}', 'Foto del Rostro Actual')">
+                                        <i class="bi bi-eye"></i> Ver
+                                    </button>
+                                </div>
+                                <img src="{{ codeudor.foto_rostro.url }}" alt="Foto actual" class="current-photo-thumb">
+                            </div>
+                        {% endif %}
+                        
+                        <div class="photo-capture-button" onclick="openCameraModal('foto_rostro', 'id_foto_rostro')">
+                            <i class="fas fa-camera fa-2x"></i>
+                            <span>{% if codeudor.foto_rostro %}Actualizar Foto del Rostro{% else %}Tomar Foto del Rostro{% endif %}</span>
+                            <small>Usar cámara frontal</small>
+                        </div>
+                        <div class="photo-preview" style="display: none;"></div>
+                        {{ form.foto_rostro }}
+                        {% if form.foto_rostro.errors %}
+                            <div class="text-danger mt-2">
+                                {% for error in form.foto_rostro.errors %}
+                                    <small>{{ error }}</small>
+                                {% endfor %}
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+                
+                <div class="col-md-4">
+                    <div class="photo-capture-container">
+                        <label class="form-label fw-bold">
+                            <i class="bi bi-card-image"></i> Cédula - Parte Frontal
+                        </label>
+                        
+                        <!-- Vista actual si existe -->
+                        {% if codeudor.foto_cedula_frontal %}
+                            <div class="current-photo-preview mb-3">
+                                <div class="current-photo-label">
+                                    <i class="bi bi-check-circle text-success"></i> 
+                                    <span>Foto actual</span>
+                                    <button type="button" class="btn btn-sm btn-outline-primary ms-2" onclick="viewCurrentPhoto('{{ codeudor.foto_cedula_frontal.url }}', 'Cédula Frontal Actual')">
+                                        <i class="bi bi-eye"></i> Ver
+                                    </button>
+                                </div>
+                                <img src="{{ codeudor.foto_cedula_frontal.url }}" alt="Cédula frontal actual" class="current-photo-thumb">
+                            </div>
+                        {% endif %}
+                        
+                        <div class="photo-capture-button" onclick="openCameraModal('foto_cedula_frontal', 'id_foto_cedula_frontal')">
+                            <i class="fas fa-id-card fa-2x"></i>
+                            <span>{% if codeudor.foto_cedula_frontal %}Actualizar Cédula Frontal{% else %}Fotografiar Cédula Frontal{% endif %}</span>
+                            <small>Coloca horizontal y completa</small>
+                        </div>
+                        <div class="photo-preview" style="display: none;"></div>
+                        {{ form.foto_cedula_frontal }}
+                        {% if form.foto_cedula_frontal.errors %}
+                            <div class="text-danger mt-2">
+                                {% for error in form.foto_cedula_frontal.errors %}
+                                    <small>{{ error }}</small>
+                                {% endfor %}
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+                
+                <div class="col-md-4">
+                    <div class="photo-capture-container">
+                        <label class="form-label fw-bold">
+                            <i class="bi bi-card-image"></i> Cédula - Parte Trasera
+                        </label>
+                        
+                        <!-- Vista actual si existe -->
+                        {% if codeudor.foto_cedula_trasera %}
+                            <div class="current-photo-preview mb-3">
+                                <div class="current-photo-label">
+                                    <i class="bi bi-check-circle text-success"></i> 
+                                    <span>Foto actual</span>
+                                    <button type="button" class="btn btn-sm btn-outline-primary ms-2" onclick="viewCurrentPhoto('{{ codeudor.foto_cedula_trasera.url }}', 'Cédula Trasera Actual')">
+                                        <i class="bi bi-eye"></i> Ver
+                                    </button>
+                                </div>
+                                <img src="{{ codeudor.foto_cedula_trasera.url }}" alt="Cédula trasera actual" class="current-photo-thumb">
+                            </div>
+                        {% endif %}
+                        
+                        <div class="photo-capture-button" onclick="openCameraModal('foto_cedula_trasera', 'id_foto_cedula_trasera')">
+                            <i class="fas fa-id-card fa-2x"></i>
+                            <span>{% if codeudor.foto_cedula_trasera %}Actualizar Cédula Trasera{% else %}Fotografiar Cédula Trasera{% endif %}</span>
+                            <small>Voltea la cédula</small>
+                        </div>
+                        <div class="photo-preview" style="display: none;"></div>
+                        {{ form.foto_cedula_trasera }}
+                        {% if form.foto_cedula_trasera.errors %}
+                            <div class="text-danger mt-2">
+                                {% for error in form.foto_cedula_trasera.errors %}
+                                    <small>{{ error }}</small>
+                                {% endfor %}
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Nota informativa -->
+            <div class="alert alert-info alert-sm">
+                <i class="bi bi-lightbulb"></i>
+                <strong>Nota:</strong> Solo se actualizarán los documentos para los cuales tomes nuevas fotos. 
+                Los documentos existentes se mantendrán si no tomas una nueva foto.
+            </div>
+
+            <div class="d-flex justify-content-end gap-2">
+                <a href="{% url 'detalle_cliente' codeudor.cliente.id %}" class="btn btn-secondary">
+                    <i class="bi bi-x-circle"></i> Cancelar
+                </a>
+                <button type="submit" class="btn btn-primary">
+                    <i class="bi bi-check-circle"></i> Actualizar Codeudor
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="alert alert-warning mt-4" role="alert">
+    <i class="bi bi-exclamation-triangle"></i>
+    <strong>Nota:</strong> Los cambios en la información del codeudor pueden afectar la evaluación crediticia. Asegúrate de que la información sea correcta.
+</div>
+<!-- Componente de Captura de Fotos -->
+{% include 'camera_capture.html' %}
+
+<!-- Modal para ver fotos actuales -->
+<div class="modal fade" id="currentPhotoModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="currentPhotoModalTitle">Foto Actual</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body text-center">
+                <img id="currentPhotoImg" src="" alt="Foto actual" class="img-fluid">
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Función para ver foto actual
+function viewCurrentPhoto(url, title) {
+    document.getElementById('currentPhotoImg').src = url;
+    document.getElementById('currentPhotoModalTitle').textContent = title;
+    new bootstrap.Modal(document.getElementById('currentPhotoModal')).show();
+}
+</script>
+
+<!-- Estilos específicos para el formulario de edición de codeudor -->
+<style>
+/* Contenedor de captura de fotos */
+.photo-capture-container {
+    border: 1px solid #e9ecef;
+    border-radius: 8px;
+    padding: 15px;
+    background: #f8f9fa;
+    min-height: 250px;
+    display: flex;
+    flex-direction: column;
+}
+
+.photo-capture-button {
+    background: linear-gradient(135deg, #007bff 0%, #0056b3 100%);
+    color: white;
+    border: none;
+    border-radius: 8px;
+    padding: 20px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    margin: 10px 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    flex-grow: 1;
+    justify-content: center;
+}
+
+.photo-capture-button:hover {
+    background: linear-gradient(135deg, #0056b3 0%, #004085 100%);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 123, 255, 0.3);
+}
+
+.photo-capture-button i {
+    opacity: 0.9;
+}
+
+.photo-capture-button span {
+    font-weight: 600;
+    font-size: 14px;
+}
+
+.photo-capture-button small {
+    opacity: 0.8;
+    font-size: 12px;
+}
+
+/* Previsualización de foto actual */
+.current-photo-preview {
+    background: white;
+    border: 1px solid #dee2e6;
+    border-radius: 6px;
+    padding: 10px;
+    margin-bottom: 10px;
+}
+
+.current-photo-label {
+    display: flex;
+    align-items: center;
+    margin-bottom: 8px;
+    font-size: 13px;
+    color: #495057;
+}
+
+.current-photo-thumb {
+    width: 100%;
+    height: 80px;
+    object-fit: cover;
+    border-radius: 4px;
+    border: 1px solid #dee2e6;
+}
+
+/* Previsualización de nueva foto */
+.photo-preview {
+    margin-top: 10px;
+    text-align: center;
+}
+
+.photo-preview img {
+    max-width: 100%;
+    height: 120px;
+    object-fit: cover;
+    border-radius: 8px;
+    border: 2px solid #28a745;
+    box-shadow: 0 2px 8px rgba(40, 167, 69, 0.2);
+}
+
+/* Ocultar inputs de archivo originales */
+.photo-capture-container input[type="file"] {
+    display: none;
+}
+
+/* Alerta personalizada */
+.alert-sm {
+    padding: 10px 15px;
+    font-size: 14px;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .photo-capture-container {
+        margin-bottom: 20px;
+        min-height: 200px;
+    }
+    
+    .photo-capture-button {
+        padding: 15px;
+    }
+    
+    .photo-capture-button i {
+        font-size: 1.5rem;
+    }
+}
+</style>
+
+{% endblock %}

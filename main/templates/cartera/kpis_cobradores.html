@@ -1,0 +1,326 @@
+{% extends 'base.html' %}
+
+{% block title %}KPIs Cobradores{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2><i class="bi bi-graph-up"></i> KPIs Detallados por Cobrador</h2>
+    <a href="{% url 'gestion_cartera' %}" class="btn btn-outline-primary">
+        <i class="bi bi-arrow-left"></i> Volver a Cartera
+    </a>
+</div>
+
+<!-- Filtros -->
+<div class="card mb-4">
+    <div class="card-header">
+        <h5 class="mb-0"><i class="bi bi-funnel"></i> Filtros de Análisis</h5>
+    </div>
+    <div class="card-body">
+        <form method="get" class="row g-3">
+            <div class="col-md-3">
+                <label for="fecha_desde" class="form-label">Fecha Desde</label>
+                <input type="date" name="fecha_desde" id="fecha_desde" 
+                       class="form-control" value="{{ fecha_desde }}" required>
+            </div>
+            
+            <div class="col-md-3">
+                <label for="fecha_hasta" class="form-label">Fecha Hasta</label>
+                <input type="date" name="fecha_hasta" id="fecha_hasta" 
+                       class="form-control" value="{{ fecha_hasta }}" required>
+            </div>
+            
+            <div class="col-md-4">
+                <label for="cobrador_id" class="form-label">Cobrador Específico</label>
+                <select name="cobrador_id" id="cobrador_id" class="form-select">
+                    <option value="">Todos los cobradores</option>
+                    {% for cobrador in cobradores_todos %}
+                        <option value="{{ cobrador.id }}" 
+                                {% if cobrador_id == cobrador.id %}selected{% endif %}>
+                            {{ cobrador.nombre_completo }}
+                        </option>
+                    {% endfor %}
+                </select>
+            </div>
+            
+            <div class="col-md-2 d-flex align-items-end">
+                <button type="submit" class="btn btn-primary w-100">
+                    <i class="bi bi-search"></i> Analizar
+                </button>
+            </div>
+        </form>
+        
+        <div class="row mt-3 pt-3 border-top">
+            <div class="col-md-6">
+                <small class="text-muted">
+                    <i class="bi bi-info-circle"></i> 
+                    Período de análisis: <strong>{{ dias_periodo }} días</strong>
+                </small>
+            </div>
+            <div class="col-md-6 text-end">
+                <small class="text-muted">
+                    Desde {{ fecha_desde|date:"d/m/Y" }} hasta {{ fecha_hasta|date:"d/m/Y" }}
+                </small>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Métricas generales -->
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card border-0 bg-primary text-white">
+            <div class="card-body text-center">
+                <h4>${{ total_recaudado_general|floatformat:0 }}</h4>
+                <p class="mb-0">Total Recaudado</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card border-0 bg-success text-white">
+            <div class="card-body text-center">
+                <h4>{{ promedio_efectividad|floatformat:1 }}%</h4>
+                <p class="mb-0">Efectividad Promedio</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card border-0 bg-info text-white">
+            <div class="card-body text-center">
+                <h4>{{ promedio_contacto|floatformat:1 }}%</h4>
+                <p class="mb-0">Tasa Contacto Promedio</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card border-0 bg-warning text-white">
+            <div class="card-body text-center">
+                <h4>{{ promedio_cumplimiento|floatformat:1 }}%</h4>
+                <p class="mb-0">Cumplimiento Meta</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Ranking de cobradores -->
+{% if datos_cobradores %}
+    <div class="row">
+        {% for datos in datos_cobradores %}
+        <div class="col-12 mb-4">
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <div>
+                        <h5 class="mb-0">
+                            {% if forloop.counter == 1 %}
+                                <i class="bi bi-trophy-fill text-warning"></i>
+                            {% elif forloop.counter == 2 %}
+                                <i class="bi bi-award-fill text-secondary"></i>
+                            {% elif forloop.counter == 3 %}
+                                <i class="bi bi-award-fill text-warning"></i>
+                            {% else %}
+                                <i class="bi bi-person-circle"></i>
+                            {% endif %}
+                            {{ datos.cobrador.nombre_completo }}
+                        </h5>
+                        <small class="text-muted">
+                            <i class="bi bi-phone"></i> {{ datos.cobrador.celular }} | 
+                            <i class="bi bi-geo-alt"></i> {{ datos.cobrador.get_rutas_nombres }}
+                        </small>
+                    </div>
+                    <div class="text-end">
+                        <span class="badge bg-{{ datos.color_rendimiento }}" style="font-size: 1.1em;">
+                            {{ datos.nivel_rendimiento }}
+                        </span>
+                        <div class="mt-1">
+                            <small class="text-muted">Score: {{ datos.score }}/100</small>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="card-body">
+                    <div class="row">
+                        <!-- KPIs de Recaudación -->
+                        <div class="col-md-4">
+                            <h6 class="text-primary"><i class="bi bi-cash-stack"></i> Recaudación</h6>
+                            <div class="row">
+                                <div class="col-6">
+                                    <div class="text-center mb-2">
+                                        <div class="h5 text-success mb-1">${{ datos.total_recaudado|floatformat:0 }}</div>
+                                        <small class="text-muted">Total Recaudado</small>
+                                    </div>
+                                </div>
+                                <div class="col-6">
+                                    <div class="text-center mb-2">
+                                        <div class="h5 mb-1">{{ datos.cantidad_pagos }}</div>
+                                        <small class="text-muted">Pagos Procesados</small>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="text-center">
+                                <div class="h6 mb-1">${{ datos.promedio_pago|floatformat:0 }}</div>
+                                <small class="text-muted">Promedio por Pago</small>
+                            </div>
+                            
+                            <!-- Barra de cumplimiento de meta -->
+                            <div class="mt-2">
+                                <div class="d-flex justify-content-between">
+                                    <small>Meta Período</small>
+                                    <small>${{ datos.meta_periodo|floatformat:0 }}</small>
+                                </div>
+                                <div class="progress" style="height: 6px;">
+                                    <div class="progress-bar bg-{{ datos.color_rendimiento }}" 
+                                         style="width: {{ datos.cumplimiento_meta|floatformat:0 }}%"></div>
+                                </div>
+                                <div class="text-center mt-1">
+                                    <small class="fw-bold text-{{ datos.color_rendimiento }}">
+                                        {{ datos.cumplimiento_meta|floatformat:1 }}%
+                                    </small>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- KPIs de Tareas -->
+                        <div class="col-md-4">
+                            <h6 class="text-info"><i class="bi bi-list-task"></i> Gestión de Tareas</h6>
+                            <div class="row">
+                                <div class="col-6">
+                                    <div class="text-center mb-2">
+                                        <div class="h5 mb-1">{{ datos.total_tareas }}</div>
+                                        <small class="text-muted">Total Tareas</small>
+                                    </div>
+                                </div>
+                                <div class="col-6">
+                                    <div class="text-center mb-2">
+                                        <div class="h5 text-success mb-1">{{ datos.tareas_cobradas }}</div>
+                                        <small class="text-muted">Cobradas</small>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Distribución de tareas -->
+                            <div class="row">
+                                <div class="col-4 text-center">
+                                    <div class="text-warning fw-bold">{{ datos.tareas_pendientes }}</div>
+                                    <small class="text-muted">Pendientes</small>
+                                </div>
+                                <div class="col-4 text-center">
+                                    <div class="text-danger fw-bold">{{ datos.tareas_no_encontrado }}</div>
+                                    <small class="text-muted">No Encontrado</small>
+                                </div>
+                                <div class="col-4 text-center">
+                                    <div class="text-primary fw-bold">{{ datos.tareas_reprogramadas }}</div>
+                                    <small class="text-muted">Reprogramadas</small>
+                                </div>
+                            </div>
+                            
+                            <!-- KPI de efectividad -->
+                            <div class="mt-2 text-center">
+                                <div class="h5 text-success mb-1">{{ datos.efectividad_cobro|floatformat:1 }}%</div>
+                                <small class="text-muted">Efectividad de Cobro</small>
+                            </div>
+                        </div>
+                        
+                        <!-- KPIs de Cartera -->
+                        <div class="col-md-4">
+                            <h6 class="text-warning"><i class="bi bi-wallet2"></i> Cartera Asignada</h6>
+                            <div class="text-center mb-2">
+                                <div class="h5 mb-1">${{ datos.cartera_total_cobrador|floatformat:0 }}</div>
+                                <small class="text-muted">Cartera Total</small>
+                            </div>
+                            
+                            <div class="row">
+                                <div class="col-6 text-center">
+                                    <div class="text-success fw-bold">{{ datos.creditos_al_dia_cobrador }}</div>
+                                    <small class="text-muted">Al Día</small>
+                                </div>
+                                <div class="col-6 text-center">
+                                    <div class="text-danger fw-bold">{{ datos.creditos_vencidos_cobrador }}</div>
+                                    <small class="text-muted">Vencidos</small>
+                                </div>
+                            </div>
+                            
+                            <!-- Mora promedio -->
+                            <div class="mt-2 text-center">
+                                <div class="h6 mb-1">{{ datos.mora_promedio|floatformat:1 }} días</div>
+                                <small class="text-muted">Mora Promedio</small>
+                            </div>
+                            
+                            <!-- Productividad -->
+                            <div class="mt-2 text-center border-top pt-2">
+                                <div class="h6 text-primary mb-1">${{ datos.productividad_diaria|floatformat:0 }}</div>
+                                <small class="text-muted">Productividad Diaria</small>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Indicadores adicionales -->
+                    <div class="row mt-3 pt-3 border-top">
+                        <div class="col-md-4 text-center">
+                            <small class="text-muted">Tasa de Contacto</small>
+                            <div class="fw-bold text-info">{{ datos.tasa_contacto|floatformat:1 }}%</div>
+                        </div>
+                        <div class="col-md-4 text-center">
+                            <small class="text-muted">Tareas/Día Promedio</small>
+                            <div class="fw-bold">{{ datos.tareas_diaria_promedio|floatformat:1 }}</div>
+                        </div>
+                        <div class="col-md-4 text-center">
+                            <small class="text-muted">Score General</small>
+                            <div class="fw-bold text-{{ datos.color_rendimiento }}">
+                                {{ datos.score }}/100
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+
+{% else %}
+    <div class="text-center py-5">
+        <i class="bi bi-graph-up" style="font-size: 4rem; color: #6c757d;"></i>
+        <h4 class="text-muted mt-3">No hay datos para el período seleccionado</h4>
+        <p class="text-muted">
+            Ajuste los filtros de fecha para ver los KPIs de los cobradores
+        </p>
+    </div>
+{% endif %}
+
+<!-- Explicación del scoring -->
+<div class="card mt-4">
+    <div class="card-header">
+        <h5 class="mb-0"><i class="bi bi-info-circle"></i> Explicación del Sistema de Calificación</h5>
+    </div>
+    <div class="card-body">
+        <div class="row">
+            <div class="col-md-6">
+                <h6>Componentes del Score (0-100):</h6>
+                <ul class="list-unstyled">
+                    <li><i class="bi bi-check-circle text-success"></i> <strong>Efectividad de Cobro (25%):</strong> % de tareas cobradas exitosamente</li>
+                    <li><i class="bi bi-target text-primary"></i> <strong>Cumplimiento de Meta (25%):</strong> % de cumplimiento de meta de recaudación</li>
+                    <li><i class="bi bi-telephone text-info"></i> <strong>Tasa de Contacto (25%):</strong> % de tareas con contacto efectivo</li>
+                    <li><i class="bi bi-clock text-warning"></i> <strong>Control de Mora (25%):</strong> Días promedio de mora en cartera</li>
+                </ul>
+            </div>
+            <div class="col-md-6">
+                <h6>Niveles de Rendimiento:</h6>
+                <div class="d-flex align-items-center mb-2">
+                    <span class="badge bg-success me-2">EXCELENTE</span>
+                    <small>90-100 puntos - Rendimiento sobresaliente</small>
+                </div>
+                <div class="d-flex align-items-center mb-2">
+                    <span class="badge bg-primary me-2">BUENO</span>
+                    <small>70-89 puntos - Rendimiento por encima del promedio</small>
+                </div>
+                <div class="d-flex align-items-center mb-2">
+                    <span class="badge bg-warning me-2">REGULAR</span>
+                    <small>50-69 puntos - Rendimiento promedio</small>
+                </div>
+                <div class="d-flex align-items-center">
+                    <span class="badge bg-danger me-2">NECESITA MEJORA</span>
+                    <small>0-49 puntos - Rendimiento por debajo del esperado</small>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

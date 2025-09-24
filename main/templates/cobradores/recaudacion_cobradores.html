@@ -1,0 +1,920 @@
+{% extends 'base.html' %}
+
+{% block title %}Recaudación por Cobradores{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2><i class="bi bi-graph-up"></i> Recaudación por Cobradores</h2>
+    <div>
+        <a href="{% url 'cobradores' %}" class="btn btn-secondary">
+            <i class="bi bi-arrow-left"></i> Volver a Cobradores
+        </a>
+    </div>
+</div>
+
+<!-- Filtros -->
+<div class="card mb-4">
+    <div class="card-header">
+        <h5 class="mb-0">
+            <i class="bi bi-funnel"></i> Filtros de Consulta
+            <small class="text-muted ms-2">Por defecto se muestran los cobros del día actual</small>
+        </h5>
+    </div>
+    <div class="card-body">
+        <form method="get" class="row g-3">
+            <div class="col-md-4">
+                <label for="fecha_desde" class="form-label">Fecha Desde</label>
+                <input type="date" class="form-control" id="fecha_desde" name="fecha_desde" value="{{ fecha_desde }}">
+            </div>
+            <div class="col-md-4">
+                <label for="fecha_hasta" class="form-label">Fecha Hasta</label>
+                <input type="date" class="form-control" id="fecha_hasta" name="fecha_hasta" value="{{ fecha_hasta }}">
+            </div>
+            <div class="col-md-4">
+                <label for="cobrador_id" class="form-label">Cobrador Específico</label>
+                <select class="form-select" id="cobrador_id" name="cobrador_id">
+                    <option value="">Todos los cobradores</option>
+                    {% for cobrador in cobradores %}
+                        <option value="{{ cobrador.id }}" {% if cobrador.id == cobrador_id %}selected{% endif %}>
+                            {{ cobrador.nombre_completo }}
+                        </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-12">
+                <div class="row">
+                    <div class="col-md-6">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-search"></i> Consultar
+                        </button>
+                        <a href="{% url 'recaudacion_cobradores' %}" class="btn btn-outline-secondary">
+                            <i class="bi bi-arrow-counterclockwise"></i> Limpiar Filtros
+                        </a>
+                    </div>
+                    <div class="col-md-6 text-end">
+                        <div class="btn-group" role="group">
+                            <button type="button" class="btn btn-outline-info btn-sm" onclick="setFechaRapida('hoy')">
+                                <i class="bi bi-calendar-day"></i> Hoy
+                            </button>
+                            <button type="button" class="btn btn-outline-info btn-sm" onclick="setFechaRapida('ayer')">
+                                <i class="bi bi-calendar-minus"></i> Ayer
+                            </button>
+                            <button type="button" class="btn btn-outline-info btn-sm" onclick="setFechaRapida('semana')">
+                                <i class="bi bi-calendar-week"></i> Última Semana
+                            </button>
+                            <button type="button" class="btn btn-outline-info btn-sm" onclick="setFechaRapida('mes')">
+                                <i class="bi bi-calendar-month"></i> Último Mes
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Resumen General -->
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card border-success">
+            <div class="card-body text-center">
+                <i class="bi bi-cash-stack" style="font-size: 2rem; color: #198754;"></i>
+                <h4 class="card-title mt-2">${{ total_general_recaudado|floatformat:0 }}</h4>
+                <p class="card-text">Total Recaudado</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card border-info">
+            <div class="card-body text-center">
+                <i class="bi bi-receipt" style="font-size: 2rem; color: #17a2b8;"></i>
+                <h4 class="card-title mt-2">{{ total_general_pagos }}</h4>
+                <p class="card-text">Total Pagos</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card border-warning">
+            <div class="card-body text-center">
+                <i class="bi bi-calculator" style="font-size: 2rem; color: #ffc107;"></i>
+                <h4 class="card-title mt-2">${{ promedio_general|floatformat:0 }}</h4>
+                <p class="card-text">Promedio por Pago</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card border-primary">
+            <div class="card-body text-center">
+                <i class="bi bi-people" style="font-size: 2rem; color: #0d6efd;"></i>
+                <h4 class="card-title mt-2">{{ datos_recaudacion|length }}</h4>
+                <p class="card-text">Cobradores Activos</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Top Recaudadores -->
+{% if top_recaudadores %}
+<div class="card mb-4">
+    <div class="card-header">
+        <h5 class="mb-0"><i class="bi bi-trophy"></i> Top 3 Recaudadores</h5>
+    </div>
+    <div class="card-body">
+        <div class="row">
+            {% for datos in top_recaudadores %}
+            <div class="col-md-4">
+                <div class="card border-warning">
+                    <div class="card-body text-center">
+                        <div class="position-relative">
+                            <i class="bi bi-award-fill" style="font-size: 2rem; color: #ffc107;"></i>
+                            <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-primary">
+                                {{ forloop.counter }}
+                            </span>
+                        </div>
+                        <h6 class="card-title mt-2">{{ datos.cobrador.nombre_completo }}</h6>
+                        <p class="card-text">
+                            <strong class="text-success">${{ datos.total_recaudado|floatformat:0 }}</strong><br>
+                            <small class="text-muted">{{ datos.cantidad_pagos }} pagos</small>
+                        </p>
+                        {% if datos.cumplimiento_meta > 0 %}
+                        <div class="progress" style="height: 6px;">
+                            <div class="progress-bar bg-success" role="progressbar" 
+                                 style="width: {% if datos.cumplimiento_meta > 100 %}100{% else %}{{ datos.cumplimiento_meta }}{% endif %}%">
+                            </div>
+                        </div>
+                        <small class="text-muted">{{ datos.cumplimiento_meta|floatformat:1 }}% de meta</small>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- Tabla Detallada -->
+<div class="card">
+    <div class="card-header">
+        <h5 class="mb-0"><i class="bi bi-table"></i> Detalle por Cobrador</h5>
+    </div>
+    <div class="card-body">
+        {% if datos_recaudacion %}
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead class="table-light">
+                    <tr>
+                        <th>Cobrador</th>
+                        <th class="text-end">Total Recaudado</th>
+                        <th class="text-center">Cantidad Pagos</th>
+                        <th class="text-end">Promedio por Pago</th>
+                        <th class="text-center">Créditos Gestionados</th>
+                        <th class="text-center">Cumplimiento Meta</th>
+                        <th class="text-center">Acciones</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for datos in datos_recaudacion %}
+                    <tr>
+                        <td>
+                            <div class="d-flex align-items-center">
+                                <div class="avatar-circle bg-primary text-white me-2">
+                                    {{ datos.cobrador.nombres|slice:":1" }}{{ datos.cobrador.apellidos|slice:":1" }}
+                                </div>
+                                <div>
+                                    <div class="fw-bold">{{ datos.cobrador.nombre_completo }}</div>
+                                    <small class="text-muted">
+                                        {% for ruta in datos.cobrador.rutas.all %}
+                                            {{ ruta.nombre }}{% if not forloop.last %}, {% endif %}
+                                        {% endfor %}
+                                    </small>
+                                </div>
+                            </div>
+                        </td>
+                        <td class="text-end">
+                            <span class="fw-bold text-success">${{ datos.total_recaudado|floatformat:0 }}</span>
+                        </td>
+                        <td class="text-center">
+                            <span class="badge bg-info">{{ datos.cantidad_pagos }}</span>
+                        </td>
+                        <td class="text-end">
+                            ${{ datos.promedio_pago|floatformat:0 }}
+                        </td>
+                        <td class="text-center">
+                            <span class="badge bg-secondary">{{ datos.creditos_gestionados }}</span>
+                        </td>
+                        <td class="text-center">
+                            {% if datos.cumplimiento_meta > 0 %}
+                                <div class="d-flex flex-column align-items-center">
+                                    <div class="progress mb-1" style="width: 60px; height: 4px;">
+                                        <div class="progress-bar 
+                                             {% if datos.cumplimiento_meta >= 100 %}bg-success
+                                             {% elif datos.cumplimiento_meta >= 75 %}bg-warning
+                                             {% else %}bg-danger{% endif %}" 
+                                             role="progressbar" 
+                                             style="width: {% if datos.cumplimiento_meta > 100 %}100{% else %}{{ datos.cumplimiento_meta }}{% endif %}%">
+                                        </div>
+                                    </div>
+                                    <small class="{% if datos.cumplimiento_meta >= 100 %}text-success{% elif datos.cumplimiento_meta >= 75 %}text-warning{% else %}text-danger{% endif %}">
+                                        {{ datos.cumplimiento_meta|floatformat:1 }}%
+                                    </small>
+                                </div>
+                            {% else %}
+                                <span class="text-muted">-</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-center">
+                            <div class="btn-group" role="group">
+                                <a href="{% url 'detalle_cobrador' datos.cobrador.id %}" 
+                                   class="btn btn-outline-primary btn-sm" title="Ver Detalle">
+                                    <i class="bi bi-eye"></i>
+                                </a>
+                                <button class="btn btn-outline-info btn-sm" 
+                                        onclick="verDetallesPagos({{ datos.cobrador.id }}, '{{ datos.cobrador.nombre_completo }}')"
+                                        title="Ver Detalles de Pagos">
+                                    <i class="bi bi-list-ul"></i>
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="text-center py-5">
+            <i class="bi bi-graph-down" style="font-size: 4rem; color: #6c757d;"></i>
+            <h5 class="text-muted mt-3">No hay datos de recaudación</h5>
+            <p class="text-muted">No se encontraron pagos en el período seleccionado</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Modal Avanzado para Detalles de Pagos -->
+<div class="modal fade" id="detallesPagosModal" tabindex="-1">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title">
+                    <i class="bi bi-graph-up me-2"></i>
+                    Detalles de Recaudación - <span id="nombreCobradorDetalle"></span>
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            
+            <div class="modal-body">
+                <!-- Filtros -->
+                <div class="row mb-4">
+                    <div class="col-md-3">
+                        <label class="form-label">Fecha Desde</label>
+                        <input type="date" class="form-control" id="filtroFechaDesde">
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">Fecha Hasta</label>
+                        <input type="date" class="form-control" id="filtroFechaHasta">
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Buscar Cliente</label>
+                        <input type="text" class="form-control" id="filtroBuscar" placeholder="Nombre, apellido o cédula...">
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label">&nbsp;</label>
+                        <button type="button" class="btn btn-primary w-100" onclick="aplicarFiltros()">
+                            <i class="bi bi-search"></i> Filtrar
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- Estadísticas del Período -->
+                <div class="row mb-4" id="estadisticasPeriodo">
+                    <div class="col-md-3">
+                        <div class="card border-success">
+                            <div class="card-body text-center">
+                                <i class="bi bi-cash-stack text-success" style="font-size: 1.5rem;"></i>
+                                <h5 class="card-title mt-2" id="totalRecaudadoPeriodo">$0</h5>
+                                <p class="card-text small">Total Recaudado</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card border-info">
+                            <div class="card-body text-center">
+                                <i class="bi bi-receipt text-info" style="font-size: 1.5rem;"></i>
+                                <h5 class="card-title mt-2" id="cantidadPagosPeriodo">0</h5>
+                                <p class="card-text small">Pagos Recibidos</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card border-warning">
+                            <div class="card-body text-center">
+                                <i class="bi bi-calculator text-warning" style="font-size: 1.5rem;"></i>
+                                <h5 class="card-title mt-2" id="promedioPagoPeriodo">$0</h5>
+                                <p class="card-text small">Promedio por Pago</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card border-secondary">
+                            <div class="card-body text-center">
+                                <i class="bi bi-credit-card text-secondary" style="font-size: 1.5rem;"></i>
+                                <h5 class="card-title mt-2" id="creditosGestionados">0</h5>
+                                <p class="card-text small">Créditos Gestionados</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Gráfico Simple (Opcional) -->
+                <div class="row mb-4" id="graficoContainer" style="display: none;">
+                    <div class="col-12">
+                        <div class="card">
+                            <div class="card-header">
+                                <h6 class="mb-0"><i class="bi bi-bar-chart"></i> Recaudación por Día</h6>
+                            </div>
+                            <div class="card-body">
+                                <canvas id="graficoRecaudacion" width="400" height="100"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Loading -->
+                <div id="loadingPagos" class="text-center py-4" style="display: none;">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Cargando...</span>
+                    </div>
+                    <p class="mt-2 text-muted">Cargando detalles de pagos...</p>
+                </div>
+                
+                <!-- Tabla de Pagos -->
+                <div id="tablaPagosContainer">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <h6 class="mb-0"><i class="bi bi-table"></i> Detalle de Pagos Recibidos</h6>
+                        <small class="text-muted" id="resumenInfoPagos">Cargando...</small>
+                    </div>
+                    <div class="table-responsive" style="max-height: 400px; overflow-y: auto;">
+                        <table class="table table-hover table-sm" id="tablaPagos">
+                            <thead class="table-dark sticky-top">
+                                <tr>
+                                    <th>Fecha</th>
+                                    <th>Cliente</th>
+                                    <th>Cédula</th>
+                                    <th>Contacto</th>
+                                    <th>Monto Pagado</th>
+                                    <th>Cuota #</th>
+                                    <th>Crédito ID</th>
+                                    <th>Barrio</th>
+                                    <th>Observaciones</th>
+                                    <th>Acciones</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tablaPagosBody">
+                                <!-- Contenido dinámico -->
+                            </tbody>
+                        </table>
+                    </div>
+                    
+                    <div id="alertaMasPagos" class="alert alert-info mt-3" style="display: none;">
+                        <i class="bi bi-info-circle"></i>
+                        <strong>Nota:</strong> Se muestran los primeros 50 registros. Use filtros para refinar su búsqueda.
+                    </div>
+                </div>
+                
+                <!-- Sin Datos -->
+                <div id="sinDatosPagos" class="text-center py-5" style="display: none;">
+                    <i class="bi bi-inbox" style="font-size: 3rem; color: #6c757d;"></i>
+                    <h5 class="text-muted mt-3">No hay pagos en el período</h5>
+                    <p class="text-muted">Intente con un rango de fechas diferente</p>
+                </div>
+            </div>
+            
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-success" onclick="imprimirReporte()">
+                    <i class="bi bi-printer"></i> Imprimir Reporte
+                </button>
+                <button type="button" class="btn btn-outline-info" onclick="exportarExcel()">
+                    <i class="bi bi-file-earmark-excel"></i> Exportar Excel
+                </button>
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                    <i class="bi bi-x-circle"></i> Cerrar
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_css %}
+<style>
+.avatar-circle {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+    font-size: 14px;
+}
+
+.progress {
+    border-radius: 10px;
+}
+
+.table th, .table td {
+    vertical-align: middle;
+}
+</style>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Variables globales para el modal
+let currentCobradorId = null;
+let currentCobradorName = '';
+let datosActuales = null;
+
+// Funciones para establecer fechas rápidas
+function setFechaRapida(periodo) {
+    const hoy = new Date();
+    let fechaDesde, fechaHasta;
+    
+    switch(periodo) {
+        case 'hoy':
+            fechaDesde = fechaHasta = hoy.toISOString().split('T')[0];
+            break;
+        case 'ayer':
+            const ayer = new Date(hoy);
+            ayer.setDate(hoy.getDate() - 1);
+            fechaDesde = fechaHasta = ayer.toISOString().split('T')[0];
+            break;
+        case 'semana':
+            fechaHasta = hoy.toISOString().split('T')[0];
+            const semanaAtras = new Date(hoy);
+            semanaAtras.setDate(hoy.getDate() - 7);
+            fechaDesde = semanaAtras.toISOString().split('T')[0];
+            break;
+        case 'mes':
+            fechaHasta = hoy.toISOString().split('T')[0];
+            const mesAtras = new Date(hoy);
+            mesAtras.setDate(hoy.getDate() - 30);
+            fechaDesde = mesAtras.toISOString().split('T')[0];
+            break;
+    }
+    
+    // Establecer los valores en los inputs
+    document.getElementById('fecha_desde').value = fechaDesde;
+    document.getElementById('fecha_hasta').value = fechaHasta;
+    
+    // Enviar el formulario automáticamente
+    document.querySelector('form').submit();
+}
+
+// Función principal para abrir el modal de detalles
+function verDetallesPagos(cobradorId, nombreCobrador) {
+    currentCobradorId = cobradorId;
+    currentCobradorName = nombreCobrador;
+    
+    document.getElementById('nombreCobradorDetalle').textContent = nombreCobrador;
+    
+    // Establecer fechas por defecto (últimos 30 días)
+    const hoy = new Date();
+    const hace30Dias = new Date();
+    hace30Dias.setDate(hace30Dias.getDate() - 30);
+    
+    document.getElementById('filtroFechaHasta').value = hoy.toISOString().split('T')[0];
+    document.getElementById('filtroFechaDesde').value = hace30Dias.toISOString().split('T')[0];
+    document.getElementById('filtroBuscar').value = '';
+    
+    // Mostrar modal
+    const modal = new bootstrap.Modal(document.getElementById('detallesPagosModal'));
+    modal.show();
+    
+    // Cargar datos iniciales
+    cargarDatosPagos();
+}
+
+// Función para cargar datos vía AJAX
+function cargarDatosPagos() {
+    if (!currentCobradorId) return;
+    
+    // Mostrar loading
+    mostrarLoading(true);
+    
+    const fechaDesde = document.getElementById('filtroFechaDesde').value;
+    const fechaHasta = document.getElementById('filtroFechaHasta').value;
+    const buscar = document.getElementById('filtroBuscar').value;
+    
+    const params = new URLSearchParams({
+        fecha_desde: fechaDesde,
+        fecha_hasta: fechaHasta,
+        buscar: buscar
+    });
+    
+    fetch(`/detalles-pagos-cobrador/${currentCobradorId}/?${params.toString()}`)
+        .then(response => {
+            console.log('Response status:', response.status);
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            return response.json();
+        })
+        .then(data => {
+            console.log('Respuesta del servidor:', data);
+            if (data.success) {
+                datosActuales = data;
+                actualizarModalConDatos(data);
+            } else {
+                mostrarError(data.error || 'Error al cargar los datos');
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            mostrarError('Error de conexión');
+        })
+        .finally(() => {
+            mostrarLoading(false);
+        });
+}
+
+// Actualizar el modal con los datos recibidos
+function actualizarModalConDatos(data) {
+    console.log('Datos recibidos:', data); // Debug
+    
+    // Actualizar estadísticas
+    document.getElementById('totalRecaudadoPeriodo').textContent = 
+        '$' + data.estadisticas.total_recaudado.toLocaleString('es-CO', {maximumFractionDigits: 0});
+    document.getElementById('cantidadPagosPeriodo').textContent = data.estadisticas.cantidad_pagos;
+    document.getElementById('promedioPagoPeriodo').textContent = 
+        '$' + data.estadisticas.promedio_pago.toLocaleString('es-CO', {maximumFractionDigits: 0});
+    document.getElementById('creditosGestionados').textContent = data.estadisticas.creditos_unicos;
+    
+    // Actualizar tabla
+    actualizarTablaPagos(data.pagos);
+    
+    // Mostrar alerta si hay más pagos
+    const alertaMasPagos = document.getElementById('alertaMasPagos');
+    if (data.tiene_mas_pagos) {
+        alertaMasPagos.style.display = 'block';
+    } else {
+        alertaMasPagos.style.display = 'none';
+    }
+    
+    // Mostrar/ocultar contenido según datos
+    const tablaPagosContainer = document.getElementById('tablaPagosContainer');
+    const sinDatosPagos = document.getElementById('sinDatosPagos');
+    
+    if (data.pagos && data.pagos.length > 0) {
+        tablaPagosContainer.style.display = 'block';
+        sinDatosPagos.style.display = 'none';
+        
+        // Actualizar el resumen en la parte superior
+        const resumenInfo = document.getElementById('resumenInfoPagos');
+        if (resumenInfo) {
+            resumenInfo.textContent = `Mostrando ${data.pagos.length} de ${data.estadisticas.cantidad_pagos} pagos`;
+        }
+    } else {
+        tablaPagosContainer.style.display = 'none';
+        sinDatosPagos.style.display = 'block';
+    }
+}
+
+// Actualizar tabla de pagos
+function actualizarTablaPagos(pagos) {
+    const tbody = document.getElementById('tablaPagosBody');
+    tbody.innerHTML = '';
+    
+    if (pagos && pagos.length > 0) {
+        pagos.forEach((pago, index) => {
+            const row = document.createElement('tr');
+            row.className = 'align-middle';
+            
+            row.innerHTML = `
+                <td>
+                    <div class="d-flex flex-column">
+                        <strong class="text-primary">${pago.fecha_pago_corta}</strong>
+                        <small class="text-muted">${pago.hora_pago}</small>
+                    </div>
+                </td>
+                <td>
+                    <div class="d-flex flex-column">
+                        <strong class="text-dark">${pago.cliente.nombre_completo}</strong>
+                        <small class="text-muted">${pago.cliente.nombres} ${pago.cliente.apellidos}</small>
+                    </div>
+                </td>
+                <td>
+                    <span class="badge bg-light text-dark border">${pago.cliente.cedula}</span>
+                </td>
+                <td>
+                    <div class="d-flex flex-column">
+                        <small class="text-muted"><i class="bi bi-phone"></i> ${pago.cliente.celular || 'N/A'}</small>
+                    </div>
+                </td>
+                <td>
+                    <div class="text-end">
+                        <strong class="text-success fs-6">$${pago.monto.toLocaleString('es-CO', {maximumFractionDigits: 0})}</strong>
+                    </div>
+                </td>
+                <td class="text-center">
+                    <span class="badge bg-primary fs-6">#${pago.numero_cuota}</span>
+                </td>
+                <td class="text-center">
+                    <div class="d-flex flex-column">
+                        <span class="badge bg-info mb-1">${pago.credito.id}</span>
+                        <small class="badge bg-secondary">${pago.credito.estado}</small>
+                    </div>
+                </td>
+                <td>
+                    <small class="text-muted">${pago.cliente.barrio || 'N/A'}</small>
+                </td>
+                <td>
+                    <small class="text-muted">${pago.observaciones || '-'}</small>
+                </td>
+                <td>
+                    <div class="btn-group" role="group">
+                        <button class="btn btn-sm btn-outline-primary" onclick="verDetallePago(${pago.id})" title="Ver Recibo">
+                            <i class="bi bi-receipt"></i>
+                        </button>
+                        <button class="btn btn-sm btn-outline-success" onclick="verDetalleCredito(${pago.credito.id})" title="Ver Crédito">
+                            <i class="bi bi-credit-card"></i>
+                        </button>
+                    </div>
+                </td>
+            `;
+            
+            // Añadir clase para alternar colores de filas
+            if (index % 2 === 0) {
+                row.classList.add('table-light');
+            }
+            
+            tbody.appendChild(row);
+        });
+    } else {
+        // Mostrar mensaje si no hay datos
+        const row = document.createElement('tr');
+        row.innerHTML = `
+            <td colspan="10" class="text-center py-4">
+                <i class="bi bi-inbox text-muted" style="font-size: 2rem;"></i>
+                <div class="mt-2 text-muted">No hay pagos en el período seleccionado</div>
+            </td>
+        `;
+        tbody.appendChild(row);
+    }
+}
+
+// Aplicar filtros
+function aplicarFiltros() {
+    cargarDatosPagos();
+}
+
+// Mostrar/ocultar loading
+function mostrarLoading(mostrar) {
+    const loading = document.getElementById('loadingPagos');
+    const estadisticas = document.getElementById('estadisticasPeriodo');
+    const tablaPagos = document.getElementById('tablaPagosContainer');
+    const sinDatos = document.getElementById('sinDatosPagos');
+    
+    if (mostrar) {
+        loading.style.display = 'block';
+        estadisticas.style.display = 'none';
+        tablaPagos.style.display = 'none';
+        sinDatos.style.display = 'none';
+    } else {
+        loading.style.display = 'none';
+        estadisticas.style.display = 'flex';
+    }
+}
+
+// Mostrar error
+function mostrarError(mensaje) {
+    const loading = document.getElementById('loadingPagos');
+    loading.innerHTML = `
+        <div class="text-center py-4">
+            <i class="bi bi-exclamation-triangle text-danger" style="font-size: 3rem;"></i>
+            <h5 class="text-danger mt-3">Error</h5>
+            <p class="text-muted">${mensaje}</p>
+            <button class="btn btn-primary" onclick="cargarDatosPagos()">
+                <i class="bi bi-arrow-clockwise"></i> Reintentar
+            </button>
+        </div>
+    `;
+}
+
+// Función para imprimir reporte
+function imprimirReporte() {
+    if (!datosActuales) {
+        alert('No hay datos para imprimir');
+        return;
+    }
+    
+    // Crear ventana de impresión
+    const ventanaImpresion = window.open('', '_blank');
+    const fechaActual = new Date().toLocaleDateString('es-CO');
+    
+    let html = `
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>Reporte de Recaudación - ${currentCobradorName}</title>
+            <style>
+                body { font-family: Arial, sans-serif; margin: 20px; }
+                .header { text-align: center; margin-bottom: 30px; border-bottom: 2px solid #333; padding-bottom: 20px; }
+                .stats { display: flex; justify-content: space-around; margin: 20px 0; }
+                .stat-box { text-align: center; padding: 10px; border: 1px solid #ddd; }
+                table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+                th, td { padding: 8px; border: 1px solid #ddd; text-align: left; }
+                th { background-color: #f8f9fa; }
+                .text-success { color: #198754; }
+                .text-muted { color: #6c757d; }
+                @media print { .no-print { display: none; } }
+            </style>
+        </head>
+        <body>
+            <div class="header">
+                <h1>Reporte de Recaudación</h1>
+                <h2>Cobrador: ${currentCobradorName}</h2>
+                <p>Período: ${datosActuales.estadisticas.fecha_desde} a ${datosActuales.estadisticas.fecha_hasta}</p>
+                <p>Generado el: ${fechaActual}</p>
+            </div>
+            
+            <div class="stats">
+                <div class="stat-box">
+                    <h3>$${datosActuales.estadisticas.total_recaudado.toLocaleString('es-CO')}</h3>
+                    <p>Total Recaudado</p>
+                </div>
+                <div class="stat-box">
+                    <h3>${datosActuales.estadisticas.cantidad_pagos}</h3>
+                    <p>Pagos Recibidos</p>
+                </div>
+                <div class="stat-box">
+                    <h3>$${datosActuales.estadisticas.promedio_pago.toLocaleString('es-CO')}</h3>
+                    <p>Promedio por Pago</p>
+                </div>
+                <div class="stat-box">
+                    <h3>${datosActuales.estadisticas.creditos_unicos}</h3>
+                    <p>Créditos Gestionados</p>
+                </div>
+            </div>
+            
+            <table>
+                <thead>
+                    <tr>
+                        <th>Fecha</th>
+                        <th>Cliente</th>
+                        <th>Cédula</th>
+                        <th>Monto</th>
+                        <th>Cuota</th>
+                        <th>Observaciones</th>
+                    </tr>
+                </thead>
+                <tbody>
+    `;
+    
+    datosActuales.pagos.forEach(pago => {
+        html += `
+            <tr>
+                <td>${pago.fecha_pago}</td>
+                <td>${pago.cliente.nombre}</td>
+                <td>${pago.cliente.cedula}</td>
+                <td class="text-success">$${pago.monto.toLocaleString('es-CO')}</td>
+                <td>#${pago.numero_cuota}</td>
+                <td class="text-muted">${pago.observaciones || '-'}</td>
+            </tr>
+        `;
+    });
+    
+    html += `
+                </tbody>
+            </table>
+            
+            <div class="no-print" style="text-align: center; margin-top: 30px;">
+                <button onclick="window.print()" style="padding: 10px 20px; font-size: 16px;">Imprimir</button>
+                <button onclick="window.close()" style="padding: 10px 20px; font-size: 16px; margin-left: 10px;">Cerrar</button>
+            </div>
+        </body>
+        </html>
+    `;
+    
+    ventanaImpresion.document.write(html);
+    ventanaImpresion.document.close();
+}
+
+// Función para exportar a Excel (simulada)
+function exportarExcel() {
+    if (!datosActuales) {
+        alert('No hay datos para exportar');
+        return;
+    }
+    
+    alert('Funcionalidad de exportación a Excel en desarrollo.\nPor ahora puede usar el botón de imprimir y guardar como PDF.');
+}
+
+// Ver detalle de un pago específico
+function verDetallePago(pagoId) {
+    // Redirigir a la página de detalle del pago
+    window.open(`/detalle-pago/${pagoId}/`, '_blank');
+}
+
+// Ver detalle de un crédito específico
+function verDetalleCredito(creditoId) {
+    // Buscar información del crédito en los datos actuales
+    if (datosActuales && datosActuales.pagos) {
+        const pagoCredito = datosActuales.pagos.find(p => p.credito.id === creditoId);
+        if (pagoCredito) {
+            const credito = pagoCredito.credito;
+            const cliente = pagoCredito.cliente;
+            
+            // Mostrar modal con información del crédito
+            const modalHtml = `
+                <div class="modal fade" id="detalleCreditoModal" tabindex="-1">
+                    <div class="modal-dialog modal-lg">
+                        <div class="modal-content">
+                            <div class="modal-header bg-info text-white">
+                                <h5 class="modal-title">
+                                    <i class="bi bi-credit-card me-2"></i>Detalle del Crédito #${credito.id}
+                                </h5>
+                                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                            </div>
+                            <div class="modal-body">
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <h6 class="text-primary"><i class="bi bi-person"></i> Información del Cliente</h6>
+                                        <p><strong>Nombre:</strong> ${cliente.nombre_completo}</p>
+                                        <p><strong>Cédula:</strong> ${cliente.cedula}</p>
+                                        <p><strong>Teléfono:</strong> ${cliente.celular || 'N/A'}</p>
+                                        <p><strong>Dirección:</strong> ${cliente.direccion || 'N/A'}</p>
+                                        <p><strong>Barrio:</strong> ${cliente.barrio || 'N/A'}</p>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <h6 class="text-success"><i class="bi bi-cash"></i> Información del Crédito</h6>
+                                        <p><strong>Monto Total:</strong> $${credito.monto_total.toLocaleString('es-CO')}</p>
+                                        <p><strong>Estado:</strong> <span class="badge bg-secondary">${credito.estado}</span></p>
+                                        <p><strong>Tasa de Interés:</strong> ${credito.tasa_interes}% anual</p>
+                                        <p><strong>Cuotas:</strong> ${credito.cantidad_cuotas}</p>
+                                        <p><strong>Tipo de Plazo:</strong> ${credito.tipo_plazo}</p>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="modal-footer">
+                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+                                <a href="/editar-credito/${credito.id}/" class="btn btn-primary" target="_blank">
+                                    <i class="bi bi-pencil"></i> Editar Crédito
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            // Remover modal anterior si existe
+            const existingModal = document.getElementById('detalleCreditoModal');
+            if (existingModal) {
+                existingModal.remove();
+            }
+            
+            // Agregar modal al body
+            document.body.insertAdjacentHTML('beforeend', modalHtml);
+            
+            // Mostrar modal
+            const modal = new bootstrap.Modal(document.getElementById('detalleCreditoModal'));
+            modal.show();
+            
+            // Remover modal del DOM cuando se cierre
+            document.getElementById('detalleCreditoModal').addEventListener('hidden.bs.modal', function() {
+                this.remove();
+            });
+        }
+    }
+}
+
+// Eventos del filtro de búsqueda en tiempo real
+document.addEventListener('DOMContentLoaded', function() {
+    // Establecer fechas por defecto en el filtro principal si están vacías
+    // NOTA: Ahora por defecto se usa el día actual (definido en la vista)
+    const fechaDesde = document.getElementById('fecha_desde');
+    const fechaHasta = document.getElementById('fecha_hasta');
+    const hoy = new Date().toISOString().split('T')[0];
+    
+    // Si ambas fechas son hoy, destacar botón "Hoy"
+    if (fechaDesde && fechaHasta && fechaDesde.value === hoy && fechaHasta.value === hoy) {
+        const botonHoy = document.querySelector('[onclick="setFechaRapida(\'hoy\')"]');
+        if (botonHoy) {
+            botonHoy.classList.add('active');
+        }
+    }
+    
+    // Evento para filtrar cuando se presiona Enter en el campo de búsqueda
+    const filtroBuscar = document.getElementById('filtroBuscar');
+    if (filtroBuscar) {
+        filtroBuscar.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                aplicarFiltros();
+            }
+        });
+    }
+});
+</script>
+{% endblock %}

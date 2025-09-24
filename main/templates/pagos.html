@@ -1,0 +1,501 @@
+{% extends 'base.html' %}
+
+{% block title %}Pagos - Sistema de Créditos{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1 class="page-title mb-0">
+        <i class="fas fa-money-bill-wave"></i> Gestión de Pagos
+    </h1>
+    <a href="{% url 'nuevo_pago' %}" class="btn btn-primary">
+        <i class="fas fa-plus"></i> Registrar Pago
+    </a>
+</div>
+
+<div class="row g-4 mb-5">
+    <div class="col-xl-3 col-md-6">
+        <div class="metric-card primary">
+            <i class="fas fa-receipt fa-3x"></i>
+            <div class="metric-number">{{ total_pagos }}</div>
+            <h5>Total Pagos</h5>
+            <p>Pagos registrados</p>
+        </div>
+    </div>
+    
+    <div class="col-xl-3 col-md-6">
+        <div class="metric-card success">
+            <i class="fas fa-calendar-day fa-3x"></i>
+            <div class="metric-number">{{ pagos_hoy }}</div>
+            <h5>Pagos Hoy</h5>
+            <p>Recibidos hoy</p>
+        </div>
+    </div>
+    
+    <div class="col-xl-3 col-md-6">
+        <div class="metric-card warning">
+            <i class="fas fa-dollar-sign fa-3x"></i>
+            <div class="metric-number">${{ recaudado_hoy|floatformat:0 }}</div>
+            <h5>Recaudado Hoy</h5>
+            <p>Ingresos del día</p>
+        </div>
+    </div>
+    
+    <div class="col-xl-3 col-md-6">
+        <div class="metric-card danger">
+            <i class="fas fa-chart-line fa-3x"></i>
+            <div class="metric-number">${{ promedio_mensual|floatformat:0 }}</div>
+            <h5>Promedio Mensual</h5>
+            <p>Últimos 30 días</p>
+        </div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <div class="row align-items-center">
+            <div class="col">
+                <h5 class="mb-0">
+                    <i class="fas fa-list"></i> Historial de Pagos
+                </h5>
+            </div>
+            <div class="col-auto">
+                <div class="input-group">
+                    <input type="date" class="form-control" id="fechaFilter">
+                    <input type="text" class="form-control" placeholder="Buscar cliente..." id="searchInput">
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="card-body">
+        {% if pagos %}
+        <div class="table-responsive">
+            <table class="table table-hover" id="pagosTable">
+                <thead class="table-light">
+                    <tr>
+                        <th>ID Pago</th>
+                        <th>Cliente</th>
+                        <th>Crédito</th>
+                        <th>Monto</th>
+                        <th>Cuota #</th>
+                        <th>Fecha Pago</th>
+                        <th>Observaciones</th>
+                        <th>Acciones</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for pago in pagos %}
+                    <tr data-fecha="{{ pago.fecha_pago|date:'Y-m-d' }}">
+                        <td>
+                            <strong class="text-primary">#{{ pago.id|stringformat:"05d" }}</strong>
+                        </td>
+                        <td>
+                            <div class="d-flex align-items-center">
+                                <span class="badge bg-info rounded-pill me-2">
+                                    {{ pago.credito.cliente.nombre|slice:":2"|upper }}
+                                </span>
+                                {{ pago.credito.cliente.nombre }}
+                            </div>
+                        </td>
+                        <td>
+                            <span class="badge bg-secondary">
+                                Crédito #{{ pago.credito.id|stringformat:"04d" }}
+                            </span>
+                        </td>
+                        <td>
+                            <strong class="text-success">
+                                ${{ pago.monto|floatformat:0 }}
+                            </strong>
+                        </td>
+                        <td>
+                            <span class="badge bg-primary rounded-pill">
+                                {{ pago.numero_cuota }}
+                            </span>
+                        </td>
+                        <td>
+                            <small>
+                                <i class="fas fa-calendar"></i>
+                                {{ pago.fecha_pago|date:"d/m/Y" }}
+                                <br>
+                                <i class="fas fa-clock"></i>
+                                {{ pago.fecha_pago|time:"H:i" }}
+                            </small>
+                        </td>
+                        <td>
+                            {% if pago.observaciones %}
+                                <small class="text-muted">{{ pago.observaciones|truncatechars:30 }}</small>
+                            {% else %}
+                                <small class="text-muted">-</small>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <div class="btn-group btn-group-sm">
+                                <button class="btn btn-outline-primary" title="Ver Recibo" onclick="verDetallesPago({{ pago.id }})">
+                                    <i class="fas fa-receipt me-1"></i>
+                                    <span class="d-none d-lg-inline">Ver</span>
+                                </button>
+                                <button class="btn btn-outline-info" title="Descargar PDF" onclick="descargarReciboPDF({{ pago.id }})">
+                                    <i class="fas fa-file-pdf me-1"></i>
+                                    <span class="d-none d-lg-inline">PDF</span>
+                                </button>
+                                <button class="btn btn-outline-success" title="Compartir" onclick="compartirRecibo({{ pago.id }}, '{{ pago.credito.cliente.celular }}')">
+                                    <i class="fas fa-share me-1"></i>
+                                    <span class="d-none d-lg-inline">Enviar</span>
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        
+        <!-- Paginación -->
+        {% with page_obj=pagos %}
+            {% include 'includes/pagination.html' %}
+        {% endwith %}
+        
+        <div class="mt-4 p-3 bg-light rounded">
+            <div class="row text-center">
+                <div class="col-md-4">
+                    <h5 class="text-success">${{ total_recaudado|floatformat:0 }}</h5>
+                    <small class="text-muted">Total Recaudado</small>
+                </div>
+                <div class="col-md-4">
+                    <h5 class="text-primary">{{ total_pagos }}</h5>
+                    <small class="text-muted">Pagos Procesados</small>
+                </div>
+                <div class="col-md-4">
+                    <h5 class="text-info">${{ promedio_pago|floatformat:0 }}</h5>
+                    <small class="text-muted">Promedio por Pago</small>
+                </div>
+            </div>
+        </div>
+        {% else %}
+        <div class="text-center py-5">
+            <i class="fas fa-money-bill-wave fa-3x text-muted mb-3"></i>
+            <h5 class="text-muted">No hay pagos registrados</h5>
+            <p class="text-muted">Los pagos aparecerán aquí cuando se registren</p>
+            <a href="{% url 'nuevo_pago' %}" class="btn btn-primary">
+                <i class="fas fa-plus"></i> Registrar Primer Pago
+            </a>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Filtro por fecha
+document.getElementById('fechaFilter').addEventListener('change', function() {
+    const selectedFecha = this.value;
+    const tableRows = document.querySelectorAll('#pagosTable tbody tr');
+    
+    tableRows.forEach(row => {
+        const rowFecha = row.getAttribute('data-fecha');
+        if (selectedFecha === '' || rowFecha === selectedFecha) {
+            row.style.display = '';
+        } else {
+            row.style.display = 'none';
+        }
+    });
+});
+
+// Búsqueda por cliente
+document.getElementById('searchInput').addEventListener('keyup', function() {
+    const searchTerm = this.value.toLowerCase();
+    const tableRows = document.querySelectorAll('#pagosTable tbody tr');
+    
+    tableRows.forEach(row => {
+        const text = row.textContent.toLowerCase();
+        row.style.display = text.includes(searchTerm) ? '' : 'none';
+    });
+});
+
+// Animaciones modernas para las tarjetas
+document.addEventListener('DOMContentLoaded', function() {
+    // Animación de entrada de las tarjetas métricas
+    const metricCards = document.querySelectorAll('.metric-card');
+    metricCards.forEach((card, index) => {
+        card.style.opacity = '0';
+        card.style.transform = 'translateY(30px)';
+        
+        setTimeout(() => {
+            card.style.transition = 'all 0.5s cubic-bezier(0.4, 0, 0.2, 1)';
+            card.style.opacity = '1';
+            card.style.transform = 'translateY(0)';
+        }, index * 150);
+    });
+    
+    // Contador animado para los números (sin signos de dolar)
+    const numbers = document.querySelectorAll('.metric-number');
+    numbers.forEach((number, index) => {
+        const text = number.textContent;
+        const hasSign = text.startsWith('$');
+        const targetValue = parseInt(text.replace('$', '').replace(',', ''));
+        let currentValue = 0;
+        const increment = Math.ceil(targetValue / 30) || 1;
+        
+        setTimeout(() => {
+            const counter = setInterval(() => {
+                currentValue += increment;
+                if (currentValue >= targetValue) {
+                    currentValue = targetValue;
+                    clearInterval(counter);
+                }
+                number.textContent = hasSign ? '$' + currentValue.toLocaleString() : currentValue;
+            }, 30);
+        }, index * 150 + 200);
+    });
+    
+    // Animación para la tabla principal
+    const mainCard = document.querySelector('.card:not(.metric-card)');
+    if (mainCard) {
+        mainCard.style.opacity = '0';
+        mainCard.style.transform = 'translateY(20px)';
+        setTimeout(() => {
+            mainCard.style.transition = 'all 0.5s ease';
+            mainCard.style.opacity = '1';
+            mainCard.style.transform = 'translateY(0)';
+        }, 600);
+    }
+    
+    // Animación para las filas de la tabla
+    const tableRows = document.querySelectorAll('#pagosTable tbody tr');
+    tableRows.forEach((row, index) => {
+        row.style.opacity = '0';
+        row.style.transform = 'translateX(-20px)';
+        setTimeout(() => {
+            row.style.transition = 'all 0.3s ease';
+            row.style.opacity = '1';
+            row.style.transform = 'translateX(0)';
+        }, 800 + index * 50);
+    });
+});
+
+// Funciones para los botones de acción de pagos
+
+// Función para ver detalles del pago en modal
+function verDetallesPago(pagoId) {
+    // Mostrar spinner de carga
+    const loadingHtml = `
+        <div class="modal fade" id="detallePagoModal" tabindex="-1" aria-hidden="true">
+            <div class="modal-dialog modal-lg">
+                <div class="modal-content">
+                    <div class="modal-header bg-primary text-white">
+                        <h5 class="modal-title">
+                            <i class="fas fa-receipt me-2"></i>
+                            Detalle del Recibo de Pago
+                        </h5>
+                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body text-center py-5">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">Cargando...</span>
+                        </div>
+                        <p class="mt-3">Cargando información del pago...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    // Remover modal existente si existe
+    const existingModal = document.getElementById('detallePagoModal');
+    if (existingModal) {
+        existingModal.remove();
+    }
+    
+    // Agregar modal al DOM
+    document.body.insertAdjacentHTML('beforeend', loadingHtml);
+    
+    // Mostrar modal
+    const modal = new bootstrap.Modal(document.getElementById('detallePagoModal'));
+    modal.show();
+    
+    // Cargar datos del pago
+    fetch(`/detalle-pago/${pagoId}/`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                mostrarDetallePago(data.pago);
+            } else {
+                mostrarErrorPago('Error al cargar los datos del pago: ' + data.error);
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            mostrarErrorPago('Error de conexión al cargar los datos del pago');
+        });
+}
+
+// Función para mostrar el modal con los detalles del pago
+function mostrarDetallePago(pago) {
+    const modalHtml = `
+        <div class="modal fade" id="detallePagoModal" tabindex="-1" aria-hidden="true">
+            <div class="modal-dialog modal-lg">
+                <div class="modal-content">
+                    <div class="modal-header bg-primary text-white">
+                        <h5 class="modal-title">
+                            <i class="fas fa-receipt me-2"></i>
+                            Recibo de Pago #${String(pago.id).padStart(5, '0')}
+                        </h5>
+                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <!-- Información del Cliente -->
+                        <div class="row mb-4">
+                            <div class="col-md-6">
+                                <div class="card border-primary h-100">
+                                    <div class="card-header bg-primary text-white">
+                                        <h6 class="mb-0"><i class="fas fa-user me-2"></i>Información del Cliente</h6>
+                                    </div>
+                                    <div class="card-body">
+                                        <p><strong>Nombre:</strong> ${pago.credito.cliente.nombre_completo}</p>
+                                        <p><strong>Cédula:</strong> ${pago.credito.cliente.cedula}</p>
+                                        <p><strong>Celular:</strong> ${pago.credito.cliente.celular}</p>
+                                        <p class="mb-0"><strong>Dirección:</strong> ${pago.credito.cliente.direccion}</p>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="card border-success h-100">
+                                    <div class="card-header bg-success text-white">
+                                        <h6 class="mb-0"><i class="fas fa-money-check me-2"></i>Detalle del Pago</h6>
+                                    </div>
+                                    <div class="card-body">
+                                        <p><strong>N° Recibo:</strong> #${String(pago.id).padStart(5, '0')}</p>
+                                        <p><strong>Crédito N°:</strong> #${String(pago.credito.id).padStart(4, '0')}</p>
+                                        <p><strong>Cuota N°:</strong> ${pago.numero_cuota}</p>
+                                        <p><strong>Fecha:</strong> ${pago.fecha_pago}</p>
+                                        <p class="mb-0"><strong>Monto:</strong> <span class="text-success fs-4">$${pago.monto.toLocaleString()}</span></p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Observaciones -->
+                        <div class="card border-info">
+                            <div class="card-header bg-info text-white">
+                                <h6 class="mb-0"><i class="fas fa-sticky-note me-2"></i>Observaciones</h6>
+                            </div>
+                            <div class="card-body">
+                                <p class="mb-0">${pago.observaciones}</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <div class="d-flex justify-content-between w-100">
+                            <div>
+                                <button type="button" class="btn btn-outline-info me-2" onclick="descargarReciboPDF(${pago.id})">
+                                    <i class="fas fa-file-pdf me-2"></i>Descargar PDF
+                                </button>
+                                <button type="button" class="btn btn-outline-success" onclick="compartirRecibo(${pago.id}, '${pago.credito.cliente.celular}')">
+                                    <i class="fas fa-share me-2"></i>Compartir
+                                </button>
+                            </div>
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                                <i class="fas fa-times me-2"></i>Cerrar
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    // Reemplazar contenido del modal
+    document.getElementById('detallePagoModal').remove();
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
+    
+    // Mostrar modal actualizado
+    const modal = new bootstrap.Modal(document.getElementById('detallePagoModal'));
+    modal.show();
+}
+
+// Función para descargar PDF del recibo
+function descargarReciboPDF(pagoId) {
+    window.open(`/generar-recibo-pdf/${pagoId}/`, '_blank');
+}
+
+// Función para compartir recibo (ejemplo con WhatsApp)
+function compartirRecibo(pagoId, celular) {
+    const mensaje = `Hola! Te envío el recibo de pago #${String(pagoId).padStart(5, '0')}. Puedes descargarlo desde: ${window.location.origin}/generar-recibo-pdf/${pagoId}/`;
+    
+    if (celular && celular !== '') {
+        // Limpiar el número de teléfono
+        const numeroLimpio = celular.replace(/\D/g, '');
+        const urlWhatsApp = `https://wa.me/57${numeroLimpio}?text=${encodeURIComponent(mensaje)}`;
+        window.open(urlWhatsApp, '_blank');
+    } else {
+        // Si no hay celular, copiar mensaje al portapapeles
+        navigator.clipboard.writeText(mensaje).then(function() {
+            alert('Mensaje copiado al portapapeles. Puedes pegarlo en WhatsApp u otra aplicación.');
+        }, function(err) {
+            console.error('Error al copiar al portapapeles: ', err);
+            alert('No se pudo copiar automáticamente. Mensaje: ' + mensaje);
+        });
+    }
+}
+
+// Función para mostrar errores
+function mostrarErrorPago(mensaje) {
+    const modalContent = document.querySelector('#detallePagoModal .modal-content');
+    if (modalContent) {
+        modalContent.innerHTML = `
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title">
+                    <i class="fas fa-exclamation-triangle me-2"></i>
+                    Error
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body text-center py-4">
+                <i class="fas fa-exclamation-triangle fa-3x text-danger mb-3"></i>
+                <p class="fs-5">${mensaje}</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+            </div>
+        `;
+    }
+}
+</script>
+
+<style>
+    /* Efecto hover para las filas de la tabla */
+    #pagosTable tbody tr {
+        transition: all 0.3s ease;
+    }
+    
+    #pagosTable tbody tr:hover {
+        transform: scale(1.02);
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+        background-color: rgba(40, 167, 69, 0.05);
+    }
+    
+    /* Mejorar estilos de los badges */
+    .badge {
+        font-size: 0.75rem;
+        padding: 0.5em 0.8em;
+        border-radius: 0.5rem;
+    }
+    
+    /* Estilos para los botones de acción */
+    .btn-group-sm > .btn {
+        transition: all 0.3s ease;
+    }
+    
+    .btn-group-sm > .btn:hover {
+        transform: translateY(-2px);
+    }
+    
+    /* Estilo para el resumen financiero */
+    .bg-light {
+        background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%) !important;
+        border-radius: 15px !important;
+        border: 1px solid rgba(0, 0, 0, 0.05);
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+    }
+</style>
+{% endblock %}

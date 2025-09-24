@@ -1,0 +1,259 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ ruta.nombre }} - Detalle{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2><i class="bi bi-map"></i> {{ ruta.nombre }}</h2>
+    <div>
+        <a href="{% url 'editar_ruta' ruta.id %}" class="btn btn-outline-primary me-2">
+            <i class="bi bi-pencil"></i> Editar
+        </a>
+        <a href="{% url 'rutas' %}" class="btn btn-secondary">
+            <i class="bi bi-arrow-left"></i> Volver a Rutas
+        </a>
+    </div>
+</div>
+
+<!-- Información de la ruta -->
+<div class="row mb-4">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-info-circle"></i> Información General</h5>
+            </div>
+            <div class="card-body">
+                <div class="row mb-2">
+                    <div class="col-sm-4"><strong>Nombre:</strong></div>
+                    <div class="col-sm-8">{{ ruta.nombre }}</div>
+                </div>
+                {% if ruta.zona %}
+                <div class="row mb-2">
+                    <div class="col-sm-4"><strong>Zona:</strong></div>
+                    <div class="col-sm-8">
+                        <span class="badge bg-secondary">{{ ruta.zona }}</span>
+                    </div>
+                </div>
+                {% endif %}
+                {% if ruta.descripcion %}
+                <div class="row mb-2">
+                    <div class="col-sm-4"><strong>Descripción:</strong></div>
+                    <div class="col-sm-8">{{ ruta.descripcion }}</div>
+                </div>
+                {% endif %}
+                <div class="row mb-2">
+                    <div class="col-sm-4"><strong>Estado:</strong></div>
+                    <div class="col-sm-8">
+                        {% if ruta.activa %}
+                            <span class="badge bg-success">Activa</span>
+                        {% else %}
+                            <span class="badge bg-danger">Inactiva</span>
+                        {% endif %}
+                    </div>
+                </div>
+                <div class="row mb-2">
+                    <div class="col-sm-4"><strong>Creada:</strong></div>
+                    <div class="col-sm-8">{{ ruta.fecha_creacion|date:"d/m/Y H:i" }}</div>
+                </div>
+                {% if ruta.fecha_modificacion != ruta.fecha_creacion %}
+                <div class="row mb-2">
+                    <div class="col-sm-4"><strong>Modificada:</strong></div>
+                    <div class="col-sm-8">{{ ruta.fecha_modificacion|date:"d/m/Y H:i" }}</div>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-houses"></i> Barrios Incluidos</h5>
+            </div>
+            <div class="card-body">
+                <div class="d-flex flex-wrap gap-2">
+                    {% for barrio in barrios_lista %}
+                        <span class="badge bg-light text-dark border">{{ barrio }}</span>
+                    {% endfor %}
+                </div>
+                <small class="text-muted mt-2 d-block">
+                    Total: {{ barrios_lista|length }} barrio{{ barrios_lista|length|pluralize }}
+                </small>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Estadísticas -->
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card border-primary">
+            <div class="card-body text-center">
+                <i class="bi bi-people" style="font-size: 2rem; color: #0d6efd;"></i>
+                <h4 class="card-title mt-2">{{ cobradores_asignados.count }}</h4>
+                <p class="card-text">Cobradores</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card border-success">
+            <div class="card-body text-center">
+                <i class="bi bi-person-check" style="font-size: 2rem; color: #198754;"></i>
+                <h4 class="card-title mt-2">{{ total_clientes }}</h4>
+                <p class="card-text">Clientes</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card border-warning">
+            <div class="card-body text-center">
+                <i class="bi bi-credit-card" style="font-size: 2rem; color: #ffc107;"></i>
+                <h4 class="card-title mt-2">{{ creditos_activos }}</h4>
+                <p class="card-text">Créditos Activos</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card border-info">
+            <div class="card-body text-center">
+                <i class="bi bi-houses" style="font-size: 2rem; color: #17a2b8;"></i>
+                <h4 class="card-title mt-2">{{ barrios_lista|length }}</h4>
+                <p class="card-text">Barrios</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Cobradores asignados -->
+<div class="row">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-cash-coin"></i> Cobradores Asignados</h5>
+            </div>
+            <div class="card-body">
+                {% if cobradores_asignados %}
+                    {% for cobrador in cobradores_asignados %}
+                    <div class="d-flex justify-content-between align-items-center mb-3 p-3 border rounded">
+                        <div>
+                            <h6 class="mb-1">
+                                <a href="{% url 'detalle_cobrador' cobrador.id %}" class="text-decoration-none">
+                                    {{ cobrador.nombre_completo }}
+                                </a>
+                            </h6>
+                            <div class="small text-muted">
+                                <i class="bi bi-phone"></i> {{ cobrador.celular }}
+                                {% if cobrador.email %}
+                                    <br><i class="bi bi-envelope"></i> {{ cobrador.email }}
+                                {% endif %}
+                            </div>
+                        </div>
+                        <div class="text-end">
+                            {% if cobrador.activo %}
+                                <span class="badge bg-success">Activo</span>
+                            {% else %}
+                                <span class="badge bg-danger">Inactivo</span>
+                            {% endif %}
+                            <div class="small text-muted mt-1">
+                                {{ cobrador.creditos_activos.count }} créditos
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                    
+                    <div class="mt-3">
+                        <a href="{% url 'nuevo_cobrador' %}" class="btn btn-outline-primary btn-sm">
+                            <i class="bi bi-plus-circle"></i> Agregar Cobrador
+                        </a>
+                    </div>
+                {% else %}
+                    <div class="text-center py-4">
+                        <i class="bi bi-person-plus" style="font-size: 3rem; color: #6c757d;"></i>
+                        <h6 class="text-muted mt-2">Sin cobradores asignados</h6>
+                        <p class="text-muted small">Esta ruta no tiene cobradores asignados</p>
+                        <a href="{% url 'nuevo_cobrador' %}" class="btn btn-primary btn-sm">
+                            <i class="bi bi-plus-circle"></i> Crear Cobrador
+                        </a>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-geo-alt"></i> Cobertura Geográfica</h5>
+            </div>
+            <div class="card-body">
+                <h6 class="mb-3">Distribución por barrios:</h6>
+                <div class="row">
+                    {% for barrio in barrios_lista %}
+                    <div class="col-md-6 mb-2">
+                        <div class="border rounded p-2">
+                            <div class="d-flex justify-content-between">
+                                <span class="fw-bold">{{ barrio }}</span>
+                                <span class="text-muted small">
+                                    {% comment %}
+                                    Aquí podrías agregar el conteo de clientes por barrio si lo necesitas
+                                    {% endcomment %}
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+                
+                {% if ruta.zona %}
+                <div class="alert alert-info mt-3">
+                    <i class="bi bi-info-circle"></i>
+                    <strong>Zona:</strong> {{ ruta.zona }}
+                    <br>
+                    <small>Los clientes de estos barrios serán asignados automáticamente a los cobradores de esta ruta.</small>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Enlaces rápidos -->
+<div class="row mt-4">
+    <div class="col-md-4">
+        <div class="card border-primary">
+            <div class="card-body text-center">
+                <i class="bi bi-plus-circle" style="font-size: 2rem; color: #0d6efd;"></i>
+                <h6 class="card-title mt-2">Nuevo Cobrador</h6>
+                <p class="card-text small">Agregar cobrador a esta ruta</p>
+                <a href="{% url 'nuevo_cobrador' %}" class="btn btn-outline-primary btn-sm">
+                    <i class="bi bi-arrow-right"></i> Crear
+                </a>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card border-info">
+            <div class="card-body text-center">
+                <i class="bi bi-list-check" style="font-size: 2rem; color: #17a2b8;"></i>
+                <h6 class="card-title mt-2">Ver Cobradores</h6>
+                <p class="card-text small">Gestionar todos los cobradores</p>
+                <a href="{% url 'cobradores' %}" class="btn btn-outline-info btn-sm">
+                    <i class="bi bi-arrow-right"></i> Ver Lista
+                </a>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card border-success">
+            <div class="card-body text-center">
+                <i class="bi bi-calendar-check" style="font-size: 2rem; color: #198754;"></i>
+                <h6 class="card-title mt-2">Gestión Diaria</h6>
+                <p class="card-text small">Ver cobros programados</p>
+                <a href="{% url 'gestion_diaria_cobros' %}" class="btn btn-outline-success btn-sm">
+                    <i class="bi bi-arrow-right"></i> Ver Agenda
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

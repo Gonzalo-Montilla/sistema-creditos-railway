@@ -1,0 +1,620 @@
+{% extends 'base.html' %}
+
+{% block title %}Detalle del Cliente{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2><i class="bi bi-person-vcard"></i> Detalle del Cliente</h2>
+    <a href="{% url 'clientes' %}" class="btn btn-secondary">
+        <i class="bi bi-arrow-left"></i> Volver a Clientes
+    </a>
+</div>
+
+<!-- Información del Cliente -->
+<div class="row mb-4">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0"><i class="bi bi-person"></i> Información Personal</h5>
+                <a href="{% url 'editar_cliente' cliente.id %}" class="btn btn-sm btn-outline-primary">
+                    <i class="bi bi-pencil"></i> Editar
+                </a>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <p><strong>Nombres:</strong> {{ cliente.nombres }}</p>
+                        <p><strong>Apellidos:</strong> {{ cliente.apellidos }}</p>
+                        <p><strong>Cedula:</strong> {{ cliente.cedula }}</p>
+                        <p><strong>Celular:</strong> {{ cliente.celular }}</p>
+                        {% if cliente.telefono_fijo %}
+                        <p><strong>Telefono Fijo:</strong> {{ cliente.telefono_fijo }}</p>
+                        {% endif %}
+                        {% if cliente.email %}
+                        <p><strong>Email:</strong> {{ cliente.email }}</p>
+                        {% endif %}
+                    </div>
+                    <div class="col-md-6">
+                        <p><strong>Direccion:</strong> {{ cliente.direccion }}</p>
+                        <p><strong>Barrio:</strong> {{ cliente.barrio }}</p>
+                        <p><strong>Estado:</strong> 
+                            {% if cliente.activo %}
+                                <span class="badge bg-success">Activo</span>
+                            {% else %}
+                                <span class="badge bg-danger">Inactivo</span>
+                            {% endif %}
+                        </p>
+                        <p><strong>Fecha de Registro:</strong> {{ cliente.fecha_registro|date:"d/m/Y H:i" }}</p>
+                    </div>
+                </div>
+                
+                {% if cliente.referencia1_nombre or cliente.referencia2_nombre %}
+                <hr>
+                <h6><i class="bi bi-people"></i> Referencias Familiares</h6>
+                <div class="row">
+                    {% if cliente.referencia1_nombre %}
+                    <div class="col-md-6">
+                        <p><strong>Referencia 1:</strong> {{ cliente.referencia1_nombre }}</p>
+                        {% if cliente.referencia1_telefono %}
+                        <p><strong>Telefono:</strong> {{ cliente.referencia1_telefono }}</p>
+                        {% endif %}
+                    </div>
+                    {% endif %}
+                    {% if cliente.referencia2_nombre %}
+                    <div class="col-md-6">
+                        <p><strong>Referencia 2:</strong> {{ cliente.referencia2_nombre }}</p>
+                        {% if cliente.referencia2_telefono %}
+                        <p><strong>Telefono:</strong> {{ cliente.referencia2_telefono }}</p>
+                        {% endif %}
+                    </div>
+                    {% endif %}
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-4">
+        <!-- Documentos del Cliente -->
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h6 class="mb-0"><i class="bi bi-file-earmark-image"></i> Documentos</h6>
+                <small class="text-muted">Documentos KYC</small>
+            </div>
+            <div class="card-body">
+                <div class="documents-grid">
+                    <!-- Foto del Rostro -->
+                    <div class="document-item">
+                        <div class="document-label">
+                            <i class="bi bi-person-badge"></i> Foto del Rostro
+                        </div>
+                        {% if cliente.foto_rostro %}
+                            <div class="document-preview" onclick="openImageModal('{{ cliente.foto_rostro.url }}', 'Foto del Rostro')">
+                                <img src="{{ cliente.foto_rostro.url }}" alt="Foto del Rostro" onerror="this.parentElement.innerHTML='<div class=\"document-error\"><i class=\"bi bi-exclamation-triangle\"></i><br>Error al cargar</div>'">
+                                <div class="document-overlay">
+                                    <i class="bi bi-zoom-in"></i>
+                                </div>
+                            </div>
+                        {% else %}
+                            <div class="document-empty">
+                                <i class="bi bi-image"></i>
+                                <span>No disponible</span>
+                            </div>
+                        {% endif %}
+                    </div>
+                    
+                    <!-- Cedula Frontal -->
+                    <div class="document-item">
+                        <div class="document-label">
+                            <i class="bi bi-card-image"></i> Cedula - Frente
+                        </div>
+                        {% if cliente.foto_cedula_frontal %}
+                            <div class="document-preview" onclick="openImageModal('{{ cliente.foto_cedula_frontal.url }}', 'Cedula - Parte Frontal')">
+                                <img src="{{ cliente.foto_cedula_frontal.url }}" alt="Cedula Frontal" onerror="this.parentElement.innerHTML='<div class=\"document-error\"><i class=\"bi bi-exclamation-triangle\"></i><br>Error al cargar</div>'">
+                                <div class="document-overlay">
+                                    <i class="bi bi-zoom-in"></i>
+                                </div>
+                            </div>
+                        {% else %}
+                            <div class="document-empty">
+                                <i class="bi bi-credit-card"></i>
+                                <span>No disponible</span>
+                            </div>
+                        {% endif %}
+                    </div>
+                    
+                    <!-- Cedula Trasera -->
+                    <div class="document-item">
+                        <div class="document-label">
+                            <i class="bi bi-card-image"></i> Cedula - Atras
+                        </div>
+                        {% if cliente.foto_cedula_trasera %}
+                            <div class="document-preview" onclick="openImageModal('{{ cliente.foto_cedula_trasera.url }}', 'Cedula - Parte Trasera')">
+                                <img src="{{ cliente.foto_cedula_trasera.url }}" alt="Cedula Trasera" onerror="this.parentElement.innerHTML='<div class=\"document-error\"><i class=\"bi bi-exclamation-triangle\"></i><br>Error al cargar</div>'">
+                                <div class="document-overlay">
+                                    <i class="bi bi-zoom-in"></i>
+                                </div>
+                            </div>
+                        {% else %}
+                            <div class="document-empty">
+                                <i class="bi bi-credit-card"></i>
+                                <span>No disponible</span>
+                            </div>
+                        {% endif %}
+                    </div>
+                    
+                    <!-- Recibo de Servicio -->
+                    <div class="document-item">
+                        <div class="document-label">
+                            <i class="bi bi-receipt"></i> Recibo de Servicio
+                        </div>
+                        {% if cliente.foto_recibo_servicio %}
+                            <div class="document-preview" onclick="openImageModal('{{ cliente.foto_recibo_servicio.url }}', 'Recibo de Servicio Publico')">
+                                <img src="{{ cliente.foto_recibo_servicio.url }}" alt="Recibo de Servicio" onerror="this.parentElement.innerHTML='<div class=\"document-error\"><i class=\"bi bi-exclamation-triangle\"></i><br>Error al cargar</div>'">
+                                <div class="document-overlay">
+                                    <i class="bi bi-zoom-in"></i>
+                                </div>
+                            </div>
+                        {% else %}
+                            <div class="document-empty">
+                                <i class="bi bi-file-earmark"></i>
+                                <span>No disponible</span>
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+                
+                <!-- Resumen de documentos -->
+                <div class="documents-summary mt-3">
+                    {% if cliente.foto_rostro or cliente.foto_cedula_frontal or cliente.foto_cedula_trasera or cliente.foto_recibo_servicio %}
+                        <div class="alert alert-success alert-sm">
+                            <i class="bi bi-check-circle"></i>
+                            <strong>Documentos disponibles:</strong> 
+                            {% if cliente.foto_rostro %}Foto Rostro{% endif %}
+                            {% if cliente.foto_cedula_frontal %}{% if cliente.foto_rostro %}, {% endif %}Cedula Frontal{% endif %}
+                            {% if cliente.foto_cedula_trasera %}{% if cliente.foto_rostro or cliente.foto_cedula_frontal %}, {% endif %}Cedula Trasera{% endif %}
+                            {% if cliente.foto_recibo_servicio %}{% if cliente.foto_rostro or cliente.foto_cedula_frontal or cliente.foto_cedula_trasera %}, {% endif %}Recibo Servicio{% endif %}
+                        </div>
+                    {% else %}
+                        <div class="alert alert-warning alert-sm">
+                            <i class="bi bi-exclamation-triangle"></i>
+                            <strong>Sin documentos:</strong> No se han cargado documentos para este cliente.
+                            <a href="{% url 'editar_cliente' cliente.id %}" class="alert-link">Agregar documentos</a>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Información del Codeudor -->
+{% if codeudor %}
+<div class="row mb-4">
+    <div class="col-md-8">
+        <!-- Información Personal del Codeudor -->
+        <div class="card h-100">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0"><i class="bi bi-person-plus"></i> Información del Codeudor</h5>
+                <div>
+                    <a href="{% url 'editar_codeudor' codeudor.id %}" class="btn btn-sm btn-outline-primary me-2">
+                        <i class="bi bi-pencil"></i> Editar Codeudor
+                    </a>
+                </div>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <p><strong>Nombres:</strong> {{ codeudor.nombres }}</p>
+                        <p><strong>Apellidos:</strong> {{ codeudor.apellidos }}</p>
+                        <p><strong>Cedula:</strong> {{ codeudor.cedula }}</p>
+                        <p><strong>Celular:</strong> {{ codeudor.celular }}</p>
+                        {% if codeudor.telefono_fijo %}
+                        <p><strong>Telefono Fijo:</strong> {{ codeudor.telefono_fijo }}</p>
+                        {% endif %}
+                        {% if codeudor.email %}
+                        <p><strong>Email:</strong> {{ codeudor.email }}</p>
+                        {% endif %}
+                    </div>
+                    <div class="col-md-6">
+                        <p><strong>Direccion:</strong> {{ codeudor.direccion }}</p>
+                        <p><strong>Barrio:</strong> {{ codeudor.barrio }}</p>
+                        <p><strong>Relacion con Cliente:</strong> {{ codeudor.relacion_cliente|default:"No especificado" }}</p>
+                        <p><strong>Estado:</strong> 
+                            {% if codeudor.activo %}
+                                <span class="badge bg-success">Activo</span>
+                            {% else %}
+                                <span class="badge bg-danger">Inactivo</span>
+                            {% endif %}
+                        </p>
+                        <p><strong>Fecha de Registro:</strong> {{ codeudor.fecha_registro|date:"d/m/Y H:i" }}</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-4">
+        <!-- Documentos del Codeudor -->
+        <div class="card h-100" id="codeudor-documents">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h6 class="mb-0"><i class="bi bi-file-earmark-person"></i> Documentos Codeudor</h6>
+                <small class="text-muted">Documentos KYC</small>
+            </div>
+            <div class="card-body">
+                <div class="documents-grid">
+                    <!-- Foto del Rostro del Codeudor -->
+                    <div class="document-item">
+                        <div class="document-label">
+                            <i class="bi bi-person-badge"></i> Foto del Rostro
+                        </div>
+                        {% if codeudor.foto_rostro %}
+                            <div class="document-preview" onclick="openImageModal('{{ codeudor.foto_rostro.url }}', 'Foto del Rostro - Codeudor')">
+                                <img src="{{ codeudor.foto_rostro.url }}" alt="Foto del Rostro Codeudor" onerror="this.parentElement.innerHTML='<div class=\"document-error\"><i class=\"bi bi-exclamation-triangle\"></i><br>Error al cargar</div>'">
+                                <div class="document-overlay">
+                                    <i class="bi bi-zoom-in"></i>
+                                </div>
+                            </div>
+                        {% else %}
+                            <div class="document-empty">
+                                <i class="bi bi-person-plus-fill text-muted" style="font-size: 3rem;"></i>
+                                <span>No disponible</span>
+                            </div>
+                        {% endif %}
+                    </div>
+                    
+                    <!-- Cedula Frontal del Codeudor -->
+                    <div class="document-item">
+                        <div class="document-label">
+                            <i class="bi bi-card-image"></i> Cedula - Frente
+                        </div>
+                        {% if codeudor.foto_cedula_frontal %}
+                            <div class="document-preview" onclick="openImageModal('{{ codeudor.foto_cedula_frontal.url }}', 'Cedula Frontal - Codeudor')">
+                                <img src="{{ codeudor.foto_cedula_frontal.url }}" alt="Cedula Frontal Codeudor" onerror="this.parentElement.innerHTML='<div class=\"document-error\"><i class=\"bi bi-exclamation-triangle\"></i><br>Error al cargar</div>'">
+                                <div class="document-overlay">
+                                    <i class="bi bi-zoom-in"></i>
+                                </div>
+                            </div>
+                        {% else %}
+                            <div class="document-empty">
+                                <i class="bi bi-credit-card"></i>
+                                <span>No disponible</span>
+                            </div>
+                        {% endif %}
+                    </div>
+                    
+                    <!-- Cedula Trasera del Codeudor -->
+                    <div class="document-item">
+                        <div class="document-label">
+                            <i class="bi bi-card-image"></i> Cedula - Atras
+                        </div>
+                        {% if codeudor.foto_cedula_trasera %}
+                            <div class="document-preview" onclick="openImageModal('{{ codeudor.foto_cedula_trasera.url }}', 'Cedula Trasera - Codeudor')">
+                                <img src="{{ codeudor.foto_cedula_trasera.url }}" alt="Cedula Trasera Codeudor" onerror="this.parentElement.innerHTML='<div class=\"document-error\"><i class=\"bi bi-exclamation-triangle\"></i><br>Error al cargar</div>'">
+                                <div class="document-overlay">
+                                    <i class="bi bi-zoom-in"></i>
+                                </div>
+                            </div>
+                        {% else %}
+                            <div class="document-empty">
+                                <i class="bi bi-credit-card"></i>
+                                <span>No disponible</span>
+                            </div>
+                        {% endif %}
+                    </div>
+                    
+                    <!-- Recibo de Servicio del Codeudor -->
+                    <div class="document-item">
+                        <div class="document-label">
+                            <i class="bi bi-receipt"></i> Recibo de Servicio
+                        </div>
+                        {% if codeudor.foto_recibo_servicio %}
+                            <div class="document-preview" onclick="openImageModal('{{ codeudor.foto_recibo_servicio.url }}', 'Recibo de Servicio - Codeudor')">
+                                <img src="{{ codeudor.foto_recibo_servicio.url }}" alt="Recibo de Servicio Codeudor" onerror="this.parentElement.innerHTML='<div class=\"document-error\"><i class=\"bi bi-exclamation-triangle\"></i><br>Error al cargar</div>'">
+                                <div class="document-overlay">
+                                    <i class="bi bi-zoom-in"></i>
+                                </div>
+                            </div>
+                        {% else %}
+                            <div class="document-empty">
+                                <i class="bi bi-file-earmark"></i>
+                                <span>No disponible</span>
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% else %}
+<!-- Sin Codeudor - Mostrar opción para agregar -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card border-warning">
+            <div class="card-header bg-warning text-dark">
+                <h5 class="mb-0">
+                    <i class="bi bi-person-plus"></i> 
+                    Codeudor
+                    <small class="ms-2">Este cliente no tiene codeudor asignado</small>
+                </h5>
+            </div>
+            <div class="card-body text-center py-5">
+                <i class="bi bi-person-plus-fill" style="font-size: 4rem; color: #ffc107;"></i>
+                <h4 class="mt-3 mb-3">Sin Codeudor Asignado</h4>
+                <p class="text-muted mb-4">
+                    Este cliente aún no tiene un codeudor registrado en el sistema. 
+                    Un codeudor puede ayudar a respaldar las operaciones crediticias.
+                </p>
+                <div class="d-flex justify-content-center gap-3">
+                    <a href="{% url 'nuevo_codeudor' cliente.id %}" class="btn btn-warning btn-lg">
+                        <i class="bi bi-person-plus"></i> Agregar Codeudor
+                    </a>
+                    <a href="{% url 'nuevo_credito' %}" class="btn btn-outline-primary">
+                        <i class="bi bi-credit-card"></i> Continuar sin Codeudor
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- Créditos del Cliente -->
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0"><i class="bi bi-credit-card"></i> Créditos</h5>
+                <a href="{% url 'nuevo_credito' %}" class="btn btn-sm btn-primary">
+                    <i class="bi bi-plus-circle"></i> Nuevo Crédito
+                </a>
+            </div>
+            <div class="card-body">
+                {% if creditos %}
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>Monto</th>
+                                <th>Plazo</th>
+                                <th>Tasa (%)</th>
+                                <th>Estado</th>
+                                <th>Fecha</th>
+                                <th>Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for credito in creditos %}
+                            <tr>
+                                <td>${{ credito.monto|floatformat:0 }}</td>
+                                <td>{{ credito.plazo_meses }} meses</td>
+                                <td>{{ credito.tasa_interes }}%</td>
+                                <td>
+                                    {% if credito.estado == 'APROBADO' %}
+                                        <span class="badge bg-success">{{ credito.estado }}</span>
+                                    {% elif credito.estado == 'DESEMBOLSADO' %}
+                                        <span class="badge bg-primary">{{ credito.estado }}</span>
+                                    {% elif credito.estado == 'PAGADO' %}
+                                        <span class="badge bg-secondary">{{ credito.estado }}</span>
+                                    {% else %}
+                                        <span class="badge bg-danger">{{ credito.estado }}</span>
+                                    {% endif %}
+                                </td>
+                                <td>{{ credito.fecha_solicitud|date:"d/m/Y" }}</td>
+                                <td>
+                                    <a href="{% url 'editar_credito' credito.id %}" class="btn btn-sm btn-outline-primary">
+                                        <i class="bi bi-pencil"></i>
+                                    </a>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <p class="text-muted">Este cliente no tiene creditos registrados.</p>
+                <a href="{% url 'nuevo_credito' %}" class="btn btn-primary">
+                    <i class="bi bi-plus-circle"></i> Crear Nuevo Credito
+                </a>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal para ver imagenes en grande -->
+<div class="modal fade" id="imageModal" tabindex="-1" aria-labelledby="imageModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="imageModalLabel">Documento</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body text-center">
+                <img id="modalImage" src="" alt="Documento" class="img-fluid" style="max-height: 70vh; border-radius: 8px;">
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+                <button type="button" class="btn btn-primary" onclick="downloadImage()">Descargar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<!-- CSS para documentos -->
+<style>
+/* Estilos para la grilla de documentos */
+.documents-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 15px;
+    margin-bottom: 20px;
+}
+
+.document-item {
+    text-align: center;
+}
+
+.document-label {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: #495057;
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+}
+
+.document-label i {
+    color: #007bff;
+}
+
+.document-preview {
+    position: relative;
+    width: 100%;
+    height: 120px;
+    border-radius: 8px;
+    overflow: hidden;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    border: 2px solid #e9ecef;
+}
+
+.document-preview:hover {
+    transform: scale(1.05);
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+    border-color: #007bff;
+}
+
+.document-preview img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transition: all 0.3s ease;
+}
+
+.document-preview:hover img {
+    transform: scale(1.1);
+}
+
+.document-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 123, 255, 0.8);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+
+.document-preview:hover .document-overlay {
+    opacity: 1;
+}
+
+.document-overlay i {
+    color: white;
+    font-size: 1.5rem;
+}
+
+.document-empty {
+    width: 100%;
+    height: 120px;
+    border: 2px dashed #ced4da;
+    border-radius: 8px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background: #f8f9fa;
+    color: #6c757d;
+    transition: all 0.3s ease;
+}
+
+.document-empty:hover {
+    border-color: #adb5bd;
+    background: #e9ecef;
+}
+
+.document-empty i {
+    font-size: 1.8rem;
+    margin-bottom: 5px;
+    opacity: 0.5;
+}
+
+.document-empty span {
+    font-size: 0.8rem;
+    font-weight: 500;
+}
+
+.document-error {
+    width: 100%;
+    height: 120px;
+    border: 2px solid #dc3545;
+    border-radius: 8px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background: #f8f9fa;
+    color: #dc3545;
+    font-size: 0.8rem;
+    text-align: center;
+}
+
+.document-error i {
+    font-size: 1.5rem;
+    margin-bottom: 5px;
+}
+
+.alert-sm {
+    padding: 8px 12px;
+    font-size: 0.85rem;
+}
+
+.documents-summary .alert {
+    border: none;
+    border-radius: 8px;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .documents-grid {
+        grid-template-columns: 1fr;
+        gap: 10px;
+    }
+    
+    .document-preview,
+    .document-empty {
+        height: 100px;
+    }
+}
+</style>
+
+<!-- JavaScript mínimo solo para funcionalidad esencial -->
+<script>
+function openImageModal(imageUrl, title) {
+    document.getElementById('modalImage').src = imageUrl;
+    document.getElementById('imageModalLabel').innerText = title;
+    new bootstrap.Modal(document.getElementById('imageModal')).show();
+}
+
+function downloadImage() {
+    const imageUrl = document.getElementById('modalImage').src;
+    const link = document.createElement('a');
+    link.href = imageUrl;
+    link.download = 'documento.jpg';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+}
+</script>
+{% endblock %}

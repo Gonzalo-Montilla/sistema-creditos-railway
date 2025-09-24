@@ -1,0 +1,472 @@
+<!-- Componente de Captura de Fotos con Cámara -->
+<div class="camera-capture-modal" id="cameraModal" style="display: none;">
+    <div class="camera-container">
+        <div class="camera-header">
+            <h5 id="cameraTitle">Tomar Foto</h5>
+            <button type="button" class="btn-close-camera" onclick="closeCameraModal()">&times;</button>
+        </div>
+        
+        <div class="camera-body">
+            <div class="camera-preview">
+                <video id="cameraVideo" autoplay muted playsinline></video>
+                <canvas id="cameraCanvas" style="display: none;"></canvas>
+            </div>
+            
+            <div class="camera-instructions">
+                <p id="cameraInstructions">Posiciona el documento o rostro en el centro y presiona capturar</p>
+            </div>
+            
+            <div class="camera-controls">
+                <button type="button" class="btn btn-secondary" onclick="closeCameraModal()">
+                    <i class="fas fa-times"></i> Cancelar
+                </button>
+                <button type="button" class="btn btn-primary" id="captureBtn" onclick="capturePhoto()">
+                    <i class="fas fa-camera"></i> Capturar
+                </button>
+                <button type="button" class="btn btn-success" id="confirmBtn" onclick="confirmPhoto()" style="display: none;">
+                    <i class="fas fa-check"></i> Usar Esta Foto
+                </button>
+                <button type="button" class="btn btn-warning" id="retakeBtn" onclick="retakePhoto()" style="display: none;">
+                    <i class="fas fa-redo"></i> Tomar Otra
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.camera-capture-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.9);
+    z-index: 9999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.camera-container {
+    background: white;
+    border-radius: 15px;
+    padding: 20px;
+    max-width: 600px;
+    width: 90%;
+    max-height: 90vh;
+    overflow-y: auto;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+}
+
+.camera-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+    padding-bottom: 15px;
+    border-bottom: 1px solid #dee2e6;
+}
+
+.camera-header h5 {
+    margin: 0;
+    color: #333;
+    font-weight: 600;
+}
+
+.btn-close-camera {
+    background: none;
+    border: none;
+    font-size: 1.5rem;
+    cursor: pointer;
+    color: #666;
+    padding: 0;
+    width: 30px;
+    height: 30px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    transition: all 0.3s ease;
+}
+
+.btn-close-camera:hover {
+    background-color: #f8f9fa;
+    color: #333;
+}
+
+.camera-preview {
+    position: relative;
+    margin-bottom: 15px;
+    text-align: center;
+    border-radius: 10px;
+    overflow: hidden;
+    background: #000;
+}
+
+#cameraVideo {
+    width: 100%;
+    height: auto;
+    max-height: 400px;
+    border-radius: 10px;
+}
+
+#cameraCanvas {
+    width: 100%;
+    height: auto;
+    max-height: 400px;
+    border-radius: 10px;
+}
+
+.camera-instructions {
+    text-align: center;
+    margin-bottom: 20px;
+}
+
+.camera-instructions p {
+    color: #666;
+    font-size: 0.9rem;
+    margin: 0;
+}
+
+.camera-controls {
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+    flex-wrap: wrap;
+}
+
+.camera-controls .btn {
+    border-radius: 25px;
+    padding: 8px 20px;
+    font-weight: 500;
+    transition: all 0.3s ease;
+}
+
+.camera-controls .btn:hover {
+    transform: translateY(-2px);
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .camera-container {
+        margin: 10px;
+        width: calc(100% - 20px);
+    }
+    
+    .camera-controls {
+        flex-direction: column;
+    }
+    
+    .camera-controls .btn {
+        width: 100%;
+    }
+}
+
+/* Indicador de captura */
+.capture-flash {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: white;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.1s ease;
+}
+
+.capture-flash.active {
+    opacity: 0.7;
+}
+
+/* Loader para cámara */
+.camera-loading {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 200px;
+    color: #666;
+}
+
+.camera-loading i {
+    font-size: 2rem;
+    margin-right: 10px;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+</style>
+
+<script>
+let currentStream = null;
+let currentPhotoType = null;
+let currentPhotoField = null;
+
+// Configuraciones para diferentes tipos de foto
+const photoConfigs = {
+    'foto_rostro': {
+        title: 'Foto del Rostro',
+        instructions: 'Posiciona tu rostro en el centro del cuadro y asegúrate de tener buena iluminación'
+    },
+    'foto_cedula_frontal': {
+        title: 'Cédula - Parte Frontal',
+        instructions: 'Coloca la cédula horizontal y asegúrate de que se vea completa y legible'
+    },
+    'foto_cedula_trasera': {
+        title: 'Cédula - Parte Trasera',
+        instructions: 'Coloca la parte trasera de la cédula y verifica que se vea toda la información'
+    },
+    'foto_recibo_servicio': {
+        title: 'Recibo de Servicio Público',
+        instructions: 'Toma una foto clara del recibo donde se vea la dirección completa'
+    }
+};
+
+function openCameraModal(photoType, fieldId) {
+    currentPhotoType = photoType;
+    currentPhotoField = fieldId;
+    
+    // Configurar título e instrucciones
+    const config = photoConfigs[photoType] || { title: 'Tomar Foto', instructions: 'Posiciona el documento en el centro' };
+    document.getElementById('cameraTitle').textContent = config.title;
+    document.getElementById('cameraInstructions').textContent = config.instructions;
+    
+    // Mostrar modal
+    document.getElementById('cameraModal').style.display = 'flex';
+    
+    // Resetear controles
+    document.getElementById('captureBtn').style.display = 'inline-block';
+    document.getElementById('confirmBtn').style.display = 'none';
+    document.getElementById('retakeBtn').style.display = 'none';
+    
+    // Iniciar cámara
+    startCamera();
+}
+
+async function startCamera() {
+    const video = document.getElementById('cameraVideo');
+    const canvas = document.getElementById('cameraCanvas');
+    
+    video.style.display = 'block';
+    canvas.style.display = 'none';
+    
+    try {
+        // Configuraciones para diferentes tipos de cámara
+        const constraints = {
+            video: {
+                width: { ideal: 1280 },
+                height: { ideal: 720 },
+                facingMode: currentPhotoType === 'foto_rostro' ? 'user' : 'environment' // Frontal para rostro, trasera para documentos
+            }
+        };
+        
+        currentStream = await navigator.mediaDevices.getUserMedia(constraints);
+        video.srcObject = currentStream;
+        
+        // Esperar a que el video esté listo
+        video.onloadedmetadata = () => {
+            video.play();
+        };
+        
+    } catch (error) {
+        console.error('Error al acceder a la cámara:', error);
+        alert('No se pudo acceder a la cámara. Por favor, permite el acceso a la cámara y recarga la página.');
+        closeCameraModal();
+    }
+}
+
+function capturePhoto() {
+    const video = document.getElementById('cameraVideo');
+    const canvas = document.getElementById('cameraCanvas');
+    const context = canvas.getContext('2d');
+    
+    // Configurar el canvas con las dimensiones del video
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    
+    // Efecto de flash
+    const flash = document.createElement('div');
+    flash.className = 'capture-flash active';
+    document.querySelector('.camera-preview').appendChild(flash);
+    
+    setTimeout(() => {
+        flash.remove();
+    }, 100);
+    
+    // Capturar la imagen
+    context.drawImage(video, 0, 0, canvas.width, canvas.height);
+    
+    // Mostrar el canvas y ocultar el video
+    video.style.display = 'none';
+    canvas.style.display = 'block';
+    
+    // Cambiar controles
+    document.getElementById('captureBtn').style.display = 'none';
+    document.getElementById('confirmBtn').style.display = 'inline-block';
+    document.getElementById('retakeBtn').style.display = 'inline-block';
+    
+    // Parar la cámara temporalmente
+    stopCamera();
+}
+
+function retakePhoto() {
+    const video = document.getElementById('cameraVideo');
+    const canvas = document.getElementById('cameraCanvas');
+    
+    video.style.display = 'block';
+    canvas.style.display = 'none';
+    
+    document.getElementById('captureBtn').style.display = 'inline-block';
+    document.getElementById('confirmBtn').style.display = 'none';
+    document.getElementById('retakeBtn').style.display = 'none';
+    
+    startCamera();
+}
+
+function confirmPhoto() {
+    const canvas = document.getElementById('cameraCanvas');
+    
+    // Convertir a blob con buena calidad
+    canvas.toBlob((blob) => {
+        // Crear un nombre único para el archivo
+        const timestamp = Date.now();
+        const fileName = `${currentPhotoType}_${timestamp}.jpg`;
+        
+        const file = new File([blob], fileName, {
+            type: 'image/jpeg',
+            lastModified: timestamp
+        });
+        
+        console.log('Archivo creado:', {
+            name: file.name,
+            size: file.size,
+            type: file.type
+        });
+        
+        // Crear un DataTransfer para simular la selección de archivo
+        const dataTransfer = new DataTransfer();
+        dataTransfer.items.add(file);
+        
+        // Asignar al campo de archivo
+        const fileInput = document.getElementById(currentPhotoField);
+        fileInput.files = dataTransfer.files;
+        
+        // Verificar que se asignó correctamente
+        console.log('Archivo asignado al input:', {
+            inputId: currentPhotoField,
+            filesLength: fileInput.files.length,
+            fileName: fileInput.files[0] ? fileInput.files[0].name : 'No file'
+        });
+        
+        // Disparar evento change para que Django lo detecte
+        const changeEvent = new Event('change', { bubbles: true });
+        fileInput.dispatchEvent(changeEvent);
+        
+        // Mostrar preview
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
+        showPhotoPreview(fileInput, dataUrl);
+        
+        // Marcar el campo como modificado
+        fileInput.setAttribute('data-photo-captured', 'true');
+        
+        // Cerrar modal
+        closeCameraModal();
+        
+        // Mostrar confirmación
+        showToast('success', `✓ Foto capturada: ${fileName}`);
+        
+    }, 'image/jpeg', 0.8);
+}
+
+function closeCameraModal() {
+    document.getElementById('cameraModal').style.display = 'none';
+    stopCamera();
+    currentPhotoType = null;
+    currentPhotoField = null;
+}
+
+function stopCamera() {
+    if (currentStream) {
+        const tracks = currentStream.getTracks();
+        tracks.forEach(track => track.stop());
+        currentStream = null;
+    }
+}
+
+function showPhotoPreview(input, dataUrl) {
+    // Encontrar el contenedor de preview
+    const previewContainer = input.closest('.photo-capture-container').querySelector('.photo-preview');
+    
+    if (previewContainer) {
+        previewContainer.innerHTML = `
+            <div class="captured-photo">
+                <img src="${dataUrl}" alt="Foto capturada" style="width: 100%; height: 150px; object-fit: cover; border-radius: 8px; border: 3px solid #28a745; box-shadow: 0 4px 8px rgba(40, 167, 69, 0.3);">
+                <div class="photo-info mt-2">
+                    <small class="text-success fw-bold">
+                        <i class="fas fa-check-circle"></i> Foto capturada - Lista para guardar
+                    </small>
+                </div>
+            </div>
+        `;
+        previewContainer.style.display = 'block';
+        
+        // Cambiar el estilo del botón de captura para indicar que hay foto
+        const captureButton = input.closest('.photo-capture-container').querySelector('.photo-capture-button');
+        if (captureButton) {
+            captureButton.style.borderColor = '#28a745';
+            captureButton.style.background = 'linear-gradient(135deg, #f0fff0 0%, #e8f5e8 100%)';
+            const icon = captureButton.querySelector('i');
+            if (icon) {
+                icon.style.color = '#28a745';
+            }
+        }
+    }
+    
+    console.log('Preview mostrado para:', input.id);
+}
+
+function showToast(type, message) {
+    const toast = document.createElement('div');
+    toast.className = `alert alert-${type} toast-notification`;
+    toast.innerHTML = message;
+    toast.style.cssText = `
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        z-index: 10000;
+        min-width: 300px;
+        border-radius: 8px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+        opacity: 0;
+        transform: translateX(100%);
+        transition: all 0.3s ease;
+    `;
+    
+    document.body.appendChild(toast);
+    
+    setTimeout(() => {
+        toast.style.opacity = '1';
+        toast.style.transform = 'translateX(0)';
+    }, 100);
+    
+    setTimeout(() => {
+        toast.style.opacity = '0';
+        toast.style.transform = 'translateX(100%)';
+        setTimeout(() => toast.remove(), 300);
+    }, 3000);
+}
+
+// Cerrar modal con ESC
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape' && document.getElementById('cameraModal').style.display === 'flex') {
+        closeCameraModal();
+    }
+});
+
+// Detener cámara al cerrar/recargar página
+window.addEventListener('beforeunload', stopCamera);
+</script>

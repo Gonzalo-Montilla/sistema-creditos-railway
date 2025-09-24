@@ -1,0 +1,203 @@
+{% extends 'base.html' %}
+
+{% block title %}Editar Ruta - {{ ruta.nombre }}{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2><i class="bi bi-pencil"></i> Editar Ruta: {{ ruta.nombre }}</h2>
+    <div>
+        <a href="{% url 'detalle_ruta' ruta.id %}" class="btn btn-outline-info me-2">
+            <i class="bi bi-eye"></i> Ver Detalle
+        </a>
+        <a href="{% url 'rutas' %}" class="btn btn-secondary">
+            <i class="bi bi-arrow-left"></i> Volver a Rutas
+        </a>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-map"></i> Información de la Ruta</h5>
+            </div>
+            <div class="card-body">
+                <form method="post">
+                    {% csrf_token %}
+                    
+                    <!-- Información básica -->
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label for="{{ form.nombre.id_for_label }}" class="form-label">
+                                <i class="bi bi-signpost"></i> Nombre de la Ruta *
+                            </label>
+                            {{ form.nombre }}
+                            {% if form.nombre.errors %}
+                                <div class="text-danger small">{{ form.nombre.errors.0 }}</div>
+                            {% endif %}
+                        </div>
+                        <div class="col-md-6">
+                            <label for="{{ form.zona.id_for_label }}" class="form-label">
+                                <i class="bi bi-geo"></i> Zona/Sector
+                            </label>
+                            {{ form.zona }}
+                            {% if form.zona.errors %}
+                                <div class="text-danger small">{{ form.zona.errors.0 }}</div>
+                            {% endif %}
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="{{ form.descripcion.id_for_label }}" class="form-label">
+                            <i class="bi bi-card-text"></i> Descripción
+                        </label>
+                        {{ form.descripcion }}
+                        {% if form.descripcion.errors %}
+                            <div class="text-danger small">{{ form.descripcion.errors.0 }}</div>
+                        {% endif %}
+                    </div>
+                    
+                    <!-- Barrios -->
+                    <div class="mb-3">
+                        <label for="{{ form.barrios.id_for_label }}" class="form-label">
+                            <i class="bi bi-houses"></i> Barrios Incluidos *
+                        </label>
+                        {{ form.barrios }}
+                        <div class="form-text">
+                            <i class="bi bi-info-circle"></i>
+                            Separe los nombres de los barrios con comas. Ejemplo: Centro, La Esperanza, San José
+                        </div>
+                        {% if form.barrios.errors %}
+                            <div class="text-danger small">{{ form.barrios.errors.0 }}</div>
+                        {% endif %}
+                    </div>
+                    
+                    <!-- Estado -->
+                    <div class="mb-3">
+                        <div class="form-check">
+                            {{ form.activa }}
+                            <label class="form-check-label" for="{{ form.activa.id_for_label }}">
+                                <i class="bi bi-check-circle"></i> Ruta Activa
+                            </label>
+                        </div>
+                        <div class="form-text">
+                            <i class="bi bi-info-circle"></i>
+                            Si desactiva la ruta, no se podrán asignar nuevos cobradores a ella.
+                        </div>
+                        {% if form.activa.errors %}
+                            <div class="text-danger small">{{ form.activa.errors.0 }}</div>
+                        {% endif %}
+                    </div>
+                    
+                    <!-- Botones de acción -->
+                    <div class="d-flex gap-2 mt-4">
+                        <button type="submit" class="btn btn-success">
+                            <i class="bi bi-check2"></i> Actualizar Ruta
+                        </button>
+                        <a href="{% url 'detalle_ruta' ruta.id %}" class="btn btn-outline-primary">
+                            <i class="bi bi-eye"></i> Ver Detalle
+                        </a>
+                        <a href="{% url 'rutas' %}" class="btn btn-secondary">
+                            <i class="bi bi-x"></i> Cancelar
+                        </a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-4">
+        <!-- Información actual de la ruta -->
+        <div class="card border-info">
+            <div class="card-header bg-info text-white">
+                <h6 class="mb-0"><i class="bi bi-info-circle"></i> Información Actual</h6>
+            </div>
+            <div class="card-body">
+                <h6>Datos de la ruta:</h6>
+                <ul class="list-unstyled mb-3">
+                    <li><strong>Creada:</strong> {{ ruta.fecha_creacion|date:"d/m/Y H:i" }}</li>
+                    {% if ruta.fecha_modificacion != ruta.fecha_creacion %}
+                        <li><strong>Última modificación:</strong> {{ ruta.fecha_modificacion|date:"d/m/Y H:i" }}</li>
+                    {% endif %}
+                    <li><strong>Estado:</strong> 
+                        {% if ruta.activa %}
+                            <span class="badge bg-success">Activa</span>
+                        {% else %}
+                            <span class="badge bg-danger">Inactiva</span>
+                        {% endif %}
+                    </li>
+                </ul>
+                
+                <h6>Cobradores asignados:</h6>
+                {% if ruta.cobradores.all %}
+                    <ul class="list-unstyled mb-3">
+                        {% for cobrador in ruta.cobradores.all %}
+                            <li>
+                                <i class="bi bi-person-check text-success"></i>
+                                <a href="{% url 'detalle_cobrador' cobrador.id %}" class="text-decoration-none">
+                                    {{ cobrador.nombre_completo }}
+                                </a>
+                                {% if not cobrador.activo %}
+                                    <span class="badge bg-secondary small">Inactivo</span>
+                                {% endif %}
+                            </li>
+                        {% endfor %}
+                    </ul>
+                {% else %}
+                    <p class="text-muted small">No hay cobradores asignados a esta ruta.</p>
+                {% endif %}
+            </div>
+        </div>
+        
+        <div class="card border-primary mt-3">
+            <div class="card-header bg-primary text-white">
+                <h6 class="mb-0"><i class="bi bi-lightbulb"></i> Consejos de Edición</h6>
+            </div>
+            <div class="card-body">
+                <h6>Campos obligatorios:</h6>
+                <ul class="list-unstyled mb-3">
+                    <li><i class="bi bi-asterisk text-danger"></i> Nombre de la ruta</li>
+                    <li><i class="bi bi-asterisk text-danger"></i> Barrios incluidos</li>
+                </ul>
+                
+                <h6>¿Cómo modificar barrios?</h6>
+                <p class="small text-muted">
+                    Puede agregar o quitar barrios separándolos con comas. 
+                    Los cambios afectarán las nuevas asignaciones de cobradores.
+                </p>
+                
+                <div class="alert alert-light border small">
+                    <strong>Ejemplo:</strong><br>
+                    Centro, La Esperanza, San José, Villa Nueva
+                </div>
+                
+                <div class="alert alert-warning small">
+                    <i class="bi bi-exclamation-triangle"></i>
+                    <strong>Nota:</strong> Si desactiva la ruta, los cobradores actuales 
+                    mantendrán sus asignaciones, pero no se podrán hacer nuevas asignaciones.
+                </div>
+            </div>
+        </div>
+        
+        <div class="card border-success mt-3">
+            <div class="card-header bg-success text-white">
+                <h6 class="mb-0"><i class="bi bi-graph-up"></i> Estadísticas</h6>
+            </div>
+            <div class="card-body">
+                <div class="row text-center">
+                    <div class="col-6">
+                        <div class="border-end">
+                            <h4 class="text-primary">{{ ruta.cobradores.count }}</h4>
+                            <small class="text-muted">Cobradores</small>
+                        </div>
+                    </div>
+                    <div class="col-6">
+                        <h4 class="text-success">{{ ruta.get_barrios_lista|length }}</h4>
+                        <small class="text-muted">Barrios</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

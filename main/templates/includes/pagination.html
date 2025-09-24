@@ -1,0 +1,118 @@
+{% if page_obj.has_other_pages %}
+<div class="d-flex justify-content-between align-items-center mt-4 flex-wrap">
+    <!-- Información de página en móvil/desktop -->
+    <div class="pagination-info mb-2 mb-md-0">
+        <small class="text-muted">
+            Mostrando 
+            <strong>{{ page_obj.start_index }}</strong> - 
+            <strong>{{ page_obj.end_index }}</strong> 
+            de <strong>{{ page_obj.paginator.count }}</strong> registros
+        </small>
+    </div>
+    
+    <!-- Controles de paginación -->
+    <nav aria-label="Navegación de páginas">
+        <ul class="pagination pagination-sm mb-0">
+            <!-- Botón Primera página -->
+            {% if page_obj.has_previous %}
+                <li class="page-item">
+                    <a class="page-link" href="?{% if request.GET.items %}{% for key, value in request.GET.items %}{% if key != 'page' %}{{ key }}={{ value }}&{% endif %}{% endfor %}{% endif %}page=1" 
+                       aria-label="Primera página">
+                        <i class="bi bi-chevron-double-left"></i>
+                        <span class="d-none d-md-inline ms-1">Primera</span>
+                    </a>
+                </li>
+                
+                <!-- Botón Anterior -->
+                <li class="page-item">
+                    <a class="page-link" href="?{% if request.GET.items %}{% for key, value in request.GET.items %}{% if key != 'page' %}{{ key }}={{ value }}&{% endif %}{% endfor %}{% endif %}page={{ page_obj.previous_page_number }}" 
+                       aria-label="Página anterior">
+                        <i class="bi bi-chevron-left"></i>
+                        <span class="d-none d-md-inline ms-1">Anterior</span>
+                    </a>
+                </li>
+            {% else %}
+                <li class="page-item disabled">
+                    <span class="page-link">
+                        <i class="bi bi-chevron-double-left"></i>
+                        <span class="d-none d-md-inline ms-1">Primera</span>
+                    </span>
+                </li>
+                <li class="page-item disabled">
+                    <span class="page-link">
+                        <i class="bi bi-chevron-left"></i>
+                        <span class="d-none d-md-inline ms-1">Anterior</span>
+                    </span>
+                </li>
+            {% endif %}
+            
+            <!-- Números de página -->
+            {% for num in page_obj.paginator.page_range %}
+                {% if page_obj.number == num %}
+                    <li class="page-item active">
+                        <span class="page-link">{{ num }}</span>
+                    </li>
+                {% elif num > page_obj.number|add:'-3' and num < page_obj.number|add:'3' %}
+                    <li class="page-item">
+                        <a class="page-link" href="?{% if request.GET.items %}{% for key, value in request.GET.items %}{% if key != 'page' %}{{ key }}={{ value }}&{% endif %}{% endfor %}{% endif %}page={{ num }}">{{ num }}</a>
+                    </li>
+                {% endif %}
+            {% endfor %}
+            
+            <!-- Botón Siguiente -->
+            {% if page_obj.has_next %}
+                <li class="page-item">
+                    <a class="page-link" href="?{% if request.GET.items %}{% for key, value in request.GET.items %}{% if key != 'page' %}{{ key }}={{ value }}&{% endif %}{% endfor %}{% endif %}page={{ page_obj.next_page_number }}" 
+                       aria-label="Página siguiente">
+                        <span class="d-none d-md-inline me-1">Siguiente</span>
+                        <i class="bi bi-chevron-right"></i>
+                    </a>
+                </li>
+                
+                <!-- Botón Última página -->
+                <li class="page-item">
+                    <a class="page-link" href="?{% if request.GET.items %}{% for key, value in request.GET.items %}{% if key != 'page' %}{{ key }}={{ value }}&{% endif %}{% endfor %}{% endif %}page={{ page_obj.paginator.num_pages }}" 
+                       aria-label="Última página">
+                        <span class="d-none d-md-inline me-1">Última</span>
+                        <i class="bi bi-chevron-double-right"></i>
+                    </a>
+                </li>
+            {% else %}
+                <li class="page-item disabled">
+                    <span class="page-link">
+                        <span class="d-none d-md-inline me-1">Siguiente</span>
+                        <i class="bi bi-chevron-right"></i>
+                    </span>
+                </li>
+                <li class="page-item disabled">
+                    <span class="page-link">
+                        <span class="d-none d-md-inline me-1">Última</span>
+                        <i class="bi bi-chevron-double-right"></i>
+                    </span>
+                </li>
+            {% endif %}
+        </ul>
+    </nav>
+</div>
+
+<!-- Estilo adicional para móvil -->
+<style>
+@media (max-width: 576px) {
+    .pagination-info {
+        font-size: 0.75rem;
+        text-align: center;
+        width: 100%;
+    }
+    
+    .pagination {
+        justify-content: center;
+        flex-wrap: wrap;
+    }
+    
+    .page-link {
+        padding: 0.25rem 0.5rem;
+        font-size: 0.875rem;
+    }
+}
+</style>
+{% endif %}

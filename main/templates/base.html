@@ -1,0 +1,602 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <meta name="theme-color" content="#667eea">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="Sistema Créditos">
+    <title>{% block title %}Sistema de Créditos{% endblock %}</title>
+    
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Bootstrap Icons -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css" rel="stylesheet">
+    <!-- Font Awesome -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <!-- Google Fonts - Poppins -->
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;700;800&display=swap" rel="stylesheet">
+    
+    <style>
+        /* Optimización móvil */
+        .sidebar {
+            min-height: 100vh;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            position: fixed;
+            top: 0;
+            left: -100%;
+            width: 280px;
+            z-index: 1050;
+            transition: left 0.3s ease;
+        }
+        
+        .sidebar.show {
+            left: 0;
+        }
+        
+        .sidebar-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            z-index: 1049;
+        }
+        
+        .sidebar-overlay.show {
+            display: block;
+        }
+        
+        /* Móvil - Navbar superior */
+        .mobile-navbar {
+            display: none;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 1rem;
+            position: sticky;
+            top: 0;
+            z-index: 1048;
+        }
+        
+        .mobile-menu-btn {
+            background: none;
+            border: none;
+            color: white;
+            font-size: 1.5rem;
+            padding: 0;
+        }
+        
+        /* Desktop - sidebar siempre visible */
+        @media (min-width: 768px) {
+            .sidebar {
+                position: static;
+                left: 0;
+                transition: none;
+            }
+            
+            .mobile-navbar {
+                display: none !important;
+            }
+            
+            .main-content {
+                margin-left: 0;
+            }
+        }
+        
+        /* Móvil - ocultar sidebar, mostrar navbar */
+        @media (max-width: 767px) {
+            .mobile-navbar {
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+            }
+            
+            .main-content {
+                margin-left: 0 !important;
+                padding: 1rem !important;
+            }
+            
+            .container-fluid {
+                padding: 0;
+            }
+            
+            /* Sidebar móvil más ancho y con mejor UX */
+            .sidebar {
+                width: 85vw;
+                max-width: 320px;
+            }
+        }
+        
+        .sidebar .nav-link {
+            color: rgba(255, 255, 255, 0.8);
+            padding: 0.75rem 1rem;
+            border-radius: 0.5rem;
+            margin-bottom: 0.25rem;
+            transition: all 0.3s;
+        }
+        
+        .sidebar .nav-link:hover {
+            color: white;
+            background-color: rgba(255, 255, 255, 0.1);
+            transform: translateX(5px);
+        }
+        
+        .sidebar .nav-link.active {
+            color: white;
+            background-color: rgba(255, 255, 255, 0.2);
+        }
+        
+        .main-content {
+            min-height: 100vh;
+            background-color: #f8f9fa;
+        }
+        
+        .card {
+            border: none;
+            box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+            border-radius: 0.75rem;
+        }
+        
+        .btn {
+            border-radius: 0.5rem;
+            font-weight: 500;
+        }
+        
+        .navbar-brand {
+            font-weight: bold;
+            font-size: 1.5rem;
+        }
+        
+        /* Estilos para CREDIFLOW en navbar */
+        .brand-crediflow {
+            font-family: 'Poppins', sans-serif;
+            font-weight: 800;
+            font-size: 1.8rem;
+            background: linear-gradient(135deg, #1e40af, #7c3aed, #0891b2);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            color: white;
+            letter-spacing: -0.5px;
+            line-height: 1.1;
+            text-align: center;
+            margin-bottom: 0;
+        }
+        
+        .brand-subtitle {
+            color: rgba(255, 255, 255, 0.8);
+            font-size: 0.75rem;
+            font-weight: 400;
+            text-align: center;
+            margin-bottom: 0;
+            margin-top: -2px;
+            opacity: 0.9;
+        }
+        
+        /* Para navbar móvil */
+        .mobile-brand-crediflow {
+            font-family: 'Poppins', sans-serif;
+            font-weight: 700;
+            font-size: 1.1rem;
+            color: white;
+            margin: 0;
+            letter-spacing: -0.5px;
+        }
+        
+        .mobile-brand-subtitle {
+            color: rgba(255, 255, 255, 0.8);
+            font-size: 0.7rem;
+            font-weight: 300;
+            margin: 0;
+        }
+        
+        /* Estilos para las tarjetas del dashboard */
+        .metric-card {
+            background: white;
+            border-radius: 15px;
+            padding: 2rem 1.5rem;
+            text-align: center;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            cursor: pointer;
+            border: 1px solid rgba(0, 0, 0, 0.05);
+            height: 100%;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .metric-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 4px;
+            background: linear-gradient(90deg, #3b82f6, #1d4ed8);
+            transform: scaleX(0);
+            transition: transform 0.3s ease;
+        }
+        
+        .metric-card:hover::before {
+            transform: scaleX(1);
+        }
+        
+        .metric-card:hover {
+            transform: translateY(-8px) scale(1.02);
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+        }
+        
+        .metric-card i {
+            color: #6b7280;
+            margin-bottom: 1rem;
+            transition: all 0.3s ease;
+        }
+        
+        .metric-card:hover i {
+            transform: scale(1.1);
+        }
+        
+        .metric-card .metric-number {
+            font-size: 3rem;
+            font-weight: 700;
+            color: #111827;
+            margin-bottom: 0.5rem;
+            line-height: 1;
+        }
+        
+        .metric-card h5 {
+            color: #374151;
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+            font-size: 1.1rem;
+        }
+        
+        .metric-card p {
+            color: #6b7280;
+            font-size: 0.875rem;
+            margin: 0;
+        }
+        
+        /* Variantes de color para las tarjetas */
+        .metric-card.primary::before {
+            background: linear-gradient(90deg, #3b82f6, #1d4ed8);
+        }
+        
+        .metric-card.primary:hover i {
+            color: #3b82f6;
+        }
+        
+        .metric-card.success::before {
+            background: linear-gradient(90deg, #10b981, #059669);
+        }
+        
+        .metric-card.success:hover i {
+            color: #10b981;
+        }
+        
+        .metric-card.warning::before {
+            background: linear-gradient(90deg, #f59e0b, #d97706);
+        }
+        
+        .metric-card.warning:hover i {
+            color: #f59e0b;
+        }
+        
+        .metric-card.danger::before {
+            background: linear-gradient(90deg, #ef4444, #dc2626);
+        }
+        
+        .metric-card.danger:hover i {
+            color: #ef4444;
+        }
+        
+        /* Estilos responsivos */
+        @media (max-width: 768px) {
+            .metric-card {
+                padding: 1rem 0.75rem;
+                margin-bottom: 1rem;
+            }
+            
+            .metric-card .metric-number {
+                font-size: 2rem;
+            }
+            
+            .metric-card i {
+                font-size: 1.5rem !important;
+                margin-bottom: 0.5rem;
+            }
+            
+            .metric-card h5 {
+                font-size: 0.9rem;
+            }
+            
+            .metric-card p {
+                font-size: 0.8rem;
+            }
+            
+            /* Ajustes para pantallas muy pequeñas */
+            .col-6 .metric-card {
+                text-align: center;
+            }
+            
+            .page-title {
+                font-size: 1.5rem;
+                text-align: center;
+                margin-bottom: 1.5rem;
+            }
+        }
+        
+        @media (max-width: 576px) {
+            .metric-card {
+                padding: 0.75rem 0.5rem;
+            }
+            
+            .metric-card .metric-number {
+                font-size: 1.75rem;
+            }
+            
+            .metric-card h5 {
+                font-size: 0.85rem;
+            }
+        }
+        
+        /* Estilos adicionales para el dashboard */
+        .page-title {
+            color: #111827;
+            font-weight: 600;
+            margin-bottom: 2rem;
+            font-size: 2rem;
+        }
+        
+        .page-title i {
+            color: #3b82f6;
+            margin-right: 0.5rem;
+        }
+        
+        /* Estilos para el footer */
+        .app-footer {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 2rem 0;
+            margin-top: 4rem;
+            text-align: center;
+            font-size: 0.9rem;
+            position: relative;
+            z-index: 1;
+        }
+        
+        .footer-brand {
+            font-family: 'Poppins', sans-serif;
+            font-weight: 600;
+            font-size: 1rem;
+            margin-bottom: 0.5rem;
+        }
+        
+        .footer-copyright {
+            opacity: 0.9;
+            font-weight: 300;
+            margin-bottom: 0;
+        }
+        
+        .footer-owner {
+            color: #fbbf24;
+            font-weight: 500;
+        }
+        
+        @media (max-width: 768px) {
+            .app-footer {
+                margin-top: 2rem;
+                padding: 1rem 0;
+                font-size: 0.8rem;
+            }
+            
+            .footer-brand {
+                font-size: 0.9rem;
+            }
+        }
+    </style>
+    
+    {% block extra_head %}
+    {% endblock %}
+</head>
+<body>
+    <!-- Navbar móvil -->
+    <div class="mobile-navbar">
+        <div class="d-flex align-items-center">
+            <button class="mobile-menu-btn" onclick="toggleSidebar()">
+                <i class="fas fa-bars"></i>
+            </button>
+            <div class="ms-3">
+                <div class="mobile-brand-crediflow">CREDIFLOW</div>
+                <div class="mobile-brand-subtitle">Sistema de Créditos</div>
+            </div>
+        </div>
+        <div>
+            <span class="badge bg-light text-dark">{{ user.username }}</span>
+        </div>
+    </div>
+    
+    <!-- Overlay para móvil -->
+    <div class="sidebar-overlay" onclick="toggleSidebar()"></div>
+    
+    <div class="container-fluid">
+        <div class="row">
+            <!-- Sidebar -->
+            <nav class="col-md-3 col-lg-2 d-md-block sidebar collapse">
+                <div class="position-sticky pt-3">
+                    <div class="text-center mb-4">
+                        <i class="bi bi-credit-card-2-back text-white mb-2" style="font-size: 2rem;"></i>
+                        <h1 class="brand-crediflow">CREDIFLOW</h1>
+                        <p class="brand-subtitle">Sistema de Créditos y Cobros</p>
+                    </div>
+                    
+                    <ul class="nav flex-column">
+                        <li class="nav-item">
+                            <a class="nav-link {% if request.resolver_match.url_name == 'dashboard' %}active{% endif %}" 
+                               href="{% url 'dashboard' %}">
+                                <i class="bi bi-house-door me-2"></i>
+                                Dashboard
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link {% if 'cliente' in request.resolver_match.url_name %}active{% endif %}" 
+                               href="{% url 'clientes' %}">
+                                <i class="bi bi-people me-2"></i>
+                                Clientes
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link {% if 'credito' in request.resolver_match.url_name %}active{% endif %}" 
+                               href="{% url 'creditos' %}">
+                                <i class="bi bi-credit-card me-2"></i>
+                                Créditos
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link {% if 'pago' in request.resolver_match.url_name %}active{% endif %}" 
+                               href="{% url 'pagos' %}">
+                                <i class="bi bi-currency-dollar me-2"></i>
+                                Pagos
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link {% if request.resolver_match.url_name == 'recaudacion_cobradores' or request.resolver_match.url_name == 'detalles_pagos_cobrador' %}active{% endif %}" 
+                               href="{% url 'recaudacion_cobradores' %}">
+                                <i class="bi bi-graph-up me-2"></i>
+                                Recaudación
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link {% if request.resolver_match.url_name == 'gestion_cartera' or request.resolver_match.url_name == 'cartera_vencida' or request.resolver_match.url_name == 'actualizar_cartera' %}active{% endif %}" 
+                               href="{% url 'gestion_cartera' %}">
+                                <i class="bi bi-wallet2 me-2"></i>
+                                Gestión Cartera
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link {% if 'tarea' in request.resolver_match.url_name or 'agenda' in request.resolver_match.url_name or 'supervisor' in request.resolver_match.url_name %}active{% endif %}" 
+                               href="{% url 'agenda_cobrador' %}">
+                                <i class="bi bi-calendar-check me-2"></i>
+                                Tareas de Cobro
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link {% if request.resolver_match.url_name == 'cobradores' or request.resolver_match.url_name == 'nuevo_cobrador' or request.resolver_match.url_name == 'detalle_cobrador' or request.resolver_match.url_name == 'editar_cobrador' or request.resolver_match.url_name == 'rutas' or request.resolver_match.url_name == 'nueva_ruta' or request.resolver_match.url_name == 'detalle_ruta' or request.resolver_match.url_name == 'editar_ruta' or request.resolver_match.url_name == 'gestion_diaria_cobros' %}active{% endif %}" 
+                               href="{% url 'cobradores' %}">
+                                <i class="bi bi-cash-coin me-2"></i>
+                                Cobradores
+                            </a>
+                        </li>
+                    </ul>
+                    
+                    <hr class="my-3" style="border-color: rgba(255, 255, 255, 0.3);">
+                    
+                    <ul class="nav flex-column">
+                        <li class="nav-item">
+                            <a class="nav-link" href="{% url 'logout' %}">
+                                <i class="bi bi-box-arrow-right me-2"></i>
+                                Cerrar Sesión
+                            </a>
+                        </li>
+                    </ul>
+                </div>
+            </nav>
+
+            <!-- Main content -->
+            <main class="col-md-9 ms-sm-auto col-lg-10 px-md-4 main-content">
+                <div class="py-4">
+                    <!-- Messages -->
+                    {% if messages %}
+                        {% for message in messages %}
+                            <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+                                {% if message.tags == 'success' %}
+                                    <i class="bi bi-check-circle me-2"></i>
+                                {% elif message.tags == 'error' %}
+                                    <i class="bi bi-exclamation-circle me-2"></i>
+                                {% elif message.tags == 'warning' %}
+                                    <i class="bi bi-exclamation-triangle me-2"></i>
+                                {% else %}
+                                    <i class="bi bi-info-circle me-2"></i>
+                                {% endif %}
+                                {{ message }}
+                                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                            </div>
+                        {% endfor %}
+                    {% endif %}
+
+                    <!-- Page content -->
+                    {% block content %}
+                    {% endblock %}
+                    
+                    <!-- Footer -->
+                    <footer class="app-footer">
+                        <div class="container">
+                            <div class="footer-brand">
+                                <i class="fas fa-coins me-2"></i>
+                                CREDIFLOW
+                            </div>
+                            <p class="footer-copyright">
+                                © {{ "now"|date:"Y" }} Todos los derechos reservados.<br>
+                                Propiedad de <span class="footer-owner">Jesús Gonzalo Montilla L</span>
+                            </p>
+                        </div>
+                    </footer>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <!-- JavaScript para sidebar móvil -->
+    <script>
+        function toggleSidebar() {
+            const sidebar = document.querySelector('.sidebar');
+            const overlay = document.querySelector('.sidebar-overlay');
+            
+            sidebar.classList.toggle('show');
+            overlay.classList.toggle('show');
+            
+            // Prevenir scroll del body cuando el sidebar está abierto
+            if (sidebar.classList.contains('show')) {
+                document.body.style.overflow = 'hidden';
+            } else {
+                document.body.style.overflow = 'auto';
+            }
+        }
+        
+        // Cerrar sidebar al hacer clic en un enlace (móvil)
+        document.addEventListener('DOMContentLoaded', function() {
+            const sidebarLinks = document.querySelectorAll('.sidebar .nav-link');
+            const isMobile = window.innerWidth < 768;
+            
+            if (isMobile) {
+                sidebarLinks.forEach(link => {
+                    link.addEventListener('click', function() {
+                        toggleSidebar();
+                    });
+                });
+            }
+        });
+        
+        // Responsive: ajustar sidebar según tamaño de pantalla
+        window.addEventListener('resize', function() {
+            const sidebar = document.querySelector('.sidebar');
+            const overlay = document.querySelector('.sidebar-overlay');
+            
+            if (window.innerWidth >= 768) {
+                sidebar.classList.remove('show');
+                overlay.classList.remove('show');
+                document.body.style.overflow = 'auto';
+            }
+        });
+    </script>
+    
+    {% block extra_js %}
+    {% endblock %}
+</body>
+</html>

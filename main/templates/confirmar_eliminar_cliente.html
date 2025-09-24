@@ -1,0 +1,156 @@
+{% extends 'base.html' %}
+
+{% block title %}Confirmar Eliminación{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2><i class="bi bi-exclamation-triangle text-warning"></i> Confirmar Eliminación</h2>
+    <a href="{% url 'detalle_cliente' cliente.id %}" class="btn btn-secondary">
+        <i class="bi bi-arrow-left"></i> Cancelar
+    </a>
+</div>
+
+<div class="row justify-content-center">
+    <div class="col-md-8">
+        <div class="card border-warning">
+            <div class="card-header bg-warning text-dark">
+                <h5 class="mb-0">
+                    <i class="bi bi-exclamation-triangle me-2"></i>
+                    ¿Está seguro que desea eliminar este cliente?
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="alert alert-warning">
+                    <i class="bi bi-info-circle me-2"></i>
+                    <strong>Atención:</strong> Esta acción desactivará al cliente pero no eliminará sus datos permanentemente.
+                    El cliente aparecerá como "Inactivo" y no se mostrará en la lista principal.
+                </div>
+
+                <div class="row">
+                    <div class="col-md-6">
+                        <h6><i class="bi bi-person"></i> Información del Cliente</h6>
+                        <table class="table table-sm">
+                            <tr>
+                                <td><strong>Nombre Completo:</strong></td>
+                                <td>{{ cliente.nombre_completo }}</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Cédula:</strong></td>
+                                <td>{{ cliente.cedula }}</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Celular:</strong></td>
+                                <td>{{ cliente.celular }}</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Dirección:</strong></td>
+                                <td>{{ cliente.direccion }}</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Fecha de Registro:</strong></td>
+                                <td>{{ cliente.fecha_registro|date:"d/m/Y H:i" }}</td>
+                            </tr>
+                        </table>
+                    </div>
+                    <div class="col-md-6">
+                        <h6><i class="bi bi-exclamation-circle"></i> Consecuencias de esta acción</h6>
+                        <ul class="list-unstyled">
+                            <li class="mb-2">
+                                <i class="bi bi-check-circle text-success me-2"></i>
+                                Los datos del cliente se conservarán
+                            </li>
+                            <li class="mb-2">
+                                <i class="bi bi-check-circle text-success me-2"></i>
+                                Los créditos existentes no se verán afectados
+                            </li>
+                            <li class="mb-2">
+                                <i class="bi bi-check-circle text-success me-2"></i>
+                                Se puede reactivar más tarde si es necesario
+                            </li>
+                            <li class="mb-2">
+                                <i class="bi bi-x-circle text-warning me-2"></i>
+                                No aparecerá en la lista principal de clientes
+                            </li>
+                            <li class="mb-2">
+                                <i class="bi bi-x-circle text-warning me-2"></i>
+                                No se podrán crear nuevos créditos mientras esté inactivo
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+
+                <hr>
+
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <small class="text-muted">
+                            <i class="bi bi-info-circle me-1"></i>
+                            Esta acción se puede revertir contactando al administrador del sistema
+                        </small>
+                    </div>
+                    <div>
+                        <a href="{% url 'detalle_cliente' cliente.id %}" class="btn btn-outline-secondary me-2">
+                            <i class="bi bi-x-lg"></i> Cancelar
+                        </a>
+                        <form method="post" style="display: inline;">
+                            {% csrf_token %}
+                            <button type="submit" class="btn btn-danger">
+                                <i class="bi bi-person-dash"></i> Confirmar Desactivación
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal de confirmación adicional (opcional) -->
+<div class="modal fade" id="confirmModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title">
+                    <i class="bi bi-exclamation-triangle me-2"></i>
+                    Confirmación Final
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p class="mb-0">
+                    ¿Está completamente seguro que desea desactivar al cliente 
+                    <strong>{{ cliente.nombre_completo }}</strong>?
+                </p>
+                <p class="text-muted mt-2 mb-0">
+                    <small>Esta es la última oportunidad para cancelar esta acción.</small>
+                </p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                    <i class="bi bi-x-lg"></i> Cancelar
+                </button>
+                <button type="button" class="btn btn-danger" onclick="document.querySelector('form').submit();">
+                    <i class="bi bi-person-dash"></i> Sí, Desactivar Cliente
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Opcional: Mostrar modal de confirmación adicional
+document.addEventListener('DOMContentLoaded', function() {
+    const deleteBtn = document.querySelector('button[type="submit"]');
+    if (deleteBtn) {
+        deleteBtn.addEventListener('click', function(e) {
+            e.preventDefault();
+            const modal = new bootstrap.Modal(document.getElementById('confirmModal'));
+            modal.show();
+        });
+    }
+});
+</script>
+{% endblock %}

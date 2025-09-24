@@ -1,0 +1,267 @@
+<!-- Modal para Captura de Fotos -->
+<div class="modal fade" id="cameraModal" tabindex="-1" aria-labelledby="cameraModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="cameraModalLabel">
+                    <i class="fas fa-camera"></i> Capturar Foto
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div id="cameraContainer">
+                    <div id="cameraControls" class="text-center mb-3">
+                        <button type="button" id="startCameraBtn" class="btn btn-primary">
+                            <i class="fas fa-video"></i> Activar Cámara
+                        </button>
+                        <button type="button" id="switchCameraBtn" class="btn btn-outline-secondary ms-2" style="display: none;">
+                            <i class="fas fa-sync-alt"></i> Cambiar Cámara
+                        </button>
+                    </div>
+                    
+                    <div id="videoContainer" class="text-center" style="display: none;">
+                        <video id="cameraVideo" width="100%" height="400" autoplay></video>
+                        <canvas id="photoCanvas" style="display: none;"></canvas>
+                        
+                        <div class="mt-3">
+                            <button type="button" id="captureBtn" class="btn btn-success">
+                                <i class="fas fa-camera"></i> Tomar Foto
+                            </button>
+                            <button type="button" id="stopCameraBtn" class="btn btn-danger ms-2">
+                                <i class="fas fa-stop"></i> Detener Cámara
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div id="previewContainer" class="text-center" style="display: none;">
+                        <h6>Vista Previa:</h6>
+                        <img id="photoPreview" class="img-fluid border" style="max-height: 400px;">
+                        
+                        <div class="mt-3">
+                            <button type="button" id="retakeBtn" class="btn btn-warning">
+                                <i class="fas fa-redo"></i> Tomar Otra
+                            </button>
+                            <button type="button" id="confirmBtn" class="btn btn-success ms-2">
+                                <i class="fas fa-check"></i> Confirmar Foto
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div id="cameraError" class="alert alert-danger" style="display: none;">
+                        <i class="fas fa-exclamation-triangle"></i>
+                        <span id="cameraErrorMessage">Error al acceder a la cámara</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+class CameraCapture {
+    constructor() {
+        this.video = document.getElementById('cameraVideo');
+        this.canvas = document.getElementById('photoCanvas');
+        this.context = this.canvas.getContext('2d');
+        this.preview = document.getElementById('photoPreview');
+        this.stream = null;
+        this.currentInput = null;
+        this.currentFieldName = null;
+        this.devices = [];
+        this.currentDeviceIndex = 0;
+        
+        this.initEventListeners();
+    }
+    
+    initEventListeners() {
+        document.getElementById('startCameraBtn').addEventListener('click', () => this.startCamera());
+        document.getElementById('switchCameraBtn').addEventListener('click', () => this.switchCamera());
+        document.getElementById('captureBtn').addEventListener('click', () => this.capturePhoto());
+        document.getElementById('retakeBtn').addEventListener('click', () => this.retakePhoto());
+        document.getElementById('confirmBtn').addEventListener('click', () => this.confirmPhoto());
+        document.getElementById('stopCameraBtn').addEventListener('click', () => this.stopCamera());
+        
+        // Cerrar modal
+        document.getElementById('cameraModal').addEventListener('hidden.bs.modal', () => {
+            this.stopCamera();
+        });
+    }
+    
+    async startCamera() {
+        try {
+            // Ocultar error si existe
+            document.getElementById('cameraError').style.display = 'none';
+            
+            // Obtener dispositivos disponibles
+            await this.getDevices();
+            
+            const constraints = {
+                video: {
+                    deviceId: this.devices.length > 0 ? { exact: this.devices[this.currentDeviceIndex].deviceId } : undefined,
+                    width: { ideal: 1280 },
+                    height: { ideal: 720 }
+                },
+                audio: false
+            };
+            
+            this.stream = await navigator.mediaDevices.getUserMedia(constraints);
+            this.video.srcObject = this.stream;
+            
+            // Mostrar video y controles
+            document.getElementById('cameraControls').style.display = 'none';
+            document.getElementById('videoContainer').style.display = 'block';
+            document.getElementById('previewContainer').style.display = 'none';
+            
+            // Mostrar botón de cambiar cámara si hay múltiples dispositivos
+            if (this.devices.length > 1) {
+                document.getElementById('switchCameraBtn').style.display = 'inline-block';
+            }
+            
+        } catch (error) {
+            console.error('Error al acceder a la cámara:', error);
+            this.showError('No se pudo acceder a la cámara. Verifica que tengas permisos y que esté conectada.');
+        }
+    }
+    
+    async getDevices() {
+        try {
+            const devices = await navigator.mediaDevices.enumerateDevices();
+            this.devices = devices.filter(device => device.kind === 'videoinput');
+        } catch (error) {
+            console.error('Error obteniendo dispositivos:', error);
+            this.devices = [];
+        }
+    }
+    
+    async switchCamera() {
+        if (this.devices.length > 1) {
+            this.currentDeviceIndex = (this.currentDeviceIndex + 1) % this.devices.length;
+            this.stopCamera();
+            await this.startCamera();
+        }
+    }
+    
+    capturePhoto() {
+        // Configurar canvas con las dimensiones del video
+        this.canvas.width = this.video.videoWidth;
+        this.canvas.height = this.video.videoHeight;
+        
+        // Dibujar el frame actual del video en el canvas
+        this.context.drawImage(this.video, 0, 0);
+        
+        // Obtener la imagen como data URL
+        const photoDataURL = this.canvas.toDataURL('image/jpeg', 0.8);
+        
+        // Mostrar preview
+        this.preview.src = photoDataURL;
+        
+        // Cambiar vista
+        document.getElementById('videoContainer').style.display = 'none';
+        document.getElementById('previewContainer').style.display = 'block';
+    }
+    
+    retakePhoto() {
+        document.getElementById('previewContainer').style.display = 'none';
+        document.getElementById('videoContainer').style.display = 'block';
+    }
+    
+    confirmPhoto() {
+        if (this.currentInput && this.preview.src) {
+            // Convertir data URL a blob
+            const dataURL = this.preview.src;
+            const byteString = atob(dataURL.split(',')[1]);
+            const mimeString = dataURL.split(',')[0].split(':')[1].split(';')[0];
+            const ab = new ArrayBuffer(byteString.length);
+            const ia = new Uint8Array(ab);
+            
+            for (let i = 0; i < byteString.length; i++) {
+                ia[i] = byteString.charCodeAt(i);
+            }
+            
+            const blob = new Blob([ab], { type: mimeString });
+            
+            // Crear archivo con nombre único
+            const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+            const fileName = `${this.currentFieldName}_${timestamp}.jpg`;
+            const file = new File([blob], fileName, { type: 'image/jpeg' });
+            
+            // Crear FileList para el input
+            const dataTransfer = new DataTransfer();
+            dataTransfer.items.add(file);
+            this.currentInput.files = dataTransfer.files;
+            
+            // Disparar evento change para actualizar preview en el formulario
+            const changeEvent = new Event('change', { bubbles: true });
+            this.currentInput.dispatchEvent(changeEvent);
+            
+            // Actualizar preview en el formulario
+            this.updateFormPreview(dataURL);
+            
+            // Cerrar modal
+            bootstrap.Modal.getInstance(document.getElementById('cameraModal')).hide();
+        }
+    }
+    
+    updateFormPreview(dataURL) {
+        // Buscar el contenedor de preview correspondiente
+        const container = this.currentInput.closest('.photo-capture-container');
+        const previewDiv = container.querySelector('.photo-preview');
+        
+        if (previewDiv) {
+            previewDiv.innerHTML = `
+                <div class="captured-photo-preview">
+                    <img src="${dataURL}" alt="Foto capturada" style="max-width: 100%; height: 100px; object-fit: cover; border-radius: 8px; border: 2px solid #28a745;">
+                    <small class="d-block text-success mt-1">
+                        <i class="fas fa-check-circle"></i> Foto capturada exitosamente
+                    </small>
+                </div>
+            `;
+            previewDiv.style.display = 'block';
+        }
+    }
+    
+    stopCamera() {
+        if (this.stream) {
+            this.stream.getTracks().forEach(track => track.stop());
+            this.stream = null;
+        }
+        
+        // Resetear vista
+        document.getElementById('cameraControls').style.display = 'block';
+        document.getElementById('videoContainer').style.display = 'none';
+        document.getElementById('previewContainer').style.display = 'none';
+        document.getElementById('switchCameraBtn').style.display = 'none';
+    }
+    
+    showError(message) {
+        document.getElementById('cameraErrorMessage').textContent = message;
+        document.getElementById('cameraError').style.display = 'block';
+        document.getElementById('cameraControls').style.display = 'block';
+        document.getElementById('videoContainer').style.display = 'none';
+    }
+    
+    open(fieldName, inputId) {
+        this.currentFieldName = fieldName;
+        this.currentInput = document.getElementById(inputId);
+        
+        // Actualizar título del modal
+        document.getElementById('cameraModalLabel').innerHTML = 
+            `<i class="fas fa-camera"></i> Capturar ${fieldName.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())}`;
+        
+        // Mostrar modal
+        new bootstrap.Modal(document.getElementById('cameraModal')).show();
+    }
+}
+
+// Inicializar cuando el DOM esté listo
+document.addEventListener('DOMContentLoaded', function() {
+    window.cameraCapture = new CameraCapture();
+});
+
+// Función global para abrir el modal de cámara
+function openCameraModal(fieldName, inputId) {
+    if (window.cameraCapture) {
+        window.cameraCapture.open(fieldName, inputId);
+    }
+}
+</script>

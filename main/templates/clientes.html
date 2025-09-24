@@ -1,0 +1,368 @@
+{% extends 'base.html' %}
+
+{% block title %}Clientes{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2><i class="bi bi-people"></i> Gestión de Clientes</h2>
+    <a href="{% url 'nuevo_cliente' %}" class="btn btn-primary">
+        <i class="bi bi-plus-circle"></i> Nuevo Cliente
+    </a>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <div class="row align-items-center">
+            <div class="col">
+                <h5 class="mb-0"><i class="bi bi-list"></i> Lista de Clientes Activos</h5>
+            </div>
+            <div class="col-auto">
+                <div class="input-group">
+                    <input type="text" class="form-control" placeholder="Buscar por cédula (exacta) o nombre (parcial)..." 
+                           id="buscar-cedula" autocomplete="off">
+                    <button class="btn btn-outline-primary" type="button" id="buscar-btn">
+                        <i class="bi bi-search"></i> Buscar
+                    </button>
+                    <button class="btn btn-outline-secondary" type="button" id="limpiar-btn" style="display: none;">
+                        <i class="bi bi-x-circle"></i> Limpiar
+                    </button>
+                </div>
+                <small class="text-muted">Ingrese la cédula o nombre para buscar un cliente específico</small>
+            </div>
+        </div>
+    </div>
+    <div class="card-body">
+        <!-- Mensaje de búsqueda -->
+        <div id="mensaje-busqueda" class="alert alert-info" style="display: none;">
+            <i class="bi bi-search"></i>
+            <span id="texto-mensaje"></span>
+        </div>
+        
+        {% if clientes %}
+        <div class="table-responsive">
+            <table class="table table-striped table-hover">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Nombre Completo</th>
+                        <th>Cédula</th>
+                        <th>Celular</th>
+                        <th>Barrio</th>
+                        <th>Codeudor</th>
+                        <th>Fecha Registro</th>
+                        <th>Acciones</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for cliente in clientes %}
+                    <tr data-cedula="{{ cliente.cedula }}" class="cliente-fila">
+                        <td>{{ cliente.id }}</td>
+                        <td>
+                            <div class="d-flex align-items-center">
+                                {% if cliente.foto_rostro %}
+                                    <img src="{{ cliente.foto_rostro.url }}" alt="Foto" 
+                                         class="rounded-circle me-2" style="width: 40px; height: 40px; object-fit: cover;">
+                                {% else %}
+                                    <div class="bg-secondary rounded-circle me-2 d-flex align-items-center justify-content-center" 
+                                         style="width: 40px; height: 40px;">
+                                        <i class="bi bi-person text-white"></i>
+                                    </div>
+                                {% endif %}
+                                <div>
+                                    <strong>{{ cliente.nombre_completo }}</strong>
+                                    {% if cliente.email %}
+                                        <br><small class="text-muted">{{ cliente.email }}</small>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </td>
+                        <td>{{ cliente.cedula }}</td>
+                        <td>
+                            <i class="bi bi-phone"></i> {{ cliente.celular }}
+                            {% if cliente.telefono_fijo %}
+                                <br><small class="text-muted"><i class="bi bi-telephone"></i> {{ cliente.telefono_fijo }}</small>
+                            {% endif %}
+                        </td>
+                        <td>{{ cliente.barrio|default:"No especificado" }}</td>
+                        <td>
+                            {% if cliente.codeudor %}
+                                <span class="badge bg-success">
+                                    <i class="bi bi-person-plus"></i> Asignado
+                                </span>
+                                <br><small class="text-muted">{{ cliente.codeudor.nombre_completo }}</small>
+                            {% else %}
+                                <span class="badge bg-warning">
+                                    <i class="bi bi-person-dash"></i> Sin codeudor
+                                </span>
+                            {% endif %}
+                        </td>
+                        <td>{{ cliente.fecha_registro|date:"d/m/Y" }}</td>
+                        <td>
+                            <div class="btn-group" role="group">
+                                <a href="{% url 'detalle_cliente' cliente.id %}" class="btn btn-sm btn-outline-info" 
+                                   title="Ver detalle completo">
+                                    <i class="bi bi-eye"></i>
+                                </a>
+                                <a href="{% url 'editar_cliente' cliente.id %}" class="btn btn-sm btn-outline-primary" 
+                                   title="Editar cliente">
+                                    <i class="bi bi-pencil"></i>
+                                </a>
+                                <a href="{% url 'eliminar_cliente' cliente.id %}" class="btn btn-sm btn-outline-danger" 
+                                   title="Desactivar cliente">
+                                    <i class="bi bi-trash"></i>
+                                </a>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        
+        <!-- Paginación -->
+        {% with page_obj=clientes %}
+            {% include 'includes/pagination.html' %}
+        {% endwith %}
+        
+        {% else %}
+        <div class="text-center py-5">
+            <i class="bi bi-people display-1 text-muted"></i>
+            <h4 class="text-muted mt-3">No hay clientes registrados</h4>
+            <p class="text-muted">Comienza agregando tu primer cliente al sistema.</p>
+            <a href="{% url 'nuevo_cliente' %}" class="btn btn-primary">
+                <i class="bi bi-plus-circle"></i> Agregar Primer Cliente
+            </a>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<div class="row mt-4">
+    <div class="col-md-4">
+        <div class="card text-center">
+            <div class="card-body">
+                <i class="bi bi-people display-4 text-primary"></i>
+                <h5 class="card-title mt-2">Total Clientes</h5>
+                <h3 class="text-primary">{{ clientes.paginator.count }}</h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card text-center">
+            <div class="card-body">
+                <i class="bi bi-person-plus display-4 text-success"></i>
+                <h5 class="card-title mt-2">Con Codeudor</h5>
+                <h3 class="text-success">{{ clientes|length|add:"-0" }}{% comment %}Calculado en el template{% endcomment %}</h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card text-center">
+            <div class="card-body">
+                <i class="bi bi-person-dash display-4 text-warning"></i>
+                <h5 class="card-title mt-2">Sin Codeudor</h5>
+                <h3 class="text-warning">{{ clientes|length|add:"-0" }}{% comment %}Calculado en el template{% endcomment %}</h3>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="alert alert-info mt-4" role="alert">
+    <i class="bi bi-info-circle"></i>
+    <strong>Tip:</strong> Haz clic en el botón <i class="bi bi-eye"></i> para ver el detalle completo de cada cliente, incluyendo la información de su codeudor e historial de créditos.
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Variables globales
+let clientesOriginales = [];
+let clientesFiltrados = [];
+let busquedaActiva = false;
+
+// Función para buscar cliente por cédula o nombre
+function buscarCliente() {
+    const termino = document.getElementById('buscar-cedula').value.trim().toLowerCase();
+    const buscarBtn = document.getElementById('buscar-btn');
+    const limpiarBtn = document.getElementById('limpiar-btn');
+    const mensajeBusqueda = document.getElementById('mensaje-busqueda');
+    const textoMensaje = document.getElementById('texto-mensaje');
+    const tabla = document.querySelector('tbody');
+    const filas = document.querySelectorAll('.cliente-fila');
+    
+    if (!termino) {
+        alert('Por favor ingrese una cédula o nombre para buscar');
+        return;
+    }
+    
+    // Mostrar indicador de carga
+    buscarBtn.innerHTML = '<i class="bi bi-hourglass-split"></i> Buscando...';
+    buscarBtn.disabled = true;
+    
+    // Buscar en las filas existentes
+    let clientesEncontrados = 0;
+    
+    filas.forEach(fila => {
+        const cedulaFila = fila.getAttribute('data-cedula');
+        const nombreFila = fila.querySelector('strong').textContent.toLowerCase();
+        
+        // Búsqueda exacta por cédula o parcial por nombre
+        if (cedulaFila === termino || nombreFila.includes(termino)) {
+            // Cliente encontrado - mostrar esta fila
+            fila.style.display = '';
+            fila.classList.add('table-success'); // Resaltar la fila
+            clientesEncontrados++;
+        } else {
+            // Ocultar otras filas
+            fila.style.display = 'none';
+        }
+    });
+    
+    // Actualizar interfaz
+    if (clientesEncontrados > 0) {
+        mensajeBusqueda.className = 'alert alert-success';
+        if (clientesEncontrados === 1) {
+            textoMensaje.innerHTML = `<strong>Cliente encontrado:</strong> Mostrando 1 cliente que coincide con "${termino}"`;
+        } else {
+            textoMensaje.innerHTML = `<strong>Clientes encontrados:</strong> Mostrando ${clientesEncontrados} clientes que coinciden con "${termino}"`;
+        }
+        mensajeBusqueda.style.display = 'block';
+        busquedaActiva = true;
+        limpiarBtn.style.display = 'inline-block';
+    } else {
+        mensajeBusqueda.className = 'alert alert-warning';
+        textoMensaje.innerHTML = `<strong>Sin resultados:</strong> No se encontraron clientes que coincidan con "${termino}"`;
+        mensajeBusqueda.style.display = 'block';
+        
+        // Mostrar todas las filas nuevamente
+        filas.forEach(fila => {
+            fila.style.display = '';
+            fila.classList.remove('table-success');
+        });
+    }
+    
+    // Restaurar botón
+    buscarBtn.innerHTML = '<i class="bi bi-search"></i> Buscar';
+    buscarBtn.disabled = false;
+}
+
+// Función para limpiar búsqueda
+function limpiarBusqueda() {
+    const cedula = document.getElementById('buscar-cedula');
+    const limpiarBtn = document.getElementById('limpiar-btn');
+    const mensajeBusqueda = document.getElementById('mensaje-busqueda');
+    const filas = document.querySelectorAll('.cliente-fila');
+    
+    // Limpiar campo de búsqueda
+    cedula.value = '';
+    
+    // Mostrar todas las filas
+    filas.forEach(fila => {
+        fila.style.display = '';
+        fila.classList.remove('table-success');
+    });
+    
+    // Ocultar elementos de búsqueda
+    mensajeBusqueda.style.display = 'none';
+    limpiarBtn.style.display = 'none';
+    busquedaActiva = false;
+    
+    // Enfocar el campo de búsqueda
+    cedula.focus();
+}
+
+// Event listeners
+document.addEventListener('DOMContentLoaded', function() {
+    const buscarBtn = document.getElementById('buscar-btn');
+    const limpiarBtn = document.getElementById('limpiar-btn');
+    const cedulaInput = document.getElementById('buscar-cedula');
+    
+    // Botón buscar
+    buscarBtn.addEventListener('click', buscarCliente);
+    
+    // Botón limpiar
+    limpiarBtn.addEventListener('click', limpiarBusqueda);
+    
+    // Enter en campo de cédula
+    cedulaInput.addEventListener('keypress', function(e) {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            buscarCliente();
+        }
+    });
+    
+    // Limpiar cuando se borre el contenido del campo
+    cedulaInput.addEventListener('input', function() {
+        if (this.value.trim() === '' && busquedaActiva) {
+            limpiarBusqueda();
+        }
+    });
+    
+    // Animaciones para las filas
+    const filas = document.querySelectorAll('.cliente-fila');
+    filas.forEach((fila, index) => {
+        fila.style.opacity = '0';
+        fila.style.transform = 'translateX(-20px)';
+        
+        setTimeout(() => {
+            fila.style.transition = 'all 0.3s ease';
+            fila.style.opacity = '1';
+            fila.style.transform = 'translateX(0)';
+        }, index * 50);
+    });
+});
+
+// Mejorar experiencia visual
+document.addEventListener('DOMContentLoaded', function() {
+    // Efecto hover mejorado para las filas
+    const filas = document.querySelectorAll('.cliente-fila');
+    filas.forEach(fila => {
+        fila.addEventListener('mouseenter', function() {
+            if (!this.classList.contains('table-success')) {
+                this.style.backgroundColor = '#f8f9fa';
+                this.style.transform = 'scale(1.005)';
+                this.style.boxShadow = '0 2px 4px rgba(0,0,0,0.1)';
+            }
+        });
+        
+        fila.addEventListener('mouseleave', function() {
+            if (!this.classList.contains('table-success')) {
+                this.style.backgroundColor = '';
+                this.style.transform = '';
+                this.style.boxShadow = '';
+            }
+        });
+    });
+});
+</script>
+
+<style>
+    .cliente-fila {
+        transition: all 0.3s ease;
+    }
+    
+    .cliente-fila.table-success {
+        background-color: #d4edda !important;
+        transform: scale(1.02) !important;
+        box-shadow: 0 4px 8px rgba(40, 167, 69, 0.2) !important;
+    }
+    
+    #buscar-cedula:focus {
+        border-color: #007bff;
+        box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
+    }
+    
+    .alert {
+        border: none;
+        border-radius: 10px;
+    }
+    
+    .input-group .btn {
+        transition: all 0.3s ease;
+    }
+    
+    .input-group .btn:hover {
+        transform: translateY(-1px);
+    }
+</style>
+{% endblock %}

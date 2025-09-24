@@ -1,0 +1,143 @@
+{% extends 'base.html' %}
+
+{% block title %}Nueva Ruta{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2><i class="bi bi-plus-circle"></i> Nueva Ruta</h2>
+    <a href="{% url 'rutas' %}" class="btn btn-secondary">
+        <i class="bi bi-arrow-left"></i> Volver a Rutas
+    </a>
+</div>
+
+<div class="row">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-map"></i> Información de la Ruta</h5>
+            </div>
+            <div class="card-body">
+                <form method="post">
+                    {% csrf_token %}
+                    
+                    <!-- Información básica -->
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label for="{{ form.nombre.id_for_label }}" class="form-label">
+                                <i class="bi bi-signpost"></i> Nombre de la Ruta *
+                            </label>
+                            {{ form.nombre }}
+                            {% if form.nombre.errors %}
+                                <div class="text-danger small">{{ form.nombre.errors.0 }}</div>
+                            {% endif %}
+                        </div>
+                        <div class="col-md-6">
+                            <label for="{{ form.zona.id_for_label }}" class="form-label">
+                                <i class="bi bi-geo"></i> Zona/Sector
+                            </label>
+                            {{ form.zona }}
+                            {% if form.zona.errors %}
+                                <div class="text-danger small">{{ form.zona.errors.0 }}</div>
+                            {% endif %}
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="{{ form.descripcion.id_for_label }}" class="form-label">
+                            <i class="bi bi-card-text"></i> Descripción
+                        </label>
+                        {{ form.descripcion }}
+                        {% if form.descripcion.errors %}
+                            <div class="text-danger small">{{ form.descripcion.errors.0 }}</div>
+                        {% endif %}
+                    </div>
+                    
+                    <!-- Barrios -->
+                    <div class="mb-3">
+                        <label for="{{ form.barrios.id_for_label }}" class="form-label">
+                            <i class="bi bi-houses"></i> Barrios Incluidos *
+                        </label>
+                        {{ form.barrios }}
+                        <div class="form-text">
+                            <i class="bi bi-info-circle"></i>
+                            Separe los nombres de los barrios con comas. Ejemplo: Centro, La Esperanza, San José
+                        </div>
+                        {% if form.barrios.errors %}
+                            <div class="text-danger small">{{ form.barrios.errors.0 }}</div>
+                        {% endif %}
+                    </div>
+                    
+                    <!-- Estado -->
+                    <div class="mb-3">
+                        <div class="form-check">
+                            {{ form.activa }}
+                            <label class="form-check-label" for="{{ form.activa.id_for_label }}">
+                                <i class="bi bi-check-circle"></i> Ruta Activa
+                            </label>
+                        </div>
+                        {% if form.activa.errors %}
+                            <div class="text-danger small">{{ form.activa.errors.0 }}</div>
+                        {% endif %}
+                    </div>
+                    
+                    <!-- Botones de acción -->
+                    <div class="d-flex gap-2 mt-4">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-check"></i> Crear Ruta
+                        </button>
+                        <a href="{% url 'rutas' %}" class="btn btn-secondary">
+                            <i class="bi bi-x"></i> Cancelar
+                        </a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-4">
+        <div class="card border-info">
+            <div class="card-header bg-info text-white">
+                <h6 class="mb-0"><i class="bi bi-lightbulb"></i> Información</h6>
+            </div>
+            <div class="card-body">
+                <h6>Campos obligatorios:</h6>
+                <ul class="list-unstyled mb-3">
+                    <li><i class="bi bi-asterisk text-danger"></i> Nombre de la ruta</li>
+                    <li><i class="bi bi-asterisk text-danger"></i> Barrios incluidos</li>
+                </ul>
+                
+                <h6>¿Cómo definir barrios?</h6>
+                <p class="small text-muted">
+                    Escriba los nombres de los barrios separados por comas. 
+                    Esto permite que el sistema asigne automáticamente cobradores 
+                    según la ubicación del cliente.
+                </p>
+                
+                <div class="alert alert-light border small">
+                    <strong>Ejemplo:</strong><br>
+                    Centro, La Esperanza, San José, Villa Nueva
+                </div>
+                
+                <h6>Asignación Automática:</h6>
+                <p class="small text-muted">
+                    Cuando se cree un crédito para un cliente que vive en uno de 
+                    estos barrios, el sistema sugerirá automáticamente un cobrador 
+                    asignado a esta ruta.
+                </p>
+            </div>
+        </div>
+        
+        <div class="card border-warning mt-3">
+            <div class="card-header bg-warning text-dark">
+                <h6 class="mb-0"><i class="bi bi-exclamation-triangle"></i> Recomendación</h6>
+            </div>
+            <div class="card-body">
+                <p class="small">
+                    Agrupa barrios que estén geográficamente cerca para optimizar 
+                    los recorridos de los cobradores y reducir tiempos de traslado.
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

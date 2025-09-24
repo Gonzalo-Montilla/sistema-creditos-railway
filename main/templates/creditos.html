@@ -1,0 +1,763 @@
+{% extends 'base.html' %}
+
+{% block title %}Créditos - Sistema de Créditos{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1 class="page-title mb-0">
+        <i class="fas fa-credit-card"></i> Gestión de Créditos
+    </h1>
+    <a href="{% url 'nuevo_credito' %}" class="btn btn-primary">
+        <i class="fas fa-plus"></i> Nuevo Crédito
+    </a>
+</div>
+
+<div class="row g-4 mb-5">
+    <div class="col-xl-3 col-md-6">
+        <div class="metric-card primary">
+            <i class="fas fa-file-alt fa-3x"></i>
+            <div class="metric-number">{{ total_creditos }}</div>
+            <h5>Total Créditos</h5>
+            <p>Créditos en el sistema</p>
+        </div>
+    </div>
+    
+    <div class="col-xl-3 col-md-6">
+        <div class="metric-card success">
+            <i class="fas fa-check-circle fa-3x"></i>
+            <div class="metric-number">{{ creditos_aprobados }}</div>
+            <h5>Aprobados</h5>
+            <p>Listos para desembolsar</p>
+        </div>
+    </div>
+    
+    <div class="col-xl-3 col-md-6">
+        <div class="metric-card warning">
+            <i class="fas fa-clock fa-3x"></i>
+            <div class="metric-number">{{ creditos_pendientes }}</div>
+            <h5>Pendientes</h5>
+            <p>Esperando aprobación</p>
+        </div>
+    </div>
+    
+    <div class="col-xl-3 col-md-6">
+        <div class="metric-card danger">
+            <i class="fas fa-exclamation-triangle fa-3x"></i>
+            <div class="metric-number">{{ creditos_vencidos }}</div>
+            <h5>Vencidos</h5>
+            <p>Requieren atención</p>
+        </div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <div class="row align-items-center">
+            <div class="col">
+                <h5 class="mb-0">
+                    <i class="fas fa-list"></i> Lista de Créditos
+                </h5>
+            </div>
+            <div class="col-auto">
+                <div class="input-group">
+                    <select class="form-select" id="estadoFilter">
+                        <option value="">Todos los estados</option>
+                        <option value="SOLICITADO">Solicitado</option>
+                        <option value="APROBADO">Aprobado</option>
+                        <option value="DESEMBOLSADO">Desembolsado</option>
+                        <option value="PAGADO">Pagado</option>
+                        <option value="VENCIDO">Vencido</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="card-body">
+        {% if creditos %}
+        <div class="table-responsive">
+            <table class="table table-hover" id="creditosTable">
+                <thead class="table-light">
+                    <tr>
+                        <th>ID</th>
+                        <th>Cliente</th>
+                        <th>Monto</th>
+                        <th>Tasa %</th>
+                        <th>Plazo</th>
+                        <th>Cobrador</th>
+                        <th>Estado</th>
+                        <th>Fecha Solicitud</th>
+                        <th>Acciones</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for credito in creditos %}
+                    <tr data-estado="{{ credito.estado }}">
+                        <td>
+                            <strong class="text-primary">#{{ credito.id|stringformat:"04d" }}</strong>
+                        </td>
+                        <td>
+                            <div class="d-flex align-items-center">
+                                <span class="badge bg-secondary rounded-pill me-2">
+                                    {{ credito.cliente.nombre|slice:":2"|upper }}
+                                </span>
+                                {{ credito.cliente.nombre }}
+                            </div>
+                        </td>
+                        <td>
+                            <strong class="text-success">
+                                ${{ credito.monto|floatformat:0 }}
+                            </strong>
+                        </td>
+                        <td>{{ credito.tasa_interes }}%</td>
+                        <td>{{ credito.plazo_meses }} meses</td>
+                        <td>
+                            {% if credito.cobrador %}
+                                <div class="d-flex align-items-center">
+                                    <i class="bi bi-cash-coin text-primary me-1"></i>
+                                    <span class="text-truncate" title="{{ credito.cobrador.nombre_completo }}">
+                                        {{ credito.cobrador.nombres }} {{ credito.cobrador.apellidos|slice:":1" }}.
+                                    </span>
+                                </div>
+                            {% else %}
+                                <span class="text-muted small">
+                                    <i class="bi bi-dash-circle"></i> Sin asignar
+                                </span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if credito.estado == 'SOLICITADO' %}
+                                <span class="badge bg-warning">{{ credito.get_estado_display }}</span>
+                            {% elif credito.estado == 'APROBADO' %}
+                                <span class="badge bg-info">{{ credito.get_estado_display }}</span>
+                            {% elif credito.estado == 'DESEMBOLSADO' %}
+                                <span class="badge bg-primary">{{ credito.get_estado_display }}</span>
+                            {% elif credito.estado == 'PAGADO' %}
+                                <span class="badge bg-success">{{ credito.get_estado_display }}</span>
+                            {% elif credito.estado == 'RECHAZADO' %}
+                                <span class="badge bg-danger">{{ credito.get_estado_display }}</span>
+                            {% elif credito.estado == 'VENCIDO' %}
+                                <span class="badge bg-warning">{{ credito.get_estado_display }}</span>
+                            {% endif %}
+                        </td>
+                        <td>{{ credito.fecha_solicitud|date:"d/m/Y" }}</td>
+                        <td>
+                            <div class="d-flex flex-column gap-2">
+                                <!-- Botón Ver Detalles -->
+                                <button class="btn btn-outline-primary btn-sm d-flex align-items-center justify-content-start" 
+                                        onclick="mostrarDetallesCredito({{ credito.id }}, '{{ credito.cliente.nombre|escapejs }}', '{{ credito.monto|floatformat:0 }}', '{{ credito.get_estado_display }}', '{{ credito.tasa_interes }}', '{{ credito.plazo_meses }}', '{{ credito.fecha_solicitud|date:"d/m/Y" }}', '{% if credito.cobrador %}{{ credito.cobrador.nombre_completo|escapejs }}{% else %}Sin asignar{% endif %}')">
+                                    <i class="fas fa-eye me-2"></i>
+                                    <span>Ver Detalles</span>
+                                </button>
+                                
+                                <!-- Botones según estado -->
+                                {% if credito.estado == 'SOLICITADO' %}
+                                    <div class="d-flex gap-1">
+                                        <button onclick="abrirModalAprobacion({{ credito.id }})" 
+                                                class="btn btn-success btn-sm flex-fill d-flex align-items-center justify-content-center">
+                                            <i class="fas fa-check me-1"></i>
+                                            <span class="d-none d-lg-inline">Aprobar</span>
+                                        </button>
+                                        <a href="{% url 'rechazar_credito' credito.id %}" 
+                                           class="btn btn-danger btn-sm flex-fill d-flex align-items-center justify-content-center"
+                                           onclick="return confirm('¿Rechazar crédito de {{ credito.cliente.nombre }}?')">
+                                            <i class="fas fa-times me-1"></i>
+                                            <span class="d-none d-lg-inline">Rechazar</span>
+                                        </a>
+                                    </div>
+                                {% elif credito.estado == 'APROBADO' %}
+                                    <a href="{% url 'desembolsar_credito' credito.id %}" 
+                                       class="btn btn-info btn-sm d-flex align-items-center justify-content-center"
+                                       onclick="return confirm('¿Confirmar desembolso de ${{ credito.monto|floatformat:0 }} a {{ credito.cliente.nombre }}?')">
+                                        <i class="fas fa-hand-holding-usd me-2"></i>
+                                        <span>Desembolsar</span>
+                                    </a>
+                                {% elif credito.estado == 'DESEMBOLSADO' %}
+                                    <a href="{% url 'nuevo_pago' %}?credito={{ credito.id }}" 
+                                       class="btn btn-success btn-sm d-flex align-items-center justify-content-center">
+                                        <i class="fas fa-money-bill-wave me-2"></i>
+                                        <span>Registrar Pago</span>
+                                    </a>
+                                {% elif credito.estado == 'PAGADO' %}
+                                    <button class="btn btn-outline-secondary btn-sm d-flex align-items-center justify-content-center" disabled>
+                                        <i class="fas fa-check-circle me-2"></i>
+                                        <span>Completado</span>
+                                    </button>
+                                {% endif %}
+                                
+                                <!-- Botón Editar -->
+                                <a href="{% url 'editar_credito' credito.id %}" 
+                                   class="btn btn-outline-warning btn-sm d-flex align-items-center justify-content-center">
+                                    <i class="fas fa-edit me-2"></i>
+                                    <span>Editar</span>
+                                </a>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        
+        <!-- Paginación -->
+        {% with page_obj=creditos %}
+            {% include 'includes/pagination.html' %}
+        {% endwith %}
+        
+        {% else %}
+        <div class="text-center py-5">
+            <i class="fas fa-credit-card fa-3x text-muted mb-3"></i>
+            <h5 class="text-muted">No hay créditos registrados</h5>
+            <p class="text-muted">Comienza creando tu primer crédito</p>
+            <a href="{% url 'nuevo_credito' %}" class="btn btn-primary">
+                <i class="fas fa-plus"></i> Crear Primer Crédito
+            </a>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Función para mostrar detalles del crédito en modal
+function mostrarDetallesCredito(id, cliente, monto, estado, tasa, plazo, fecha, cobrador) {
+    const modalHtml = `
+        <div class="modal fade" id="detallesCreditoModal" tabindex="-1" aria-hidden="true">
+            <div class="modal-dialog modal-lg">
+                <div class="modal-content">
+                    <div class="modal-header bg-primary text-white">
+                        <h5 class="modal-title">
+                            <i class="fas fa-credit-card me-2"></i>
+                            Detalles del Crédito #${String(id).padStart(4, '0')}
+                        </h5>
+                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="row g-4">
+                            <div class="col-md-6">
+                                <div class="card border-0 bg-light h-100">
+                                    <div class="card-body">
+                                        <h6 class="card-title text-primary">
+                                            <i class="fas fa-user me-2"></i>Información del Cliente
+                                        </h6>
+                                        <p class="card-text mb-0">
+                                            <strong>${cliente}</strong>
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="card border-0 bg-light h-100">
+                                    <div class="card-body">
+                                        <h6 class="card-title text-success">
+                                            <i class="fas fa-dollar-sign me-2"></i>Monto del Crédito
+                                        </h6>
+                                        <p class="card-text mb-0">
+                                            <strong class="fs-4 text-success">$${monto}</strong>
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="card border-0 bg-light h-100">
+                                    <div class="card-body">
+                                        <h6 class="card-title text-info">
+                                            <i class="fas fa-percentage me-2"></i>Tasa de Interés
+                                        </h6>
+                                        <p class="card-text mb-0">
+                                            <strong class="fs-5">${tasa}% anual</strong>
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="card border-0 bg-light h-100">
+                                    <div class="card-body">
+                                        <h6 class="card-title text-warning">
+                                            <i class="fas fa-calendar me-2"></i>Plazo
+                                        </h6>
+                                        <p class="card-text mb-0">
+                                            <strong class="fs-5">${plazo} meses</strong>
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="card border-0 bg-light h-100">
+                                    <div class="card-body">
+                                        <h6 class="card-title text-secondary">
+                                            <i class="fas fa-clock me-2"></i>Fecha de Solicitud
+                                        </h6>
+                                        <p class="card-text mb-0">
+                                            <strong>${fecha}</strong>
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="card border-0 bg-light h-100">
+                                    <div class="card-body">
+                                        <h6 class="card-title text-dark">
+                                            <i class="fas fa-flag me-2"></i>Estado Actual
+                                        </h6>
+                                        <p class="card-text mb-0">
+                                            <span class="badge bg-primary fs-6">${estado}</span>
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="card border-0 bg-light h-100">
+                                    <div class="card-body">
+                                        <h6 class="card-title text-success">
+                                            <i class="bi bi-cash-coin me-2"></i>Cobrador Asignado
+                                        </h6>
+                                        <p class="card-text mb-0">
+                                            <strong>${cobrador}</strong>
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                            <i class="fas fa-times me-2"></i>Cerrar
+                        </button>
+                        <a href="/editar-credito/${id}/" class="btn btn-primary">
+                            <i class="fas fa-edit me-2"></i>Editar Crédito
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    // Remover modal anterior si existe
+    const existingModal = document.getElementById('detallesCreditoModal');
+    if (existingModal) {
+        existingModal.remove();
+    }
+    
+    // Agregar modal al body
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
+    
+    // Mostrar modal
+    const modal = new bootstrap.Modal(document.getElementById('detallesCreditoModal'));
+    modal.show();
+    
+    // Remover modal del DOM cuando se cierre
+    document.getElementById('detallesCreditoModal').addEventListener('hidden.bs.modal', function() {
+        this.remove();
+    });
+}
+
+// Filtro por estado
+document.getElementById('estadoFilter').addEventListener('change', function() {
+    const selectedEstado = this.value;
+    const tableRows = document.querySelectorAll('#creditosTable tbody tr');
+    
+    tableRows.forEach(row => {
+        const rowEstado = row.getAttribute('data-estado');
+        if (selectedEstado === '' || rowEstado === selectedEstado) {
+            row.style.display = '';
+        } else {
+            row.style.display = 'none';
+        }
+    });
+});
+
+// Animaciones modernas para las tarjetas
+document.addEventListener('DOMContentLoaded', function() {
+    // Animación de entrada de las tarjetas métricas
+    const metricCards = document.querySelectorAll('.metric-card');
+    metricCards.forEach((card, index) => {
+        card.style.opacity = '0';
+        card.style.transform = 'translateY(30px)';
+        
+        setTimeout(() => {
+            card.style.transition = 'all 0.5s cubic-bezier(0.4, 0, 0.2, 1)';
+            card.style.opacity = '1';
+            card.style.transform = 'translateY(0)';
+        }, index * 150);
+    });
+    
+    // Contador animado para los números
+    const numbers = document.querySelectorAll('.metric-number');
+    numbers.forEach((number, index) => {
+        const targetValue = parseInt(number.textContent);
+        let currentValue = 0;
+        const increment = Math.ceil(targetValue / 30) || 1;
+        
+        setTimeout(() => {
+            const counter = setInterval(() => {
+                currentValue += increment;
+                if (currentValue >= targetValue) {
+                    currentValue = targetValue;
+                    clearInterval(counter);
+                }
+                number.textContent = currentValue;
+            }, 30);
+        }, index * 150 + 200);
+    });
+    
+    // Animación para la tabla
+    const mainCard = document.querySelector('.card:not(.metric-card)');
+    if (mainCard) {
+        mainCard.style.opacity = '0';
+        mainCard.style.transform = 'translateY(20px)';
+        setTimeout(() => {
+            mainCard.style.transition = 'all 0.5s ease';
+            mainCard.style.opacity = '1';
+            mainCard.style.transform = 'translateY(0)';
+        }, 600);
+    }
+    
+    // Animación para las filas de la tabla
+    const tableRows = document.querySelectorAll('#creditosTable tbody tr');
+    tableRows.forEach((row, index) => {
+        row.style.opacity = '0';
+        row.style.transform = 'translateX(-20px)';
+        setTimeout(() => {
+            row.style.transition = 'all 0.3s ease';
+            row.style.opacity = '1';
+            row.style.transform = 'translateX(0)';
+        }, 800 + index * 50);
+    });
+});
+
+// Funciones para el modal de aprobación
+
+// Función para abrir modal de aprobación
+function abrirModalAprobacion(creditoId) {
+    // Mostrar spinner de carga
+    const loadingHtml = `
+        <div class="modal fade" id="aprobacionModal" tabindex="-1" aria-hidden="true">
+            <div class="modal-dialog modal-xl">
+                <div class="modal-content">
+                    <div class="modal-header bg-success text-white">
+                        <h5 class="modal-title">
+                            <i class="fas fa-check-circle me-2"></i>
+                            Aprobación de Crédito
+                        </h5>
+                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body text-center py-5">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">Cargando...</span>
+                        </div>
+                        <p class="mt-3">Cargando información del crédito...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    // Remover modal existente si existe
+    const existingModal = document.getElementById('aprobacionModal');
+    if (existingModal) {
+        existingModal.remove();
+    }
+    
+    // Agregar modal al DOM
+    document.body.insertAdjacentHTML('beforeend', loadingHtml);
+    
+    // Mostrar modal
+    const modal = new bootstrap.Modal(document.getElementById('aprobacionModal'));
+    modal.show();
+    
+    // Cargar datos del crédito
+    fetch(`/obtener-datos-credito/${creditoId}/`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                mostrarModalAprobacion(data.credito);
+            } else {
+                mostrarError('Error al cargar los datos del crédito: ' + data.error);
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            mostrarError('Error de conexión al cargar los datos del crédito');
+        });
+}
+
+// Función para mostrar el modal de aprobación con los datos
+function mostrarModalAprobacion(credito) {
+    const cronogramaHtml = credito.cronograma.map((cuota, index) => `
+        <tr class="${index % 2 === 0 ? 'table-light' : ''}">
+            <td class="text-center"><strong>${cuota.cuota}</strong></td>
+            <td class="text-center">${cuota.fecha}</td>
+            <td class="text-end"><strong>$${cuota.valor.toLocaleString()}</strong></td>
+            <td class="text-center">
+                <span class="badge bg-warning">Pendiente</span>
+            </td>
+        </tr>
+    `).join('');
+    
+    const modalHtml = `
+        <div class="modal fade" id="aprobacionModal" tabindex="-1" aria-hidden="true">
+            <div class="modal-dialog modal-xl">
+                <div class="modal-content">
+                    <div class="modal-header bg-success text-white">
+                        <h5 class="modal-title">
+                            <i class="fas fa-check-circle me-2"></i>
+                            Aprobación de Crédito #${String(credito.id).padStart(4, '0')}
+                        </h5>
+                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <!-- Información del Cliente y Crédito -->
+                        <div class="row mb-4">
+                            <div class="col-md-6">
+                                <div class="card border-primary h-100">
+                                    <div class="card-header bg-primary text-white">
+                                        <h6 class="mb-0"><i class="fas fa-user me-2"></i>Información del Cliente</h6>
+                                    </div>
+                                    <div class="card-body">
+                                        <p><strong>Nombre:</strong> ${credito.cliente.nombre_completo}</p>
+                                        <p><strong>Cédula:</strong> ${credito.cliente.cedula}</p>
+                                        <p><strong>Celular:</strong> ${credito.cliente.celular}</p>
+                                        <p class="mb-0"><strong>Dirección:</strong> ${credito.cliente.direccion}</p>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="card border-success h-100">
+                                    <div class="card-header bg-success text-white">
+                                        <h6 class="mb-0"><i class="fas fa-credit-card me-2"></i>Detalles del Crédito</h6>
+                                    </div>
+                                    <div class="card-body">
+                                        <div class="row">
+                                            <div class="col-6">
+                                                <p><strong>Monto:</strong><br><span class="text-success fs-5">$${credito.monto.toLocaleString()}</span></p>
+                                                <p><strong>Tasa:</strong><br>${credito.tasa_interes}% anual</p>
+                                                <p><strong>Modalidad:</strong><br>${credito.tipo_plazo}</p>
+                                            </div>
+                                            <div class="col-6">
+                                                <p><strong>Cuotas:</strong><br>${credito.cantidad_cuotas}</p>
+                                                <p><strong>Valor Cuota:</strong><br><span class="text-primary">$${credito.valor_cuota.toLocaleString()}</span></p>
+                                                <p><strong>Total:</strong><br><span class="text-danger">$${credito.monto_total.toLocaleString()}</span></p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Resumen Financiero -->
+                        <div class="row mb-4">
+                            <div class="col-12">
+                                <div class="card border-info">
+                                    <div class="card-header bg-info text-white">
+                                        <h6 class="mb-0"><i class="fas fa-calculator me-2"></i>Resumen Financiero</h6>
+                                    </div>
+                                    <div class="card-body">
+                                        <div class="row text-center">
+                                            <div class="col-md-3">
+                                                <div class="border-end">
+                                                    <h6 class="text-muted">Monto Solicitado</h6>
+                                                    <h4 class="text-success">$${credito.monto.toLocaleString()}</h4>
+                                                </div>
+                                            </div>
+                                            <div class="col-md-3">
+                                                <div class="border-end">
+                                                    <h6 class="text-muted">Total Interés</h6>
+                                                    <h4 class="text-warning">$${credito.total_interes.toLocaleString()}</h4>
+                                                </div>
+                                            </div>
+                                            <div class="col-md-3">
+                                                <div class="border-end">
+                                                    <h6 class="text-muted">Total a Pagar</h6>
+                                                    <h4 class="text-danger">$${credito.monto_total.toLocaleString()}</h4>
+                                                </div>
+                                            </div>
+                                            <div class="col-md-3">
+                                                <h6 class="text-muted">Cuota ${credito.tipo_plazo}</h6>
+                                                <h4 class="text-primary">$${credito.valor_cuota.toLocaleString()}</h4>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Cronograma de Pagos -->
+                        <div class="row mb-4">
+                            <div class="col-12">
+                                <div class="card border-secondary">
+                                    <div class="card-header bg-secondary text-white d-flex justify-content-between align-items-center">
+                                        <h6 class="mb-0"><i class="fas fa-calendar-alt me-2"></i>Cronograma de Pagos</h6>
+                                        <span class="badge bg-light text-dark">${credito.cantidad_cuotas} cuotas</span>
+                                    </div>
+                                    <div class="card-body p-0">
+                                        <div class="table-responsive" style="max-height: 300px; overflow-y: auto;">
+                                            <table class="table table-sm mb-0">
+                                                <thead class="sticky-top bg-light">
+                                                    <tr>
+                                                        <th class="text-center">Cuota</th>
+                                                        <th class="text-center">Fecha de Pago</th>
+                                                        <th class="text-center">Valor</th>
+                                                        <th class="text-center">Estado</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    ${cronogramaHtml}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Información de Pago -->
+                        <div class="alert alert-info">
+                            <h6 class="alert-heading"><i class="fas fa-info-circle me-2"></i>Información de Pago</h6>
+                            <p class="mb-0">${credito.descripcion_pago || 'Pago programado según cronograma.'}</p>
+                        </div>
+                    </div>
+                    <div class="modal-footer d-flex justify-content-between">
+                        <div>
+                            <button type="button" class="btn btn-outline-primary" onclick="descargarPDF(${credito.id})">
+                                <i class="fas fa-file-pdf me-2"></i>Descargar PDF
+                            </button>
+                        </div>
+                        <div>
+                            <button type="button" class="btn btn-secondary me-2" data-bs-dismiss="modal">
+                                <i class="fas fa-times me-2"></i>Cancelar
+                            </button>
+                            <button type="button" class="btn btn-success" onclick="confirmarAprobacion(${credito.id})">
+                                <i class="fas fa-check me-2"></i>Aprobar Crédito
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    // Reemplazar contenido del modal
+    document.getElementById('aprobacionModal').remove();
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
+    
+    // Mostrar modal actualizado
+    const modal = new bootstrap.Modal(document.getElementById('aprobacionModal'));
+    modal.show();
+}
+
+// Función para descargar PDF
+function descargarPDF(creditoId) {
+    window.open(`/generar-pdf-cronograma/${creditoId}/`, '_blank');
+}
+
+// Función para confirmar aprobación
+function confirmarAprobacion(creditoId) {
+    if (confirm('¿Está seguro que desea aprobar este crédito? Esta acción no se puede deshacer.')) {
+        window.location.href = `/aprobar-credito/${creditoId}/`;
+    }
+}
+
+// Función para mostrar errores
+function mostrarError(mensaje) {
+    const modalContent = document.querySelector('#aprobacionModal .modal-content');
+    if (modalContent) {
+        modalContent.innerHTML = `
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title">
+                    <i class="fas fa-exclamation-triangle me-2"></i>
+                    Error
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body text-center py-4">
+                <i class="fas fa-exclamation-triangle fa-3x text-danger mb-3"></i>
+                <p class="fs-5">${mensaje}</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+            </div>
+        `;
+    }
+}
+</script>
+
+<style>
+    /* Efecto hover para las filas de la tabla */
+    #creditosTable tbody tr {
+        transition: all 0.3s ease;
+    }
+    
+    #creditosTable tbody tr:hover {
+        transform: scale(1.02);
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+        background-color: rgba(0, 123, 255, 0.05);
+    }
+    
+    /* Mejorar estilos de los badges */
+    .badge {
+        font-size: 0.75rem;
+        padding: 0.5em 0.8em;
+        border-radius: 0.5rem;
+    }
+    
+    /* Estilos para los botones de acción mejorados */
+    .btn-sm {
+        transition: all 0.3s ease;
+        font-size: 0.8rem;
+        padding: 0.4rem 0.8rem;
+    }
+    
+    .btn-sm:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+    }
+    
+    /* Espaciado para la columna de acciones */
+    #creditosTable td:last-child {
+        min-width: 180px;
+        padding: 1rem 0.75rem;
+    }
+    
+    /* Estilos para el modal de detalles */
+    .modal-header.bg-primary {
+        border-bottom: none;
+    }
+    
+    .modal-body .card {
+        transition: all 0.3s ease;
+    }
+    
+    .modal-body .card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    }
+    
+    /* Responsive para botones de acción */
+    @media (max-width: 992px) {
+        .d-none.d-lg-inline {
+            display: none !important;
+        }
+        
+        #creditosTable td:last-child {
+            min-width: 120px;
+        }
+    }
+    
+    /* Estados de botones según acción */
+    .btn-success:hover {
+        background-color: #157347;
+        border-color: #146c43;
+    }
+    
+    .btn-danger:hover {
+        background-color: #bb2d3b;
+        border-color: #b02a37;
+    }
+    
+    .btn-info:hover {
+        background-color: #31d2f2;
+        border-color: #25cff2;
+    }
+</style>
+{% endblock %}

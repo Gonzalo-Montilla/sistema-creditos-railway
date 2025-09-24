@@ -1,0 +1,199 @@
+{% extends 'base.html' %}
+
+{% block title %}Gestión de Rutas{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2><i class="bi bi-map"></i> Gestión de Rutas</h2>
+    <div>
+        <a href="{% url 'cobradores' %}" class="btn btn-outline-primary me-2">
+            <i class="bi bi-cash-coin"></i> Gestionar Cobradores
+        </a>
+        <a href="{% url 'nueva_ruta' %}" class="btn btn-primary">
+            <i class="bi bi-plus-circle"></i> Nueva Ruta
+        </a>
+    </div>
+</div>
+
+<!-- Estadísticas rápidas -->
+<div class="row mb-4">
+    <div class="col-md-4">
+        <div class="card border-0 bg-primary text-white">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <h4 class="card-title">{{ total_rutas }}</h4>
+                        <p class="card-text">Total Rutas</p>
+                    </div>
+                    <div class="align-self-center">
+                        <i class="bi bi-map" style="font-size: 2rem;"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card border-0 bg-success text-white">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <h4 class="card-title">{{ rutas_activas }}</h4>
+                        <p class="card-text">Rutas Activas</p>
+                    </div>
+                    <div class="align-self-center">
+                        <i class="bi bi-check-circle" style="font-size: 2rem;"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card border-0 bg-info text-white">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <h4 class="card-title">{{ total_rutas|add:"-"|add:rutas_activas }}</h4>
+                        <p class="card-text">Rutas Inactivas</p>
+                    </div>
+                    <div class="align-self-center">
+                        <i class="bi bi-x-circle" style="font-size: 2rem;"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Lista de rutas -->
+<div class="card">
+    <div class="card-header">
+        <h5 class="mb-0"><i class="bi bi-list-ul"></i> Lista de Rutas</h5>
+    </div>
+    <div class="card-body">
+        {% if rutas %}
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead class="table-light">
+                    <tr>
+                        <th>Ruta</th>
+                        <th>Zona</th>
+                        <th>Barrios</th>
+                        <th>Cobradores Asignados</th>
+                        <th>Clientes</th>
+                        <th>Estado</th>
+                        <th>Acciones</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for ruta in rutas %}
+                    <tr>
+                        <td>
+                            <div>
+                                <strong>{{ ruta.nombre }}</strong>
+                                {% if ruta.descripcion %}
+                                    <br><small class="text-muted">{{ ruta.descripcion|truncatechars:60 }}</small>
+                                {% endif %}
+                            </div>
+                        </td>
+                        <td>
+                            {% if ruta.zona %}
+                                <span class="badge bg-secondary">{{ ruta.zona }}</span>
+                            {% else %}
+                                <span class="text-muted">Sin zona</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <div class="d-flex flex-wrap gap-1">
+                                {% for barrio in ruta.get_barrios_lista|slice:":3" %}
+                                    <span class="badge bg-light text-dark">{{ barrio }}</span>
+                                {% endfor %}
+                                {% if ruta.get_barrios_lista|length > 3 %}
+                                    <span class="badge bg-info text-white">+{{ ruta.get_barrios_lista|length|add:"-3" }} más</span>
+                                {% endif %}
+                            </div>
+                        </td>
+                        <td>
+                            {% if ruta.cobradores.all %}
+                                {% for cobrador in ruta.cobradores.all %}
+                                    <div class="mb-1">
+                                        <span class="badge {% if cobrador.activo %}bg-success{% else %}bg-danger{% endif %} text-white">
+                                            {{ cobrador.nombre_completo }}
+                                        </span>
+                                    </div>
+                                {% endfor %}
+                            {% else %}
+                                <span class="text-muted">Sin cobradores</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <strong>{{ ruta.total_clientes }}</strong>
+                            <br><small class="text-muted">clientes</small>
+                        </td>
+                        <td>
+                            {% if ruta.activa %}
+                                <span class="badge bg-success">Activa</span>
+                            {% else %}
+                                <span class="badge bg-danger">Inactiva</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <div class="btn-group" role="group">
+                                <a href="{% url 'detalle_ruta' ruta.id %}" 
+                                   class="btn btn-sm btn-outline-primary" title="Ver detalles">
+                                    <i class="bi bi-eye"></i>
+                                </a>
+                                <a href="{% url 'editar_ruta' ruta.id %}" 
+                                   class="btn btn-sm btn-outline-secondary" title="Editar">
+                                    <i class="bi bi-pencil"></i>
+                                </a>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="text-center py-4">
+            <i class="bi bi-map" style="font-size: 4rem; color: #6c757d;"></i>
+            <h4 class="text-muted mt-3">No hay rutas registradas</h4>
+            <p class="text-muted">Las rutas te ayudan a organizar los cobradores por zonas geográficas</p>
+            <a href="{% url 'nueva_ruta' %}" class="btn btn-primary">
+                <i class="bi bi-plus-circle"></i> Crear Primera Ruta
+            </a>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Información útil -->
+<div class="row mt-4">
+    <div class="col-md-6">
+        <div class="card border-info">
+            <div class="card-body text-center">
+                <i class="bi bi-lightbulb" style="font-size: 2rem; color: #17a2b8;"></i>
+                <h5 class="card-title mt-2">¿Cómo funcionan las rutas?</h5>
+                <p class="card-text small">
+                    Las rutas agrupan barrios por zonas geográficas. Cuando se crea un crédito, 
+                    el sistema asigna automáticamente el cobrador según el barrio del cliente.
+                </p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card border-success">
+            <div class="card-body text-center">
+                <i class="bi bi-cash-coin" style="font-size: 2rem; color: #198754;"></i>
+                <h5 class="card-title mt-2">Gestión de Cobradores</h5>
+                <p class="card-text small">
+                    Un cobrador puede manejar múltiples rutas, y una ruta puede tener 
+                    varios cobradores asignados para flexibilidad operativa.
+                </p>
+                <a href="{% url 'cobradores' %}" class="btn btn-outline-success btn-sm">
+                    <i class="bi bi-arrow-right"></i> Ir a Cobradores
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

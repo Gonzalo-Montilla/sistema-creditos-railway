@@ -1,0 +1,306 @@
+{% extends 'base.html' %}
+
+{% block title %}Cartera Vencida{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2><i class="bi bi-exclamation-triangle text-danger"></i> Cartera Vencida</h2>
+    <div>
+        <a href="{% url 'gestion_cartera' %}" class="btn btn-outline-primary">
+            <i class="bi bi-arrow-left"></i> Volver a Gestión
+        </a>
+    </div>
+</div>
+
+<!-- Filtros -->
+<div class="card mb-4">
+    <div class="card-header">
+        <h5 class="mb-0"><i class="bi bi-funnel"></i> Filtros de Búsqueda</h5>
+    </div>
+    <div class="card-body">
+        <form method="get" class="row g-3">
+            <div class="col-md-3">
+                <label for="estado_mora" class="form-label">Estado de Mora</label>
+                <select name="estado_mora" id="estado_mora" class="form-select">
+                    <option value="">Todos los estados</option>
+                    <option value="MORA_TEMPRANA" {% if estado_mora == 'MORA_TEMPRANA' %}selected{% endif %}>
+                        Mora Temprana (1-30 días)
+                    </option>
+                    <option value="MORA_ALTA" {% if estado_mora == 'MORA_ALTA' %}selected{% endif %}>
+                        Mora Alta (31-90 días)
+                    </option>
+                    <option value="MORA_CRITICA" {% if estado_mora == 'MORA_CRITICA' %}selected{% endif %}>
+                        Mora Crítica (+90 días)
+                    </option>
+                </select>
+            </div>
+            
+            <div class="col-md-3">
+                <label for="dias_mora_min" class="form-label">Días Mora Mínimos</label>
+                <input type="number" name="dias_mora_min" id="dias_mora_min" 
+                       class="form-control" value="{{ dias_mora_min }}" 
+                       placeholder="Ej: 30" min="1">
+            </div>
+            
+            <div class="col-md-4">
+                <label for="cobrador_id" class="form-label">Cobrador</label>
+                <select name="cobrador_id" id="cobrador_id" class="form-select">
+                    <option value="">Todos los cobradores</option>
+                    {% for cobrador in cobradores %}
+                        <option value="{{ cobrador.id }}" 
+                                {% if cobrador_id == cobrador.id|stringformat:"s" %}selected{% endif %}>
+                            {{ cobrador.nombre_completo }}
+                        </option>
+                    {% endfor %}
+                </select>
+            </div>
+            
+            <div class="col-md-2 d-flex align-items-end">
+                <div class="d-grid gap-1">
+                    <button type="submit" class="btn btn-primary">
+                        <i class="bi bi-search"></i> Filtrar
+                    </button>
+                    <a href="{% url 'exportar_cartera_excel' %}?{{ request.GET.urlencode }}" 
+                       class="btn btn-success btn-sm" 
+                       title="Exportar a Excel">
+                        <i class="bi bi-file-earmark-excel"></i> Excel
+                    </a>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Tabla de créditos vencidos -->
+<div class="card">
+    <div class="card-header">
+        <h5 class="mb-0">
+            <i class="bi bi-list-ul"></i> 
+            Créditos Vencidos ({{ creditos_vencidos.paginator.count }} encontrados)
+        </h5>
+    </div>
+    <div class="card-body">
+        {% if creditos_vencidos %}
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead class="table-light">
+                    <tr>
+                        <th>Cliente</th>
+                        <th>Crédito</th>
+                        <th>Monto Original</th>
+                        <th>Saldo Pendiente</th>
+                        <th>Días Mora</th>
+                        <th>Estado Mora</th>
+                        <th>Interés Moratorio</th>
+                        <th>Cobrador</th>
+                        <th>Contacto</th>
+                        <th>Acciones</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for credito in creditos_vencidos %}
+                    <tr class="table-{% if credito.estado_mora == 'MORA_CRITICA' %}danger{% elif credito.estado_mora == 'MORA_ALTA' %}warning{% else %}light{% endif %}">
+                        <td>
+                            <strong>{{ credito.cliente.nombre_completo }}</strong>
+                            <br>
+                            <small class="text-muted">
+                                <i class="bi bi-card-text"></i> {{ credito.cliente.cedula }}
+                            </small>
+                            <br>
+                            <small class="text-muted">
+                                <i class="bi bi-geo-alt"></i> {{ credito.cliente.barrio }}
+                            </small>
+                        </td>
+                        <td>
+                            <strong>#{{ credito.id }}</strong>
+                            <br>
+                            <small class="text-muted">{{ credito.get_tipo_plazo_display }}</small>
+                            <br>
+                            <small class="text-muted">{{ credito.cantidad_cuotas }} cuotas</small>
+                        </td>
+                        <td>
+                            <strong>${{ credito.monto|floatformat:0 }}</strong>
+                            <br>
+                            <small class="text-muted">Total: ${{ credito.monto_total|floatformat:0 }}</small>
+                        </td>
+                        <td>
+                            <strong class="text-danger">${{ credito.saldo_pendiente|floatformat:0 }}</strong>
+                            <br>
+                            <small class="text-success">
+                                Pagado: ${{ credito.total_pagado|floatformat:0 }}
+                            </small>
+                        </td>
+                        <td>
+                            <span class="badge bg-{{ credito.get_color_mora }}" style="font-size: 1.1em;">
+                                {{ credito.dias_mora }}
+                            </span>
+                            <br>
+                            <small>días</small>
+                        </td>
+                        <td>
+                            <span class="badge bg-{{ credito.get_color_mora }}">
+                                {{ credito.get_estado_mora_display }}
+                            </span>
+                        </td>
+                        <td>
+                            <strong class="text-danger">
+                                ${{ credito.interes_moratorio|floatformat:0 }}
+                            </strong>
+                            <br>
+                            <small class="text-muted">
+                                {{ credito.tasa_mora }}% diario
+                            </small>
+                        </td>
+                        <td>
+                            {% if credito.cobrador %}
+                                <strong>{{ credito.cobrador.nombre_completo }}</strong>
+                                <br>
+                                <small class="text-muted">
+                                    <i class="bi bi-phone"></i> {{ credito.cobrador.celular }}
+                                </small>
+                            {% else %}
+                                <span class="text-muted">Sin asignar</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <small>
+                                <i class="bi bi-phone"></i> {{ credito.cliente.celular }}
+                            </small>
+                            <br>
+                            <small class="text-muted">{{ credito.cliente.direccion|truncatechars:30 }}</small>
+                        </td>
+                        <td>
+                            <div class="btn-group-vertical" role="group">
+                                <a href="{% url 'detalle_cliente' credito.cliente.id %}" 
+                                   class="btn btn-sm btn-outline-primary mb-1" 
+                                   title="Ver cliente">
+                                    <i class="bi bi-eye"></i>
+                                </a>
+                                <a href="{% url 'nuevo_pago' %}?credito={{ credito.id }}" 
+                                   class="btn btn-sm btn-outline-success mb-1" 
+                                   title="Registrar pago">
+                                    <i class="bi bi-cash"></i>
+                                </a>
+                                <a href="tel:{{ credito.cliente.celular }}" 
+                                   class="btn btn-sm btn-outline-warning" 
+                                   title="Llamar cliente">
+                                    <i class="bi bi-telephone"></i>
+                                </a>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        
+        <!-- Paginación -->
+        {% with page_obj=creditos_vencidos %}
+            {% include 'includes/pagination.html' %}
+        {% endwith %}
+        
+        <!-- Resumen en la parte inferior -->
+        <div class="row mt-4 pt-3 border-top">
+            <div class="col-md-3">
+                <div class="text-center">
+                    <h5 class="text-primary">{{ creditos_vencidos.paginator.count }}</h5>
+                    <small class="text-muted">Total Créditos</small>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="text-center">
+                    <h5 class="text-danger">
+                        ${% widthratio creditos_vencidos|length 1 1 as total_saldo %}
+                        {% for credito in creditos_vencidos %}
+                            {% if forloop.first %}{{ credito.saldo_pendiente|add:0|floatformat:0 }}{% endif %}
+                        {% endfor %}
+                    </h5>
+                    <small class="text-muted">Saldo Total Vencido</small>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="text-center">
+                    <h5 class="text-warning">
+                        ${% for credito in creditos_vencidos %}
+                            {% if forloop.first %}{{ credito.interes_moratorio|add:0|floatformat:0 }}{% endif %}
+                        {% endfor %}
+                    </h5>
+                    <small class="text-muted">Intereses Moratorios</small>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="text-center">
+                    <h5 class="text-info">
+                        {% if creditos_vencidos %}
+                            {{ creditos_vencidos.0.dias_mora|default:0 }}
+                        {% else %}
+                            0
+                        {% endif %}
+                    </h5>
+                    <small class="text-muted">Días Mora Máximo</small>
+                </div>
+            </div>
+        </div>
+        
+        {% else %}
+        <div class="text-center py-5">
+            <i class="bi bi-check-circle-fill text-success" style="font-size: 4rem;"></i>
+            <h4 class="text-success mt-3">¡Excelente trabajo!</h4>
+            <p class="text-muted">
+                {% if estado_mora or dias_mora_min or cobrador_id %}
+                    No se encontraron créditos vencidos con los filtros aplicados.
+                {% else %}
+                    No hay créditos en mora en este momento. La cartera está al día.
+                {% endif %}
+            </p>
+            <a href="{% url 'gestion_cartera' %}" class="btn btn-primary">
+                <i class="bi bi-arrow-left"></i> Volver a Gestión de Cartera
+            </a>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Acciones rápidas -->
+{% if creditos_vencidos %}
+<div class="row mt-4">
+    <div class="col-md-4">
+        <div class="card border-danger">
+            <div class="card-body text-center">
+                <i class="bi bi-telephone" style="font-size: 2rem; color: #dc3545;"></i>
+                <h5 class="card-title mt-2">Llamadas Masivas</h5>
+                <p class="card-text">Generar lista de llamadas para cobradores</p>
+                <button class="btn btn-outline-danger" disabled>
+                    <i class="bi bi-arrow-right"></i> Próximamente
+                </button>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card border-warning">
+            <div class="card-body text-center">
+                <i class="bi bi-envelope" style="font-size: 2rem; color: #ffc107;"></i>
+                <h5 class="card-title mt-2">Notificaciones</h5>
+                <p class="card-text">Enviar recordatorios por WhatsApp/SMS</p>
+                <button class="btn btn-outline-warning" disabled>
+                    <i class="bi bi-arrow-right"></i> Próximamente
+                </button>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card border-success">
+            <div class="card-body text-center">
+                <i class="bi bi-file-earmark-excel" style="font-size: 2rem; color: #198754;"></i>
+                <h5 class="card-title mt-2">Exportar</h5>
+                <p class="card-text">Descargar reporte completo en Excel</p>
+                <a href="{% url 'exportar_cartera_excel' %}?{{ request.GET.urlencode }}" 
+                   class="btn btn-outline-success">
+                    <i class="bi bi-download"></i> Descargar Excel
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+{% endblock %}

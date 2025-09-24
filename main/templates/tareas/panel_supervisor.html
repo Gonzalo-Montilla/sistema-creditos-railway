@@ -1,0 +1,539 @@
+{% extends 'base.html' %}
+
+{% block title %}Panel Supervisor - Tareas de Cobro - Sistema de Créditos{% endblock %}
+
+{% block extra_head %}
+<style>
+    .progress-mini {
+        height: 8px;
+        border-radius: 4px;
+    }
+    
+        .cobrador-card {
+            transition: all 0.3s ease;
+            border-left: 4px solid transparent;
+        }
+        
+        .cobrador-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        }
+        
+        /* Optimización móvil */
+        @media (max-width: 768px) {
+            .container-fluid {
+                padding: 0.5rem;
+            }
+            
+            .cobrador-card {
+                margin-bottom: 1rem;
+                border-radius: 10px;
+            }
+            
+            .cobrador-card .card-header {
+                padding: 0.75rem;
+            }
+            
+            .cobrador-card .card-body {
+                padding: 0.75rem;
+            }
+            
+            .progress-mini {
+                height: 6px;
+            }
+            
+            .stats-icon {
+                font-size: 1.5rem;
+            }
+            
+            .btn-group .btn {
+                font-size: 0.8rem;
+                padding: 0.5rem;
+            }
+            
+            .floating-actions {
+                bottom: 15px;
+                right: 15px;
+            }
+            
+            .floating-actions .btn {
+                width: 48px;
+                height: 48px;
+                margin-bottom: 8px;
+            }
+            
+            .task-mini {
+                font-size: 10px;
+                padding: 1px 4px;
+            }
+        }
+        
+        @media (max-width: 576px) {
+            .container-fluid {
+                padding: 0.25rem;
+            }
+            
+            .card {
+                border-radius: 8px;
+            }
+            
+            .row.text-center .col-3 {
+                padding: 0.5rem 0.25rem;
+            }
+            
+            .row.text-center .h3 {
+                font-size: 1.5rem;
+            }
+            
+            .row.text-center small {
+                font-size: 0.7rem;
+            }
+            
+            .btn-group .btn {
+                font-size: 0.7rem;
+                padding: 0.4rem 0.3rem;
+            }
+        }
+    
+    .cobrador-card.excelente {
+        border-left-color: #28a745;
+    }
+    
+    .cobrador-card.bueno {
+        border-left-color: #17a2b8;
+    }
+    
+    .cobrador-card.regular {
+        border-left-color: #ffc107;
+    }
+    
+    .cobrador-card.bajo {
+        border-left-color: #dc3545;
+    }
+    
+    .stats-icon {
+        font-size: 2rem;
+        opacity: 0.8;
+    }
+    
+    .refresh-indicator {
+        position: fixed;
+        top: 80px;
+        right: 20px;
+        z-index: 1000;
+    }
+    
+    .task-mini {
+        padding: 2px 6px;
+        font-size: 11px;
+        margin: 1px;
+        display: inline-block;
+        border-radius: 3px;
+    }
+    
+    .floating-actions {
+        position: fixed;
+        bottom: 20px;
+        right: 20px;
+        z-index: 1000;
+    }
+    
+    .floating-actions .btn {
+        margin-bottom: 10px;
+        width: 56px;
+        height: 56px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <!-- Header con estadísticas generales -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card bg-gradient-primary text-white">
+                <div class="card-body">
+                    <div class="row align-items-center">
+                        <div class="col-8">
+                            <h4 class="mb-1">Panel de Supervisión</h4>
+                            <p class="mb-0 opacity-8">
+                                <i class="fas fa-calendar"></i> {{ fecha|date:"l, d \d\e F \d\e Y" }}
+                            </p>
+                        </div>
+                        <div class="col-4 text-right">
+                            <div class="stats-icon">
+                                <i class="fas fa-chart-line"></i>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="row mt-3">
+                        <div class="col-3 text-center border-right">
+                            <div class="h3 mb-0">{{ total_general_tareas }}</div>
+                            <small>Total Tareas</small>
+                        </div>
+                        <div class="col-3 text-center border-right">
+                            <div class="h3 mb-0">{{ total_general_cobradas }}</div>
+                            <small>Cobradas</small>
+                        </div>
+                        <div class="col-3 text-center border-right">
+                            <div class="h3 mb-0">{{ porcentaje_general|floatformat:0 }}%</div>
+                            <small>Completado</small>
+                        </div>
+                        <div class="col-3 text-center">
+                            <div class="h3 mb-0">${{ total_general_monto|floatformat:0 }}</div>
+                            <small>Recaudado</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Controles de fecha y acciones -->
+    <div class="row mb-3">
+        <div class="col-md-6">
+            <div class="btn-group" role="group">
+                <a href="?fecha={{ fecha|date:'Y-m-d'|add:'-1 day' }}" class="btn btn-outline-secondary">
+                    <i class="fas fa-chevron-left"></i> Anterior
+                </a>
+                <button type="button" class="btn btn-outline-primary" data-toggle="modal" data-target="#fechaModal">
+                    {{ fecha|date:"d/m/Y" }}
+                </button>
+                <a href="?fecha={{ fecha|date:'Y-m-d'|add:'1 day' }}" class="btn btn-outline-secondary">
+                    Siguiente <i class="fas fa-chevron-right"></i>
+                </a>
+            </div>
+        </div>
+        <div class="col-md-6 text-right">
+            <div class="btn-group" role="group">
+                <button class="btn btn-success" data-toggle="modal" data-target="#generarTareasModal">
+                    <i class="fas fa-plus"></i> Generar Tareas
+                </button>
+                <button class="btn btn-info" onclick="location.reload()">
+                    <i class="fas fa-sync-alt"></i> Actualizar
+                </button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Lista de cobradores -->
+    {% if datos_cobradores %}
+        <div class="row">
+            {% for data in datos_cobradores %}
+            {% with cobrador=data.cobrador %}
+            <div class="col-lg-6 mb-4">
+                <div class="card cobrador-card 
+                    {% if data.porcentaje >= 80 %}excelente
+                    {% elif data.porcentaje >= 60 %}bueno
+                    {% elif data.porcentaje >= 40 %}regular
+                    {% else %}bajo{% endif %}">
+                    
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="mb-0">{{ cobrador.nombre_completo }}</h6>
+                            <small class="text-muted">
+                                {% if data.rutas %}
+                                    Rutas: 
+                                    {% for ruta in data.rutas %}
+                                        <span class="badge bg-info text-dark">{{ ruta.nombre }}</span>
+                                    {% endfor %}
+                                {% else %}
+                                    Sin rutas asignadas
+                                {% endif %}
+                            </small>
+                        </div>
+                        <div class="text-right">
+                            <div class="h5 mb-0 
+                                {% if data.porcentaje >= 80 %}text-success
+                                {% elif data.porcentaje >= 60 %}text-info
+                                {% elif data.porcentaje >= 40 %}text-warning
+                                {% else %}text-danger{% endif %}">
+                                {{ data.porcentaje|floatformat:0 }}%
+                            </div>
+                            <small class="text-muted">Completado</small>
+                        </div>
+                    </div>
+                    
+                    <div class="card-body pb-2">
+                        <!-- Progreso visual -->
+                        <div class="progress progress-mini mb-3">
+                            <div class="progress-bar 
+                                {% if data.porcentaje >= 80 %}bg-success
+                                {% elif data.porcentaje >= 60 %}bg-info
+                                {% elif data.porcentaje >= 40 %}bg-warning
+                                {% else %}bg-danger{% endif %}"
+                                style="width: {{ data.porcentaje }}%">
+                            </div>
+                        </div>
+                        
+                        <!-- Estadísticas -->
+                        <div class="row text-center mb-3">
+                            <div class="col-4">
+                                <div class="small text-muted">Total</div>
+                                <div class="h6 mb-0">{{ data.total_tareas }}</div>
+                            </div>
+                            <div class="col-4">
+                                <div class="small text-muted">Cobradas</div>
+                                <div class="h6 mb-0 text-success">{{ data.tareas_cobradas }}</div>
+                            </div>
+                            <div class="col-4">
+                                <div class="small text-muted">Pendientes</div>
+                                <div class="h6 mb-0 text-warning">{{ data.tareas_pendientes }}</div>
+                            </div>
+                        </div>
+                        
+                        <!-- Monto recaudado -->
+                        <div class="text-center mb-3">
+                            <div class="h5 text-success mb-0">${{ data.monto_cobrado|floatformat:0 }}</div>
+                            <small class="text-muted">Recaudado hoy</small>
+                        </div>
+                        
+                        <!-- Últimas actividades -->
+                        {% if data.ultimas_tareas %}
+                            <div class="mb-2">
+                                <small class="text-muted">Última actividad:</small>
+                                <div>
+                                    {% for tarea in data.ultimas_tareas %}
+                                        <span class="task-mini badge bg-{{ tarea.color_estado }}{% if tarea.color_estado == 'warning' %} text-dark{% endif %}">
+                                            {{ tarea.cuota.credito.cliente.nombre_completo|truncatechars:15 }}
+                                        </span>
+                                    {% endfor %}
+                                </div>
+                            </div>
+                        {% endif %}
+                        
+                        <!-- Acciones -->
+                        <div class="text-center">
+                            <a href="{% url 'agenda_cobrador_especifico' cobrador.id %}?fecha={{ fecha|date:'Y-m-d' }}" 
+                               class="btn btn-primary btn-sm">
+                                <i class="fas fa-calendar-alt"></i> Ver Agenda
+                            </a>
+                            {% if cobrador.telefono %}
+                                <a href="tel:{{ cobrador.telefono }}" class="btn btn-outline-success btn-sm">
+                                    <i class="fas fa-phone"></i>
+                                </a>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endwith %}
+            {% endfor %}
+        </div>
+    {% else %}
+        <div class="text-center py-5">
+            <i class="fas fa-users-slash fa-3x text-muted mb-3"></i>
+            <h5 class="text-muted">No hay cobradores activos</h5>
+            <p class="text-muted">
+                Debe registrar cobradores y asignarles rutas para generar tareas.
+            </p>
+            <a href="{% url 'nuevo_cobrador' %}" class="btn btn-success">
+                <i class="fas fa-plus"></i> Registrar Cobrador
+            </a>
+        </div>
+    {% endif %}
+    
+    <!-- Estadísticas por estado -->
+    {% if estadisticas_estado %}
+    <div class="row mt-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h6 class="mb-0">
+                        <i class="fas fa-chart-pie"></i> Distribución de Tareas por Estado
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <div class="row text-center">
+                        {% for estado, cantidad in estadisticas_estado.items %}
+                        <div class="col-md-2 col-6 mb-2">
+                            <div class="border rounded p-2">
+                                <div class="h4 mb-1 
+                                    {% if estado == 'COBRADO' %}text-success
+                                    {% elif estado == 'PENDIENTE' %}text-secondary
+                                    {% elif estado == 'EN_PROCESO' %}text-warning
+                                    {% elif estado == 'NO_ENCONTRADO' %}text-danger
+                                    {% else %}text-info{% endif %}">
+                                    {{ cantidad }}
+                                </div>
+                                <small class="text-muted">
+                                    {% if estado == 'COBRADO' %}Cobradas
+                                    {% elif estado == 'PENDIENTE' %}Pendientes
+                                    {% elif estado == 'EN_PROCESO' %}En Proceso
+                                    {% elif estado == 'NO_ENCONTRADO' %}No Encontradas
+                                    {% elif estado == 'REPROGRAMADO' %}Reprogramadas
+                                    {% else %}{{ estado }}{% endif %}
+                                </small>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+<!-- Botones flotantes -->
+<div class="floating-actions">
+    <button class="btn btn-success" data-toggle="modal" data-target="#generarTareasModal" 
+            title="Generar Tareas">
+        <i class="fas fa-plus"></i>
+    </button>
+    <button class="btn btn-info" onclick="location.reload()" title="Actualizar">
+        <i class="fas fa-sync-alt"></i>
+    </button>
+</div>
+
+<!-- Modal de selección de fecha -->
+<div class="modal fade" id="fechaModal" tabindex="-1">
+    <div class="modal-dialog modal-sm">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Seleccionar Fecha</h5>
+                <button type="button" class="close" data-dismiss="modal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <input type="date" class="form-control" id="fechaInput" value="{{ fecha|date:'Y-m-d' }}">
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary" onclick="cambiarFecha()">Cambiar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal para generar tareas -->
+<div class="modal fade" id="generarTareasModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Generar Tareas Diarias</h5>
+                <button type="button" class="close" data-dismiss="modal">&times;</button>
+            </div>
+            <form method="post" action="{% url 'generar_tareas_diarias' %}">
+                {% csrf_token %}
+                <div class="modal-body">
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle"></i>
+                        <strong>¿Qué hace esta función?</strong><br>
+                        Genera automáticamente las tareas de cobro para todos los cobradores activos 
+                        basándose en las cuotas vencidas y por vencer.
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>Fecha para generar tareas:</label>
+                        <input type="date" class="form-control" name="fecha" value="{{ fecha|date:'Y-m-d' }}" required>
+                        <small class="form-text text-muted">
+                            Se generarán tareas para las cuotas que venzan en esta fecha
+                        </small>
+                    </div>
+                    
+                    <div class="alert alert-warning">
+                        <i class="fas fa-exclamation-triangle"></i>
+                        <strong>Nota:</strong> Si ya existen tareas para esta fecha, no se duplicarán.
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-success">
+                        <i class="fas fa-cogs"></i> Generar Tareas
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Indicador de actualización automática -->
+<div class="refresh-indicator" style="display: none;">
+    <div class="alert alert-info alert-sm">
+        <i class="fas fa-sync-alt fa-spin"></i> Actualizando...
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Función para cambiar fecha
+function cambiarFecha() {
+    const fecha = document.getElementById('fechaInput').value;
+    window.location.href = '?fecha=' + fecha;
+}
+
+// Auto-refresh cada 2 minutos
+let autoRefreshInterval;
+
+function iniciarAutoRefresh() {
+    autoRefreshInterval = setInterval(() => {
+        // Mostrar indicador
+        document.querySelector('.refresh-indicator').style.display = 'block';
+        
+        // Recargar después de un breve retraso para mostrar el indicador
+        setTimeout(() => {
+            location.reload();
+        }, 500);
+    }, 120000); // 2 minutos
+}
+
+// Pausar auto-refresh cuando hay modales abiertos
+$('.modal').on('shown.bs.modal', function() {
+    clearInterval(autoRefreshInterval);
+});
+
+$('.modal').on('hidden.bs.modal', function() {
+    iniciarAutoRefresh();
+});
+
+// Iniciar auto-refresh al cargar la página
+document.addEventListener('DOMContentLoaded', function() {
+    iniciarAutoRefresh();
+});
+
+// Función para mostrar alertas
+function mostrarAlerta(tipo, mensaje) {
+    const alerta = document.createElement('div');
+    alerta.className = `alert alert-${tipo} alert-dismissible fade show`;
+    alerta.style.position = 'fixed';
+    alerta.style.top = '20px';
+    alerta.style.right = '20px';
+    alerta.style.zIndex = '9999';
+    alerta.style.minWidth = '300px';
+    
+    alerta.innerHTML = `
+        ${mensaje}
+        <button type="button" class="close" onclick="this.parentElement.remove()">
+            <span>&times;</span>
+        </button>
+    `;
+    
+    document.body.appendChild(alerta);
+    
+    // Auto-eliminar después de 5 segundos
+    setTimeout(() => {
+        if (alerta.parentNode) {
+            alerta.parentNode.removeChild(alerta);
+        }
+    }, 5000);
+}
+
+// Manejar respuesta del servidor para generar tareas
+{% if messages %}
+    {% for message in messages %}
+        mostrarAlerta('{{ message.tags|default:"info" }}', '{{ message }}');
+    {% endfor %}
+{% endif %}
+
+// Añadir tooltips a elementos con title
+document.addEventListener('DOMContentLoaded', function() {
+    $('[title]').tooltip();
+});
+</script>
+{% endblock %}

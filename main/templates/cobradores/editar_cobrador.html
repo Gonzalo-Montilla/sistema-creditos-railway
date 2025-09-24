@@ -1,0 +1,238 @@
+{% extends 'base.html' %}
+
+{% block title %}Editar {{ cobrador.nombre_completo }}{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2><i class="bi bi-pencil"></i> Editar {{ cobrador.nombre_completo }}</h2>
+    <div>
+        <a href="{% url 'detalle_cobrador' cobrador.id %}" class="btn btn-outline-info me-2">
+            <i class="bi bi-eye"></i> Ver Detalle
+        </a>
+        <a href="{% url 'cobradores' %}" class="btn btn-secondary">
+            <i class="bi bi-arrow-left"></i> Volver a Cobradores
+        </a>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-form"></i> Editar Información del Cobrador</h5>
+            </div>
+            <div class="card-body">
+                <form method="post">
+                    {% csrf_token %}
+                    
+                    <!-- Información Personal -->
+                    <h6 class="border-bottom pb-2 mb-3">
+                        <i class="bi bi-person"></i> Información Personal
+                    </h6>
+                    
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label for="{{ form.nombres.id_for_label }}" class="form-label">
+                                <i class="bi bi-person"></i> Nombres *
+                            </label>
+                            {{ form.nombres }}
+                            {% if form.nombres.errors %}
+                                <div class="text-danger small">{{ form.nombres.errors.0 }}</div>
+                            {% endif %}
+                        </div>
+                        <div class="col-md-6">
+                            <label for="{{ form.apellidos.id_for_label }}" class="form-label">
+                                <i class="bi bi-person"></i> Apellidos *
+                            </label>
+                            {{ form.apellidos }}
+                            {% if form.apellidos.errors %}
+                                <div class="text-danger small">{{ form.apellidos.errors.0 }}</div>
+                            {% endif %}
+                        </div>
+                    </div>
+                    
+                    <div class="row mb-3">
+                        <div class="col-md-4">
+                            <label for="{{ form.tipo_documento.id_for_label }}" class="form-label">
+                                <i class="bi bi-card-text"></i> Tipo de Documento
+                            </label>
+                            {{ form.tipo_documento }}
+                            {% if form.tipo_documento.errors %}
+                                <div class="text-danger small">{{ form.tipo_documento.errors.0 }}</div>
+                            {% endif %}
+                        </div>
+                        <div class="col-md-8">
+                            <label for="{{ form.numero_documento.id_for_label }}" class="form-label">
+                                <i class="bi bi-card-text"></i> Número de Documento *
+                            </label>
+                            {{ form.numero_documento }}
+                            {% if form.numero_documento.errors %}
+                                <div class="text-danger small">{{ form.numero_documento.errors.0 }}</div>
+                            {% endif %}
+                        </div>
+                    </div>
+                    
+                    <!-- Información de Contacto -->
+                    <h6 class="border-bottom pb-2 mb-3 mt-4">
+                        <i class="bi bi-telephone"></i> Información de Contacto
+                    </h6>
+                    
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label for="{{ form.celular.id_for_label }}" class="form-label">
+                                <i class="bi bi-phone"></i> Celular *
+                            </label>
+                            {{ form.celular }}
+                            {% if form.celular.errors %}
+                                <div class="text-danger small">{{ form.celular.errors.0 }}</div>
+                            {% endif %}
+                        </div>
+                        <div class="col-md-6">
+                            <label for="{{ form.email.id_for_label }}" class="form-label">
+                                <i class="bi bi-envelope"></i> Correo Electrónico
+                            </label>
+                            {{ form.email }}
+                            {% if form.email.errors %}
+                                <div class="text-danger small">{{ form.email.errors.0 }}</div>
+                            {% endif %}
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="{{ form.direccion.id_for_label }}" class="form-label">
+                            <i class="bi bi-geo-alt"></i> Dirección de Residencia *
+                        </label>
+                        {{ form.direccion }}
+                        {% if form.direccion.errors %}
+                            <div class="text-danger small">{{ form.direccion.errors.0 }}</div>
+                        {% endif %}
+                    </div>
+                    
+                    <!-- Información Laboral -->
+                    <h6 class="border-bottom pb-2 mb-3 mt-4">
+                        <i class="bi bi-briefcase"></i> Información Laboral
+                    </h6>
+                    
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label for="{{ form.fecha_ingreso.id_for_label }}" class="form-label">
+                                <i class="bi bi-calendar"></i> Fecha de Ingreso *
+                            </label>
+                            {{ form.fecha_ingreso }}
+                            {% if form.fecha_ingreso.errors %}
+                                <div class="text-danger small">{{ form.fecha_ingreso.errors.0 }}</div>
+                            {% endif %}
+                        </div>
+                        <div class="col-md-6">
+                            <div class="form-check mt-4">
+                                {{ form.activo }}
+                                <label class="form-check-label" for="{{ form.activo.id_for_label }}">
+                                    <i class="bi bi-check-circle"></i> Cobrador Activo
+                                </label>
+                            </div>
+                            {% if form.activo.errors %}
+                                <div class="text-danger small">{{ form.activo.errors.0 }}</div>
+                            {% endif %}
+                        </div>
+                    </div>
+                    
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label for="{{ form.comision_porcentaje.id_for_label }}" class="form-label">
+                                <i class="bi bi-percent"></i> Comisión (%)
+                            </label>
+                            {{ form.comision_porcentaje }}
+                            {% if form.comision_porcentaje.errors %}
+                                <div class="text-danger small">{{ form.comision_porcentaje.errors.0 }}</div>
+                            {% endif %}
+                        </div>
+                        <div class="col-md-6">
+                            <label for="{{ form.meta_diaria.id_for_label }}" class="form-label">
+                                <i class="bi bi-target"></i> Meta Diaria ($)
+                            </label>
+                            {{ form.meta_diaria }}
+                            {% if form.meta_diaria.errors %}
+                                <div class="text-danger small">{{ form.meta_diaria.errors.0 }}</div>
+                            {% endif %}
+                        </div>
+                    </div>
+                    
+                    <!-- Rutas Asignadas -->
+                    <h6 class="border-bottom pb-2 mb-3 mt-4">
+                        <i class="bi bi-map"></i> Rutas Asignadas
+                    </h6>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Selecciona las rutas que manejará este cobrador:</label>
+                        <div class="row">
+                            {% for choice in form.rutas %}
+                                <div class="col-md-4 mb-2">
+                                    <div class="form-check">
+                                        {{ choice.tag }}
+                                        <label class="form-check-label" for="{{ choice.id_for_label }}">
+                                            {{ choice.choice_label }}
+                                        </label>
+                                    </div>
+                                </div>
+                            {% empty %}
+                                <div class="col-12">
+                                    <div class="alert alert-info">
+                                        <i class="bi bi-info-circle"></i>
+                                        No hay rutas disponibles. 
+                                        <a href="{% url 'nueva_ruta' %}" class="alert-link">Crear nueva ruta</a>
+                                    </div>
+                                </div>
+                            {% endfor %}
+                        </div>
+                        {% if form.rutas.errors %}
+                            <div class="text-danger small">{{ form.rutas.errors.0 }}</div>
+                        {% endif %}
+                    </div>
+                    
+                    <!-- Botones de acción -->
+                    <div class="d-flex gap-2 mt-4">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-check"></i> Guardar Cambios
+                        </button>
+                        <a href="{% url 'detalle_cobrador' cobrador.id %}" class="btn btn-outline-secondary">
+                            <i class="bi bi-x"></i> Cancelar
+                        </a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-4">
+        <div class="card border-info">
+            <div class="card-header bg-info text-white">
+                <h6 class="mb-0"><i class="bi bi-info-circle"></i> Información del Cobrador</h6>
+            </div>
+            <div class="card-body">
+                <h6>Datos actuales:</h6>
+                <ul class="list-unstyled mb-3">
+                    <li><strong>Documento:</strong> {{ cobrador.numero_documento }}</li>
+                    <li><strong>Fecha Ingreso:</strong> {{ cobrador.fecha_ingreso|date:"d/m/Y" }}</li>
+                    <li><strong>Estado:</strong> 
+                        {% if cobrador.activo %}
+                            <span class="badge bg-success">Activo</span>
+                        {% else %}
+                            <span class="badge bg-danger">Inactivo</span>
+                        {% endif %}
+                    </li>
+                </ul>
+                
+                <h6>Estadísticas:</h6>
+                <ul class="list-unstyled mb-3">
+                    <li><strong>Créditos asignados:</strong> {{ cobrador.creditos_activos.count }}</li>
+                    <li><strong>Rutas actuales:</strong> {{ cobrador.rutas.count }}</li>
+                </ul>
+                
+                <div class="alert alert-warning small">
+                    <strong>Nota:</strong> Los cambios en las rutas afectarán la asignación automática de nuevos créditos.
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

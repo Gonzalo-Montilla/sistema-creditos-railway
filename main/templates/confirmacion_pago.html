@@ -1,0 +1,258 @@
+{% extends 'base.html' %}
+
+{% block title %}Pago Registrado - Sistema de Créditos{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1 class="page-title mb-0">
+        <i class="fas fa-check-circle text-success"></i> Pago Registrado Exitosamente
+    </h1>
+    <div>
+        <a href="{% url 'nuevo_pago' %}" class="btn btn-primary me-2">
+            <i class="fas fa-plus"></i> Nuevo Pago
+        </a>
+        <a href="{% url 'pagos' %}" class="btn btn-secondary">
+            <i class="fas fa-list"></i> Ver Pagos
+        </a>
+    </div>
+</div>
+
+<!-- Alerta de éxito -->
+<div class="alert alert-success alert-dismissible fade show" role="alert">
+    <i class="fas fa-check-circle me-2"></i>
+    <strong>¡Pago registrado exitosamente!</strong>
+    El pago de ${{ pago.monto|floatformat:0 }} para la cuota #{{ pago.numero_cuota }} ha sido procesado.
+    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+</div>
+
+<div class="row">
+    <!-- Información del Pago -->
+    <div class="col-md-6 mb-4">
+        <div class="card border-success">
+            <div class="card-header bg-success text-white">
+                <h5 class="mb-0">
+                    <i class="fas fa-receipt"></i> Recibo de Pago #{{ pago.id|stringformat:"05d" }}
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="row mb-3">
+                    <div class="col-sm-5"><strong>Cliente:</strong></div>
+                    <div class="col-sm-7">{{ cliente.nombre_completo }}</div>
+                </div>
+                <div class="row mb-3">
+                    <div class="col-sm-5"><strong>Cédula:</strong></div>
+                    <div class="col-sm-7">{{ cliente.cedula }}</div>
+                </div>
+                <div class="row mb-3">
+                    <div class="col-sm-5"><strong>Crédito N°:</strong></div>
+                    <div class="col-sm-7">#{{ credito.id|stringformat:"04d" }}</div>
+                </div>
+                <div class="row mb-3">
+                    <div class="col-sm-5"><strong>Cuota Pagada:</strong></div>
+                    <div class="col-sm-7">
+                        <span class="badge bg-primary">#{{ pago.numero_cuota }}</span>
+                    </div>
+                </div>
+                <div class="row mb-3">
+                    <div class="col-sm-5"><strong>Monto Pagado:</strong></div>
+                    <div class="col-sm-7">
+                        <span class="text-success fs-4"><strong>${{ pago.monto|floatformat:0 }}</strong></span>
+                    </div>
+                </div>
+                <div class="row mb-3">
+                    <div class="col-sm-5"><strong>Fecha de Pago:</strong></div>
+                    <div class="col-sm-7">{{ pago.fecha_pago|date:"d/m/Y H:i" }}</div>
+                </div>
+                {% if pago.observaciones %}
+                <div class="row">
+                    <div class="col-sm-5"><strong>Observaciones:</strong></div>
+                    <div class="col-sm-7">{{ pago.observaciones }}</div>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Estado del Crédito -->
+    <div class="col-md-6 mb-4">
+        <div class="card border-info">
+            <div class="card-header bg-info text-white">
+                <h5 class="mb-0">
+                    <i class="fas fa-chart-pie"></i> Estado del Crédito
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="row mb-3">
+                    <div class="col-sm-6"><strong>Monto Total:</strong></div>
+                    <div class="col-sm-6 text-primary"><strong>${{ credito.monto_total|floatformat:0 }}</strong></div>
+                </div>
+                <div class="row mb-3">
+                    <div class="col-sm-6"><strong>Total Pagado:</strong></div>
+                    <div class="col-sm-6 text-success"><strong>${{ credito.total_pagado|floatformat:0 }}</strong></div>
+                </div>
+                <div class="row mb-3">
+                    <div class="col-sm-6"><strong>Saldo Pendiente:</strong></div>
+                    <div class="col-sm-6 text-warning"><strong>${{ credito.saldo_pendiente|floatformat:0 }}</strong></div>
+                </div>
+                <div class="row mb-3">
+                    <div class="col-sm-6"><strong>Cuotas:</strong></div>
+                    <div class="col-sm-6">{{ cuotas_pagadas }} de {{ total_cuotas }}</div>
+                </div>
+                
+                <!-- Barra de Progreso -->
+                <div class="mb-3">
+                    <label class="form-label"><strong>Progreso de Pago:</strong></label>
+                    <div class="progress" style="height: 25px;">
+                        <div class="progress-bar bg-success progress-bar-striped progress-bar-animated" 
+                             role="progressbar" 
+                             style="width: {{ progreso_pago }}%" 
+                             aria-valuenow="{{ progreso_pago }}" 
+                             aria-valuemin="0" 
+                             aria-valuemax="100">
+                            {{ progreso_pago|floatformat:1 }}%
+                        </div>
+                    </div>
+                </div>
+
+                {% if not credito_completado and proxima_fecha_pago %}
+                <div class="alert alert-info mb-0">
+                    <strong>Próximo Pago:</strong><br>
+                    Cuota #{{ cuotas_pagadas|add:1 }} - ${{ credito.valor_cuota|floatformat:0 }}<br>
+                    <small>Fecha estimada: {{ proxima_fecha_pago|date:"d/m/Y" }}</small>
+                </div>
+                {% elif credito_completado %}
+                <div class="alert alert-success mb-0">
+                    <i class="fas fa-trophy"></i>
+                    <strong>¡Crédito Completado!</strong><br>
+                    El crédito ha sido pagado en su totalidad.
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Acciones del Recibo -->
+<div class="card">
+    <div class="card-header bg-primary text-white">
+        <h5 class="mb-0">
+            <i class="fas fa-tools"></i> Opciones del Recibo
+        </h5>
+    </div>
+    <div class="card-body">
+        <div class="row text-center">
+            <div class="col-md-4 mb-3">
+                <button class="btn btn-info btn-lg w-100" onclick="descargarRecibo()">
+                    <i class="fas fa-file-pdf fa-2x mb-2"></i><br>
+                    <strong>Descargar Recibo</strong><br>
+                    <small>Generar PDF del recibo</small>
+                </button>
+            </div>
+            <div class="col-md-4 mb-3">
+                <button class="btn btn-success btn-lg w-100" onclick="enviarWhatsApp()">
+                    <i class="fab fa-whatsapp fa-2x mb-2"></i><br>
+                    <strong>Enviar por WhatsApp</strong><br>
+                    <small>Compartir con el cliente</small>
+                </button>
+            </div>
+            <div class="col-md-4 mb-3">
+                <button class="btn btn-warning btn-lg w-100" onclick="verDetallesCompletos()">
+                    <i class="fas fa-eye fa-2x mb-2"></i><br>
+                    <strong>Ver Detalles</strong><br>
+                    <small>Información completa</small>
+                </button>
+            </div>
+        </div>
+        
+        <div class="row mt-4">
+            <div class="col-12">
+                <div class="alert alert-light">
+                    <i class="fas fa-info-circle"></i>
+                    <strong>Sugerencia:</strong> 
+                    Puede descargar el recibo en PDF y enviarlo directamente al cliente por WhatsApp. 
+                    El recibo incluye toda la información del pago y el estado actual del crédito.
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Función para descargar recibo
+function descargarRecibo() {
+    window.open('/generar-recibo-pdf/{{ pago.id }}/', '_blank');
+}
+
+// Función para enviar por WhatsApp
+function enviarWhatsApp() {
+    const celular = '{{ cliente.celular }}';
+    const mensaje = `¡Hola {{ cliente.nombre|slice:":20" }}! 🏦
+
+Te enviamos el recibo de tu pago:
+
+💳 Recibo #{{ pago.id|stringformat:"05d" }}
+💰 Monto pagado: ${{ pago.monto|floatformat:0 }}
+📅 Fecha: {{ pago.fecha_pago|date:"d/m/Y" }}
+🔢 Cuota #{{ pago.numero_cuota }}
+
+📊 Estado de tu crédito:
+✅ Cuotas pagadas: {{ cuotas_pagadas }}/{{ total_cuotas }}
+📈 Progreso: {{ progreso_pago|floatformat:1 }}%
+💲 Saldo pendiente: ${{ credito.saldo_pendiente|floatformat:0 }}
+
+Puedes descargar tu recibo completo aquí: {{ request.build_absolute_uri }}/generar-recibo-pdf/{{ pago.id }}/
+
+¡Gracias por tu pago puntual! 😊`;
+    
+    if (celular && celular.trim() !== '') {
+        const numeroLimpio = celular.replace(/\D/g, '');
+        const urlWhatsApp = `https://wa.me/57${numeroLimpio}?text=${encodeURIComponent(mensaje)}`;
+        window.open(urlWhatsApp, '_blank');
+    } else {
+        // Si no hay celular, copiar mensaje al portapapeles
+        navigator.clipboard.writeText(mensaje).then(function() {
+            alert('Mensaje copiado al portapapeles. Puedes pegarlo en WhatsApp.');
+        }, function(err) {
+            console.error('Error al copiar: ', err);
+            alert('No se pudo copiar automáticamente. Mensaje: ' + mensaje);
+        });
+    }
+}
+
+// Función para ver detalles completos
+function verDetallesCompletos() {
+    // Llamar a la función existente para mostrar detalles del pago
+    verDetallesPago({{ pago.id }});
+}
+
+// Animaciones de entrada
+document.addEventListener('DOMContentLoaded', function() {
+    // Animar las tarjetas
+    const cards = document.querySelectorAll('.card');
+    cards.forEach((card, index) => {
+        card.style.opacity = '0';
+        card.style.transform = 'translateY(30px)';
+        
+        setTimeout(() => {
+            card.style.transition = 'all 0.6s ease';
+            card.style.opacity = '1';
+            card.style.transform = 'translateY(0)';
+        }, index * 200);
+    });
+    
+    // Animar la barra de progreso
+    setTimeout(() => {
+        const progressBar = document.querySelector('.progress-bar');
+        if (progressBar) {
+            progressBar.style.width = '0%';
+            setTimeout(() => {
+                progressBar.style.transition = 'width 2s ease-in-out';
+                progressBar.style.width = '{{ progreso_pago }}%';
+            }, 500);
+        }
+    }, 1000);
+});
+</script>
+{% endblock %}
