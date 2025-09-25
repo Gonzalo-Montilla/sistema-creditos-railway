@@ -507,17 +507,25 @@
                                 Usuarios
                             </a>
                         </li>
-                        {% if user.is_superuser %}
-                        <li class="nav-item">
-                            <a class="nav-link" href="{% url 'media_status' %}" title="Diagnóstico de archivos media">
-                                <i class="bi bi-image me-2"></i>
-                                Estado Media
-                            </a>
-                        </li>
-                        {% endif %}
                     </ul>
                     
                     <hr class="my-3" style="border-color: rgba(255, 255, 255, 0.3);">
+                    
+                    <!-- Sección de Administración (solo superusuarios) -->
+                    {% if user.is_superuser %}
+                    <div class="text-center mb-2">
+                        <small class="text-white-50">ADMINISTRACIÓN</small>
+                    </div>
+                    <ul class="nav flex-column mb-3">
+                        <li class="nav-item">
+                            <a class="nav-link" href="{% url 'media_status' %}" title="Diagnóstico del sistema de archivos">
+                                <i class="bi bi-gear me-2"></i>
+                                <small>Diagnóstico Sistema</small>
+                            </a>
+                        </li>
+                    </ul>
+                    <hr class="my-3" style="border-color: rgba(255, 255, 255, 0.3);">
+                    {% endif %}
                     
                     <ul class="nav flex-column">
                         <li class="nav-item">
