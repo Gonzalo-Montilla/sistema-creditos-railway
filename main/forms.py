@@ -22,7 +22,7 @@ class ClienteForm(forms.ModelForm):
             # Información personal
             'nombres': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Nombres del cliente'}),
             'apellidos': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Apellidos del cliente'}),
-            'cedula': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Número de cédula'}),
+            'cedula': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Número de cédula (5-10 dígitos)'}),
             
             # Contacto
             'celular': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Celular (obligatorio)'}),
@@ -55,7 +55,7 @@ class CodeudorForm(forms.ModelForm):
         widgets = {
             'nombres': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Nombres del codeudor'}),
             'apellidos': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Apellidos del codeudor'}),
-            'cedula': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Cédula del codeudor'}),
+            'cedula': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Cédula del codeudor (5-10 dígitos)'}),
             'celular': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Celular del codeudor'}),
             'direccion': forms.Textarea(attrs={'class': 'form-control', 'rows': 3, 'placeholder': 'Dirección completa'}),
             'barrio': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Barrio'}),
@@ -71,7 +71,7 @@ class CreditoForm(forms.ModelForm):
         required=True,
         widget=forms.TextInput(attrs={
             'class': 'form-control',
-            'placeholder': 'Ingrese la cédula del cliente',
+            'placeholder': 'Ingrese la cédula del cliente (5-10 dígitos)',
             'id': 'cedula_cliente',
             'autocomplete': 'off'
         }),
@@ -98,7 +98,7 @@ class CreditoForm(forms.ModelForm):
             'tasa_interes': forms.NumberInput(attrs={
                 'class': 'form-control', 
                 'step': '0.01', 
-                'placeholder': 'Tasa de interés anual (%)',
+                'placeholder': 'Tasa de interés mensual (%) - Ej: 20',
                 'id': 'tasa_interes'
             }),
             'tipo_plazo': forms.Select(attrs={
@@ -177,7 +177,7 @@ class PagoForm(forms.ModelForm):
         required=True,
         widget=forms.TextInput(attrs={
             'class': 'form-control',
-            'placeholder': 'Ingrese la cédula del cliente para buscar sus créditos',
+            'placeholder': 'Ingrese la cédula del cliente para buscar sus créditos (5-10 dígitos)',
             'id': 'cedula_cliente_pago',
             'autocomplete': 'off'
         }),
@@ -245,10 +245,22 @@ class PagoForm(forms.ModelForm):
                 'credito': 'Debe seleccionar un crédito para aplicar el pago.'
             })
         
-        # Validar monto
+        # Validar monto con validaciones específicas para pesos colombianos
         if not monto or monto <= 0:
             raise ValidationError({
                 'monto': 'El monto debe ser mayor a cero.'
+            })
+        
+        # Validaciones específicas para pesos colombianos
+        # Permitir desde $50 para casos excepcionales (pagos parciales, etc.)
+        if monto < 50:
+            raise ValidationError({
+                'monto': f'El monto ${monto:,.0f} parece muy bajo para un pago en pesos colombianos.'
+            })
+        
+        if monto > 50000000:  # 50 millones COP
+            raise ValidationError({
+                'monto': f'El monto ${monto:,.0f} parece excesivo. Verifique el valor ingresado.'
             })
         
         # Validar número de cuota

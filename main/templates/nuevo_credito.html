@@ -86,14 +86,14 @@
                         
                         <div class="col-md-6">
                             <div class="mb-3">
-                                <label for="{{ form.tasa_interes.id_for_label }}" class="form-label">
-                                    <i class="fas fa-percentage"></i> Tasa de Interés Anual (%) *
-                                </label>
+                <label for="{{ form.tasa_interes.id_for_label }}" class="form-label">
+                    <i class="fas fa-percentage"></i> Tasa de Interés Mensual (%) *
+                </label>
                                 {{ form.tasa_interes }}
                                 <div class="form-text">
                                     <small class="text-muted">
                                         <i class="fas fa-lightbulb"></i> 
-                                        Se calculará automáticamente la tasa equivalente por período
+                                        Sistema de créditos informales - Interés simple
                                     </small>
                                 </div>
                                 {% if form.tasa_interes.errors %}
@@ -207,7 +207,7 @@
                         
                         <div class="col-12">
                             <div class="bg-warning bg-opacity-10 p-2 rounded text-center">
-                                <small class="text-muted">Tasa Equivalente por Período</small>
+                                <small class="text-muted">Tasa Efectiva Anual</small>
                                 <div class="fw-bold text-warning" id="tasa-periodo">0%</div>
                             </div>
                         </div>
@@ -368,79 +368,78 @@ function mostrarClientePlaceholder() {
     document.getElementById('id_cliente').value = '';
 }
 
-// Calculadora de crédito
+// Calculadora de crédito usando la misma lógica del valorizador (interés simple)
 function calcularCredito() {
     const monto = parseFloat(document.getElementById('monto').value) || 0;
-    const tasaAnual = parseFloat(document.getElementById('tasa_interes').value) || 0;
+    const tasaMensual = parseFloat(document.getElementById('tasa_interes').value) || 0;
     const tipoplazo = document.getElementById('tipo_plazo').value;
     const cuotas = parseInt(document.getElementById('cantidad_cuotas').value) || 0;
     
-    if (monto <= 0 || tasaAnual < 0 || cuotas <= 0) {
+    if (monto <= 0 || tasaMensual < 0 || cuotas <= 0) {
         document.getElementById('calculadora-resultados').style.display = 'none';
         return;
     }
     
-    // Calcular tasa por período
-    let tasaPeriodo;
-    let tasaPeriodoPorcentaje;
+    // Calcular tiempo en meses según el tipo de plazo (misma lógica del valorizador)
+    let tiempoMeses;
     let textoTipo;
     let textoSingular;
     
     switch(tipoplazo) {
         case 'DIARIO':
-            tasaPeriodo = tasaAnual / 365 / 100;
-            tasaPeriodoPorcentaje = tasaAnual / 365;
+            tiempoMeses = cuotas / 30; // 30 días por mes
             textoTipo = 'diarios';
             textoSingular = 'diario';
             break;
         case 'SEMANAL':
-            tasaPeriodo = tasaAnual / 52 / 100;
-            tasaPeriodoPorcentaje = tasaAnual / 52;
+            tiempoMeses = cuotas / 4.33; // 4.33 semanas por mes
             textoTipo = 'semanales';
             textoSingular = 'semanal';
             break;
         case 'QUINCENAL':
-            tasaPeriodo = tasaAnual / 24 / 100;
-            tasaPeriodoPorcentaje = tasaAnual / 24;
+            tiempoMeses = cuotas / 2; // 2 quincenas por mes
             textoTipo = 'quincenales';
             textoSingular = 'quincenal';
             break;
         case 'MENSUAL':
         default:
-            tasaPeriodo = tasaAnual / 12 / 100;
-            tasaPeriodoPorcentaje = tasaAnual / 12;
+            tiempoMeses = cuotas;
             textoTipo = 'mensuales';
             textoSingular = 'mensual';
             break;
     }
     
-    // Calcular cuota usando fórmula de amortización francesa
-    let valorCuota;
-    if (tasaPeriodo > 0) {
-        const factor = (tasaPeriodo * Math.pow(1 + tasaPeriodo, cuotas)) / (Math.pow(1 + tasaPeriodo, cuotas) - 1);
-        valorCuota = monto * factor;
-    } else {
-        valorCuota = monto / cuotas;
-    }
+    // CÁLCULO DE INTERÉS SIMPLE (Sistema de créditos informales)
+    // Interés = Capital × Tasa × Tiempo
+    const capital = monto;
+    const tasaDecimal = tasaMensual / 100;
+    const interesTotal = capital * tasaDecimal * tiempoMeses;
+    const montoTotal = capital + interesTotal;
     
-    const montoTotal = valorCuota * cuotas;
-    const totalInteres = montoTotal - monto;
+    // Cuota fija = Total a pagar ÷ Número de cuotas
+    const valorCuota = montoTotal / cuotas;
+    
+    // Calcular tasa efectiva anual para referencia
+    let tasaEfectivaAnual = 0;
+    if (tiempoMeses > 0) {
+        tasaEfectivaAnual = (interesTotal / capital) * (12 / tiempoMeses) * 100;
+    }
     
     // Mostrar resultados
     document.getElementById('valor-cuota').textContent = '$' + valorCuota.toLocaleString('es-CO', {maximumFractionDigits: 0});
-    document.getElementById('total-interes').textContent = '$' + totalInteres.toLocaleString('es-CO', {maximumFractionDigits: 0});
+    document.getElementById('total-interes').textContent = '$' + interesTotal.toLocaleString('es-CO', {maximumFractionDigits: 0});
     document.getElementById('total-pagar').textContent = '$' + montoTotal.toLocaleString('es-CO', {maximumFractionDigits: 0});
     
-    // Mostrar tasa equivalente por período
-    document.getElementById('tasa-periodo').textContent = tasaPeriodoPorcentaje.toFixed(2) + '% ' + textoSingular;
-    document.getElementById('tasa-periodo').title = `Tasa anual ${tasaAnual}% equivale a ${tasaPeriodoPorcentaje.toFixed(4)}% ${textoSingular}`;
+    // Mostrar tasa efectiva anual
+    document.getElementById('tasa-periodo').textContent = tasaEfectivaAnual.toFixed(1) + '% efectiva anual';
+    document.getElementById('tasa-periodo').title = `Tasa mensual ${tasaMensual}% equivale a ${tasaEfectivaAnual.toFixed(2)}% efectiva anual`;
     
     document.getElementById('descripcion-pago').innerHTML = `
         <i class="fas fa-info-circle"></i>
-        <strong>Crédito de $${monto.toLocaleString('es-CO', {maximumFractionDigits: 0})}</strong><br>
+        <strong>Crédito informal de $${monto.toLocaleString('es-CO', {maximumFractionDigits: 0})}</strong><br>
         📅 ${cuotas} cuotas ${textoTipo} de <strong>$${valorCuota.toLocaleString('es-CO', {maximumFractionDigits: 0})}</strong><br>
-        📈 Tasa: ${tasaAnual}% anual (${tasaPeriodoPorcentaje.toFixed(2)}% ${textoSingular})<br>
-        💰 Total interés: $${totalInteres.toLocaleString('es-CO', {maximumFractionDigits: 0})}
+        📈 Tasa: ${tasaMensual}% mensual por ${tiempoMeses.toFixed(1)} meses<br>
+        💰 Total interés: $${interesTotal.toLocaleString('es-CO', {maximumFractionDigits: 0})}
     `;
     
     document.getElementById('calculadora-resultados').style.display = 'block';
@@ -459,16 +458,17 @@ function actualizarEquivalencia() {
         return;
     }
     
+    // Usar la misma lógica de cálculo que el valorizador
     let meses;
     switch(tipoplazo) {
         case 'DIARIO':
-            meses = Math.round((cuotas / 30) * 10) / 10;
+            meses = cuotas / 30; // 30 días por mes
             break;
         case 'SEMANAL':
-            meses = Math.round((cuotas / 4.33) * 10) / 10;
+            meses = cuotas / 4.33; // 4.33 semanas por mes
             break;
         case 'QUINCENAL':
-            meses = Math.round((cuotas / 2) * 10) / 10;
+            meses = cuotas / 2; // 2 quincenas por mes
             break;
         case 'MENSUAL':
         default:
@@ -476,7 +476,7 @@ function actualizarEquivalencia() {
             break;
     }
     
-    equivalenteEl.textContent = `Equivalente a: ${meses} meses aprox.`;
+    equivalenteEl.textContent = `Equivalente a: ${meses.toFixed(1)} meses`;
 }
 
 // Event listeners

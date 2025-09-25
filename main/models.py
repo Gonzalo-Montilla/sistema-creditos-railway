@@ -4,8 +4,8 @@ from django.core.validators import RegexValidator
 
 # Validadores personalizados
 cedula_validator = RegexValidator(
-    regex=r'^\d{8,10}$',
-    message="La cédula debe tener entre 8 y 10 dígitos numéricos"
+    regex=r'^\d{5,10}$',
+    message="La cédula debe tener entre 5 y 10 dígitos numéricos"
 )
 
 celular_validator = RegexValidator(
@@ -27,7 +27,7 @@ class Cliente(models.Model):
         unique=True, 
         validators=[cedula_validator],
         verbose_name="Cédula",
-        help_text="Entre 8 y 10 dígitos numéricos"
+        help_text="Entre 5 y 10 dígitos numéricos"
     )
     
     # Información de contacto
@@ -107,7 +107,7 @@ class Codeudor(models.Model):
         unique=True,  # 🔥 CORRECCIÓN: Evitar duplicados
         validators=[cedula_validator],
         verbose_name="Cédula",
-        help_text="Entre 8 y 10 dígitos numéricos (no puede repetirse)"
+        help_text="Entre 5 y 10 dígitos numéricos (no puede repetirse)"
     )
     
     # Información de contacto
@@ -223,15 +223,9 @@ class Credito(models.Model):
         if not self.cobrador:
             self.asignar_cobrador_automaticamente()
         
-        # Calcular plazo en meses para compatibilidad
-        if self.tipo_plazo == 'DIARIO':
-            self.plazo_meses = round(self.cantidad_cuotas / 30, 1)
-        elif self.tipo_plazo == 'SEMANAL':
-            self.plazo_meses = round(self.cantidad_cuotas / 4.33, 1)
-        elif self.tipo_plazo == 'QUINCENAL':
-            self.plazo_meses = round(self.cantidad_cuotas / 2, 1)
-        else:  # MENSUAL
-            self.plazo_meses = self.cantidad_cuotas
+        # Calcular plazo en meses para compatibilidad usando función centralizada
+        from .creditos_utils import calcular_plazo_en_meses
+        self.plazo_meses = round(calcular_plazo_en_meses(self.cantidad_cuotas, self.tipo_plazo), 1)
             
         # Calcular cronograma si no está calculado
         if not self.valor_cuota:
@@ -240,94 +234,66 @@ class Credito(models.Model):
         super().save(*args, **kwargs)
     
     def calcular_cronograma(self):
-        """Calcula el cronograma de pagos del crédito"""
-        from decimal import Decimal
-        import math
+        """Calcula el cronograma de pagos del crédito usando sistema de créditos informales"""
+        from .creditos_utils import calcular_credito_informal, generar_descripcion_credito
         
-        # Convertir tasa anual a tasa por período
-        tasa_anual = self.tasa_interes / 100
+        # Usar la función centralizada del valorizador
+        resultado = calcular_credito_informal(
+            monto=self.monto,
+            tasa_mensual=self.tasa_interes,
+            cantidad_cuotas=self.cantidad_cuotas,
+            tipo_plazo=self.tipo_plazo
+        )
         
-        if self.tipo_plazo == 'DIARIO':
-            tasa_periodo = tasa_anual / 365
-        elif self.tipo_plazo == 'SEMANAL':
-            tasa_periodo = tasa_anual / 52
-        elif self.tipo_plazo == 'QUINCENAL':
-            tasa_periodo = tasa_anual / 24
-        else:  # MENSUAL
-            tasa_periodo = tasa_anual / 12
+        # Actualizar campos del modelo
+        calculos = resultado['calculos']
+        self.valor_cuota = calculos['valor_cuota']
+        self.monto_total = calculos['monto_total']
+        self.total_interes = calculos['interes_total']
         
-        # Calcular cuota usando fórmula de amortización francesa
-        if tasa_periodo > 0:
-            factor = (tasa_periodo * (1 + tasa_periodo) ** self.cantidad_cuotas) / ((1 + tasa_periodo) ** self.cantidad_cuotas - 1)
-            self.valor_cuota = self.monto * Decimal(str(factor))
-        else:
-            # Si no hay interés, dividir el monto entre las cuotas
-            self.valor_cuota = self.monto / self.cantidad_cuotas
-        
-        # Calcular totales
-        self.monto_total = self.valor_cuota * self.cantidad_cuotas
-        self.total_interes = self.monto_total - self.monto
-        
-        # Generar descripción del pago
-        periodo_texto = self.get_tipo_plazo_display().lower()
-        self.descripcion_pago = f"Crédito de ${self.monto:,.2f} a pagar en {self.cantidad_cuotas} cuotas {periodo_texto}es de ${self.valor_cuota:,.2f} cada una. Total a pagar: ${self.monto_total:,.2f} (Intereses: ${self.total_interes:,.2f})"
+        # Generar descripción usando la función centralizada
+        self.descripcion_pago = generar_descripcion_credito(resultado)
     
     def obtener_fechas_pago(self):
         """Genera las fechas de pago basadas en la fecha de desembolso"""
-        from datetime import timedelta
+        from .creditos_utils import generar_cronograma_fechas
         
         if not self.fecha_desembolso:
             return []
         
-        fechas = []
-        fecha_actual = self.fecha_desembolso
+        # Usar función centralizada
+        cronograma = generar_cronograma_fechas(
+            cantidad_cuotas=self.cantidad_cuotas,
+            tipo_plazo=self.tipo_plazo,
+            fecha_inicio=self.fecha_desembolso.date() if hasattr(self.fecha_desembolso, 'date') else self.fecha_desembolso
+        )
         
-        for i in range(self.cantidad_cuotas):
-            if self.tipo_plazo == 'DIARIO':
-                fecha_pago = fecha_actual + timedelta(days=i+1)
-            elif self.tipo_plazo == 'SEMANAL':
-                fecha_pago = fecha_actual + timedelta(weeks=i+1)
-            elif self.tipo_plazo == 'QUINCENAL':
-                fecha_pago = fecha_actual + timedelta(days=(i+1)*15)
-            else:  # MENSUAL
-                # Para mensual, agregar meses
-                mes = fecha_actual.month
-                año = fecha_actual.year
-                dia = fecha_actual.day
-                
-                mes += (i + 1)
-                while mes > 12:
-                    mes -= 12
-                    año += 1
-                
-                try:
-                    from datetime import date
-                    fecha_pago = fecha_actual.replace(year=año, month=mes, day=dia)
-                except ValueError:
-                    # Si el día no existe en ese mes (ej: 31 en febrero)
-                    from calendar import monthrange
-                    ultimo_dia_mes = monthrange(año, mes)[1]
-                    fecha_pago = fecha_actual.replace(year=año, month=mes, day=min(dia, ultimo_dia_mes))
-            
-            fechas.append(fecha_pago)
-        
-        return fechas
+        # Retornar solo las fechas para compatibilidad
+        return [item['fecha_objeto'] for item in cronograma]
     
     def generar_cronograma(self):
-        """Genera el cronograma de pagos en la base de datos"""
+        """Genera el cronograma de pagos en la base de datos usando la lógica centralizada"""
+        from .creditos_utils import generar_cronograma_fechas
+        
         if not self.fecha_desembolso:
             return
         
         # Eliminar cronograma anterior si existe
         self.cronograma.all().delete()
         
-        fechas_pago = self.obtener_fechas_pago()
+        # Usar función centralizada para generar el cronograma completo
+        cronograma = generar_cronograma_fechas(
+            cantidad_cuotas=self.cantidad_cuotas,
+            tipo_plazo=self.tipo_plazo,
+            fecha_inicio=self.fecha_desembolso.date() if hasattr(self.fecha_desembolso, 'date') else self.fecha_desembolso
+        )
         
-        for i, fecha in enumerate(fechas_pago, 1):
+        # Crear registros en la base de datos
+        for cuota_info in cronograma:
             CronogramaPago.objects.create(
                 credito=self,
-                numero_cuota=i,
-                fecha_vencimiento=fecha.date() if hasattr(fecha, 'date') else fecha,
+                numero_cuota=cuota_info['numero_cuota'],
+                fecha_vencimiento=cuota_info['fecha_objeto'],
                 monto_cuota=self.valor_cuota
             )
     
@@ -881,12 +847,31 @@ class TareaCobro(models.Model):
     def marcar_como_cobrado(self, monto, observaciones="", latitud=None, longitud=None):
         """Marca la tarea como cobrada Y registra el pago automáticamente"""
         from django.utils import timezone
-        from decimal import Decimal
+        from decimal import Decimal, InvalidOperation
+        
+        # Convertir monto a Decimal de forma segura
+        if isinstance(monto, (str, int, float)):
+            try:
+                # Limpiar el monto si es string
+                if isinstance(monto, str):
+                    monto_limpio = str(monto).replace(',', '').replace(' ', '').strip()
+                else:
+                    monto_limpio = str(monto)
+                monto_decimal = Decimal(monto_limpio)
+                print(f"[DEBUG][marcar_como_cobrado] monto convertido a Decimal: {monto_decimal}")
+            except (ValueError, InvalidOperation) as e:
+                print(f"[DEBUG][marcar_como_cobrado] Error al convertir monto: {e}")
+                raise ValueError(f"Monto inválido: {monto}")
+        elif isinstance(monto, Decimal):
+            monto_decimal = monto
+            print(f"[DEBUG][marcar_como_cobrado] monto ya es Decimal: {monto_decimal}")
+        else:
+            raise ValueError(f"Tipo de monto no soportado: {type(monto)}")
         
         # 1. Actualizar la tarea
         self.estado = 'COBRADO'
         self.fecha_visita = timezone.now()
-        self.monto_cobrado = Decimal(str(monto))
+        self.monto_cobrado = monto_decimal
         self.observaciones = observaciones
         if latitud:
             self.latitud = latitud
@@ -896,7 +881,6 @@ class TareaCobro(models.Model):
         self.save()
         
         # 2. Actualizar la cuota asociada
-        monto_decimal = Decimal(str(monto))
         self.cuota.monto_pagado += monto_decimal
         
         if self.cuota.monto_pagado >= self.cuota.monto_cuota:

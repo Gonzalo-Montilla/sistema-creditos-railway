@@ -1,5 +1,6 @@
 from django.urls import path
 from . import views
+from . import valorizador_views
 
 urlpatterns = [
     path('', views.login_view, name='login'),
@@ -81,4 +82,9 @@ urlpatterns = [
     path('editar-usuario/<int:user_id>/', views.editar_usuario, name='editar_usuario'),
     path('eliminar-usuario/<int:user_id>/', views.eliminar_usuario, name='eliminar_usuario'),
     path('cambiar-password/<int:user_id>/', views.cambiar_password_usuario, name='cambiar_password_usuario'),
+    
+    # Valorizador de créditos
+    path('valorizador/', valorizador_views.valorizador, name='valorizador'),
+    path('valorizador/calcular/', valorizador_views.calcular_credito, name='calcular_credito'),
+    path('valorizador/comparar/', valorizador_views.comparar_modalidades, name='comparar_modalidades'),
 ]

@@ -81,8 +81,8 @@
                         <th>ID</th>
                         <th>Cliente</th>
                         <th>Monto</th>
-                        <th>Tasa %</th>
-                        <th>Plazo</th>
+                        <th>Tasa Mensual</th>
+                        <th>Modalidad</th>
                         <th>Cobrador</th>
                         <th>Estado</th>
                         <th>Fecha Solicitud</th>
@@ -109,7 +109,13 @@
                             </strong>
                         </td>
                         <td>{{ credito.tasa_interes }}%</td>
-                        <td>{{ credito.plazo_meses }} meses</td>
+                        <td>
+                            <div class="small">
+                                <strong>{{ credito.cantidad_cuotas }}</strong> {{ credito.get_tipo_plazo_display|lower }}{% if credito.cantidad_cuotas > 1 %}s{% endif %}
+                                <br>
+                                <span class="text-muted">{{ credito.plazo_meses }} meses</span>
+                            </div>
+                        </td>
                         <td>
                             {% if credito.cobrador %}
                                 <div class="d-flex align-items-center">
