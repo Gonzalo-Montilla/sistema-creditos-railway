@@ -15,20 +15,27 @@ Including another URLconf
     2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
 """
 from django.contrib import admin
-from django.urls import path, include
+from django.urls import path, include, re_path
 from django.conf import settings
 from django.conf.urls.static import static
+from main import media_views
 
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('', include('main.urls')),
+    # Vista de diagnóstico para media
+    path('media-status/', media_views.media_status, name='media_status'),
 ]
 
-# Servir archivos media en desarrollo y producción
-# Para desarrollo
+# Servir archivos media
 if settings.DEBUG:
+    # En desarrollo, usar el método estándar de Django
     urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
-    urlpatterns += static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)
 else:
-    # Para producción - usar WhiteNoise también para media
-    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+    # En producción, usar nuestra vista personalizada con placeholders
+    urlpatterns += [
+        re_path(r'^media/(?P<path>.*)$', media_views.serve_media_file, name='media'),
+    ]
+
+# Servir archivos estáticos (siempre)
+urlpatterns += static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)

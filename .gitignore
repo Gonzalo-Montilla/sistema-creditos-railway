@@ -3,6 +3,9 @@
 __pycache__/
 db.sqlite3
 media/
+# Permitir imágenes de ejemplo para testing
+!media/ejemplos/
+!media/ejemplos/**
 staticfiles/
 
 # Variables de entorno

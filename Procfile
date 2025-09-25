@@ -1,1 +1,1 @@
-web: python manage.py migrate && python manage.py collectstatic --noinput && python manage.py crear_superusuario_auto && gunicorn creditos.wsgi:application --bind 0.0.0.0:$PORT --workers 1 --timeout 120
+web: python manage.py migrate && python manage.py collectstatic --noinput && python manage.py crear_superusuario_auto && python manage.py ejecutar_tareas_automaticas --solo-tareas && gunicorn creditos.wsgi:application --bind 0.0.0.0:$PORT --workers 1 --timeout 120

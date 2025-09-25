@@ -91,12 +91,24 @@ def clientes(request):
     
     clientes_list = Cliente.objects.filter(activo=True).order_by('-fecha_registro')
     
+    # Calcular estadísticas de codeudores
+    total_clientes = clientes_list.count()
+    clientes_con_codeudor = clientes_list.filter(codeudor__isnull=False).count()
+    clientes_sin_codeudor = total_clientes - clientes_con_codeudor
+    
     # Paginación: 20 clientes por página
     paginator = Paginator(clientes_list, 20)
     page_number = request.GET.get('page')
     clientes = paginator.get_page(page_number)
     
-    return render(request, 'clientes.html', {'clientes': clientes})
+    context = {
+        'clientes': clientes,
+        'total_clientes': total_clientes,
+        'clientes_con_codeudor': clientes_con_codeudor,
+        'clientes_sin_codeudor': clientes_sin_codeudor,
+    }
+    
+    return render(request, 'clientes.html', context)
 
 @login_required
 def creditos(request):
@@ -2273,26 +2285,82 @@ def procesar_cobro_completo(request, tarea_id):
         latitud = request.POST.get('latitud')
         longitud = request.POST.get('longitud')
         
+        # LOGS para depuración
+        print(f"[DEBUG] monto_recibido original: '{monto_cobrado}'")  # Valor crudo como string
+        print(f"[DEBUG] Todo el POST data: {dict(request.POST.items())}")  # Ver todos los datos enviados
+        
         if not monto_cobrado:
             return JsonResponse({'success': False, 'error': 'Debe especificar el monto cobrado'})
         
+        # Limpiar el monto de forma más inteligente
+        monto_str = str(monto_cobrado).strip()
+        
+        # Si tiene coma como último separador (formato europeo), rechazar
+        if ',' in monto_str and monto_str.rindex(',') > monto_str.rindex('.') if '.' in monto_str else True:
+            # Verificar si es formato europeo (coma decimal)
+            parts_comma = monto_str.split(',')
+            if len(parts_comma) == 2 and len(parts_comma[1]) <= 2 and '.' not in parts_comma[1]:
+                return JsonResponse({
+                    'success': False, 
+                    'error': f'Use punto (.) como separador decimal, no coma (,). Ejemplo: {monto_str.replace(",", ".")}'
+                })
+        
+        # Limpiar comas de miles y espacios, pero conservar punto decimal
+        monto_limpio = monto_str.replace(' ', '')  # Quitar espacios
+        # Solo quitar comas si están en posición de miles (no al final)
+        if ',' in monto_limpio:
+            # Si hay punto, las comas antes del punto son separadores de miles
+            if '.' in monto_limpio:
+                parte_entera, parte_decimal = monto_limpio.split('.', 1)
+                parte_entera = parte_entera.replace(',', '')
+                monto_limpio = f"{parte_entera}.{parte_decimal}"
+            else:
+                # Si no hay punto, solo quitar comas de miles (no al final)
+                if not monto_limpio.endswith(',') and len(monto_limpio.split(',')[-1]) >= 3:
+                    monto_limpio = monto_limpio.replace(',', '')
+        
+        print(f"[DEBUG] monto_limpio después de limpiar: '{monto_limpio}'")
+        
+        # Validación directa con Decimal (más preciso)
         try:
-            monto = float(monto_cobrado)
-            if monto <= 0:
+            from decimal import Decimal, InvalidOperation
+            monto_decimal = Decimal(monto_limpio)
+            print(f"[DEBUG] monto convertido directamente a Decimal: {monto_decimal}")
+            
+            if monto_decimal <= Decimal('0'):
                 return JsonResponse({'success': False, 'error': 'El monto debe ser mayor que cero'})
-        except ValueError:
-            return JsonResponse({'success': False, 'error': 'Monto inválido'})
+                
+            # Validar que no sea un monto absurdamente pequeño o grande para pesos colombianos
+            # Permitir montos desde $50 para casos excepcionales (pagos parciales, etc.)
+            if monto_decimal < Decimal('50'):  # Menos de $50 COP
+                return JsonResponse({
+                    'success': False, 
+                    'error': f'El monto ${monto_decimal} parece muy bajo para un pago en pesos colombianos.'
+                })
+            
+            if monto_decimal > Decimal('50000000'):  # Más de $50 millones COP
+                return JsonResponse({
+                    'success': False,
+                    'error': f'El monto ${monto_decimal} parece muy alto. Verifique el valor.'
+                })
+                
+        except (ValueError, InvalidOperation) as e:
+            print(f"[DEBUG] Error al convertir monto: {e}")
+            return JsonResponse({'success': False, 'error': f'Monto inválido: "{monto_cobrado}". Use solo números y punto decimal.'})
         
         from decimal import Decimal
+        
+        print(f"[DEBUG] Usando monto_decimal para crear pago: {monto_decimal}")
         
         # 🎯 USAR EXACTAMENTE LA MISMA LÓGICA QUE nuevo_pago - CREAR PAGO
         pago = Pago.objects.create(
             credito=tarea.credito,
             cuota=tarea.cuota,
-            monto=Decimal(str(monto)),
+            monto=monto_decimal,  # Usar directamente el Decimal ya validado
             numero_cuota=tarea.cuota.numero_cuota,
             observaciones=f"📱 Cobro por {tarea.cobrador.nombre_completo}\n{observaciones}".strip()
         )
+        print(f"[DEBUG] Pago creado con monto: {pago.monto}")
         
         credito = pago.credito
         
@@ -2304,7 +2372,8 @@ def procesar_cobro_completo(request, tarea_id):
         # Actualizar tarea como cobrada
         tarea.estado = 'COBRADO'
         tarea.fecha_visita = timezone.now()
-        tarea.monto_cobrado = Decimal(str(monto))
+        tarea.monto_cobrado = monto_decimal  # Usar directamente el Decimal ya validado
+        print(f"[DEBUG] Tarea actualizada con monto_cobrado: {tarea.monto_cobrado}")
         tarea.observaciones = observaciones
         if latitud:
             tarea.latitud = float(latitud)
@@ -2313,7 +2382,7 @@ def procesar_cobro_completo(request, tarea_id):
         tarea.save()
         
         # Actualizar cuota
-        tarea.cuota.monto_pagado += Decimal(str(monto))
+        tarea.cuota.monto_pagado += monto_decimal  # Usar directamente el Decimal ya validado
         if tarea.cuota.monto_pagado >= tarea.cuota.monto_cuota:
             tarea.cuota.estado = 'PAGADA'
             tarea.cuota.fecha_pago = timezone.now().date()
@@ -2361,18 +2430,61 @@ def actualizar_tarea(request, tarea_id):
                 return JsonResponse({'success': False, 'error': 'Debe especificar el monto cobrado'})
             
             try:
-                monto = float(monto_cobrado)
-                if monto <= 0:
+                # Usar el mismo manejo robusto de Decimal
+                from decimal import Decimal, InvalidOperation
+                
+                # Limpiar el monto de forma inteligente (misma lógica que procesar_cobro_completo)
+                monto_str = str(monto_cobrado).strip()
+                
+                # Verificar formato europeo (coma decimal)
+                if ',' in monto_str:
+                    parts_comma = monto_str.split(',')
+                    if len(parts_comma) == 2 and len(parts_comma[1]) <= 2 and '.' not in parts_comma[1]:
+                        return JsonResponse({
+                            'success': False, 
+                            'error': f'Use punto (.) como separador decimal. Ejemplo: {monto_str.replace(",", ".")}'
+                        })
+                
+                # Limpiar comas de miles pero conservar punto decimal
+                monto_limpio = monto_str.replace(' ', '')
+                if ',' in monto_limpio:
+                    if '.' in monto_limpio:
+                        parte_entera, parte_decimal = monto_limpio.split('.', 1)
+                        parte_entera = parte_entera.replace(',', '')
+                        monto_limpio = f"{parte_entera}.{parte_decimal}"
+                    else:
+                        if not monto_limpio.endswith(',') and len(monto_limpio.split(',')[-1]) >= 3:
+                            monto_limpio = monto_limpio.replace(',', '')
+                
+                monto_decimal = Decimal(monto_limpio)
+                
+                # Validaciones de rango para pesos colombianos
+                if monto_decimal <= Decimal('0'):
                     return JsonResponse({'success': False, 'error': 'El monto debe ser mayor que cero'})
+                
+                # Permitir montos desde $50 para casos excepcionales
+                if monto_decimal < Decimal('50'):
+                    return JsonResponse({
+                        'success': False, 
+                        'error': f'El monto ${monto_decimal} parece muy bajo para un pago en pesos colombianos.'
+                    })
+                
+                if monto_decimal > Decimal('50000000'):
+                    return JsonResponse({
+                        'success': False,
+                        'error': f'El monto ${monto_decimal} parece muy alto. Verifique el valor.'
+                    })
                 
                 lat = float(latitud) if latitud else None
                 lng = float(longitud) if longitud else None
                 
                 # 🎆 MAGIA: Marcar tarea Y crear pago automáticamente
-                pago_creado = tarea.marcar_como_cobrado(monto, observaciones, lat, lng)
+                print(f"[DEBUG][actualizar_tarea] Enviando monto_decimal: {monto_decimal}")
+                pago_creado = tarea.marcar_como_cobrado(monto_decimal, observaciones, lat, lng)
                 
-            except ValueError:
-                return JsonResponse({'success': False, 'error': 'Monto inválido'})
+            except (ValueError, InvalidOperation) as e:
+                print(f"[DEBUG][actualizar_tarea] Error al convertir monto: {e}")
+                return JsonResponse({'success': False, 'error': f'Monto inválido: "{monto_cobrado}". Use solo números y punto decimal.'})
         else:
             fecha_reprog = None
             if fecha_reprogramacion:

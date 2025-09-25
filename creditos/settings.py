@@ -50,9 +50,16 @@ INSTALLED_APPS = [
     'main',
 ]
 
+# Añadir django_crontab solo si está disponible (producción)
+try:
+    import django_crontab
+    INSTALLED_APPS.append('django_crontab')
+except ImportError:
+    pass  # No disponible en desarrollo local
+
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
-    'whitenoise.middleware.WhiteNoiseMiddleware',  # Para archivos estáticos
+    'whitenoise.middleware.WhiteNoiseMiddleware',  # Para archivos estáticos y media
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -155,6 +162,14 @@ STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
 
+# WhiteNoise para servir archivos media en producción
+WHITENOISE_USE_FINDERS = True
+WHITENOISE_AUTOREFRESH = True
+
+# Configuración adicional para que WhiteNoise sirva archivos media
+WHITENOISE_SKIP_COMPRESS_EXTENSIONS = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'zip', 'gz', 'tgz', 'bz2', 'tbz', 'xz', 'br']
+WHITENOISE_MAX_AGE = 31536000  # 1 año para imágenes
+
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
 
@@ -163,3 +178,19 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 # Login settings
 LOGIN_URL = 'login'
 LOGIN_REDIRECT_URL = 'dashboard'
+
+# ===== AUTOMATIZACIÓN DE TAREAS DIARIAS =====
+# Configuración de tareas programadas para producción
+# Solo se configura si django_crontab está disponible
+if 'django_crontab' in INSTALLED_APPS:
+    CRONJOBS = [
+        # Generar tareas de cobro diarias (Lunes a Viernes a las 6:00 AM)
+        ('0 6 * * 1-5', 'django.core.management.call_command', ['ejecutar_tareas_automaticas', '--solo-tareas']),
+        
+        # Verificación completa del sistema (Domingos a las 7:00 AM)
+        ('0 7 * * 0', 'django.core.management.call_command', ['ejecutar_tareas_automaticas']),
+    ]
+    
+    # Configuración adicional para cron
+    CRONTAB_LOCK_JOBS = True  # Evita ejecución simultánea
+    CRONTAB_COMMAND_SUFFIX = '2>&1'  # Captura logs

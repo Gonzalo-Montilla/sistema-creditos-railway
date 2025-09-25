@@ -1,0 +1,1794 @@
+[
+{
+  "model": "auth.permission",
+  "pk": 1,
+  "fields": {
+    "name": "Can add log entry",
+    "content_type": 1,
+    "codename": "add_logentry"
+  }
+},
+{
+  "model": "auth.permission",
+  "pk": 2,
+  "fields": {
+    "name": "Can change log entry",
+    "content_type": 1,
+    "codename": "change_logentry"
+  }
+},
+{
+  "model": "auth.permission",
+  "pk": 3,
+  "fields": {
+    "name": "Can delete log entry",
+    "content_type": 1,
+    "codename": "delete_logentry"
+  }
+},
+{
+  "model": "auth.permission",
+  "pk": 4,
+  "fields": {
+    "name": "Can view log entry",
+    "content_type": 1,
+    "codename": "view_logentry"
+  }
+},
+{
+  "model": "auth.permission",
+  "pk": 5,
+  "fields": {
+    "name": "Can add permission",
+    "content_type": 2,
+    "codename": "add_permission"
+  }
+},
+{
+  "model": "auth.permission",
+  "pk": 6,
+  "fields": {
+    "name": "Can change permission",
+    "content_type": 2,
+    "codename": "change_permission"
+  }
+},
+{
+  "model": "auth.permission",
+  "pk": 7,
+  "fields": {
+    "name": "Can delete permission",
+    "content_type": 2,
+    "codename": "delete_permission"
+  }
+},
+{
+  "model": "auth.permission",
+  "pk": 8,
+  "fields": {
+    "name": "Can view permission",
+    "content_type": 2,
+    "codename": "view_permission"
+  }
+},
+{
+  "model": "auth.permission",
+  "pk": 9,
+  "fields": {
+    "name": "Can add group",
+    "content_type": 3,
+    "codename": "add_group"
+  }
+},
+{
+  "model": "auth.permission",
+  "pk": 10,
+  "fields": {
+    "name": "Can change group",
+    "content_type": 3,
+    "codename": "change_group"
+  }
+},
+{
+  "model": "auth.permission",
+  "pk": 11,
+  "fields": {
+    "name": "Can delete group",
+    "content_type": 3,
+    "codename": "delete_group"
+  }
+},
+{
+  "model": "auth.permission",
+  "pk": 12,
+  "fields": {
+    "name": "Can view group",
+    "content_type": 3,
+    "codename": "view_group"
+  }
+},
+{
+  "model": "auth.permission",
+  "pk": 13,
+  "fields": {
+    "name": "Can add user",
+    "content_type": 4,
+    "codename": "add_user"
+  }
+},
+{
+  "model": "auth.permission",
+  "pk": 14,
+  "fields": {
+    "name": "Can change user",
+    "content_type": 4,
+    "codename": "change_user"
+  }
+},
+{
+  "model": "auth.permission",
+  "pk": 15,
+  "fields": {
+    "name": "Can delete user",
+    "content_type": 4,
+    "codename": "delete_user"
+  }
+},
+{
+  "model": "auth.permission",
+  "pk": 16,
+  "fields": {
+    "name": "Can view user",
+    "content_type": 4,
+    "codename": "view_user"
+  }
+},
+{
+  "model": "auth.permission",
+  "pk": 17,
+  "fields": {
+    "name": "Can add content type",
+    "content_type": 5,
+    "codename": "add_contenttype"
+  }
+},
+{
+  "model": "auth.permission",
+  "pk": 18,
+  "fields": {
+    "name": "Can change content type",
+    "content_type": 5,
+    "codename": "change_contenttype"
+  }
+},
+{
+  "model": "auth.permission",
+  "pk": 19,
+  "fields": {
+    "name": "Can delete content type",
+    "content_type": 5,
+    "codename": "delete_contenttype"
+  }
+},
+{
+  "model": "auth.permission",
+  "pk": 20,
+  "fields": {
+    "name": "Can view content type",
+    "content_type": 5,
+    "codename": "view_contenttype"
+  }
+},
+{
+  "model": "auth.permission",
+  "pk": 21,
+  "fields": {
+    "name": "Can add session",
+    "content_type": 6,
+    "codename": "add_session"
+  }
+},
+{
+  "model": "auth.permission",
+  "pk": 22,
+  "fields": {
+    "name": "Can change session",
+    "content_type": 6,
+    "codename": "change_session"
+  }
+},
+{
+  "model": "auth.permission",
+  "pk": 23,
+  "fields": {
+    "name": "Can delete session",
+    "content_type": 6,
+    "codename": "delete_session"
+  }
+},
+{
+  "model": "auth.permission",
+  "pk": 24,
+  "fields": {
+    "name": "Can view session",
+    "content_type": 6,
+    "codename": "view_session"
+  }
+},
+{
+  "model": "auth.permission",
+  "pk": 25,
+  "fields": {
+    "name": "Can add cliente",
+    "content_type": 7,
+    "codename": "add_cliente"
+  }
+},
+{
+  "model": "auth.permission",
+  "pk": 26,
+  "fields": {
+    "name": "Can change cliente",
+    "content_type": 7,
+    "codename": "change_cliente"
+  }
+},
+{
+  "model": "auth.permission",
+  "pk": 27,
+  "fields": {
+    "name": "Can delete cliente",
+    "content_type": 7,
+    "codename": "delete_cliente"
+  }
+},
+{
+  "model": "auth.permission",
+  "pk": 28,
+  "fields": {
+    "name": "Can view cliente",
+    "content_type": 7,
+    "codename": "view_cliente"
+  }
+},
+{
+  "model": "auth.permission",
+  "pk": 29,
+  "fields": {
+    "name": "Can add credito",
+    "content_type": 8,
+    "codename": "add_credito"
+  }
+},
+{
+  "model": "auth.permission",
+  "pk": 30,
+  "fields": {
+    "name": "Can change credito",
+    "content_type": 8,
+    "codename": "change_credito"
+  }
+},
+{
+  "model": "auth.permission",
+  "pk": 31,
+  "fields": {
+    "name": "Can delete credito",
+    "content_type": 8,
+    "codename": "delete_credito"
+  }
+},
+{
+  "model": "auth.permission",
+  "pk": 32,
+  "fields": {
+    "name": "Can view credito",
+    "content_type": 8,
+    "codename": "view_credito"
+  }
+},
+{
+  "model": "auth.permission",
+  "pk": 33,
+  "fields": {
+    "name": "Can add pago",
+    "content_type": 9,
+    "codename": "add_pago"
+  }
+},
+{
+  "model": "auth.permission",
+  "pk": 34,
+  "fields": {
+    "name": "Can change pago",
+    "content_type": 9,
+    "codename": "change_pago"
+  }
+},
+{
+  "model": "auth.permission",
+  "pk": 35,
+  "fields": {
+    "name": "Can delete pago",
+    "content_type": 9,
+    "codename": "delete_pago"
+  }
+},
+{
+  "model": "auth.permission",
+  "pk": 36,
+  "fields": {
+    "name": "Can view pago",
+    "content_type": 9,
+    "codename": "view_pago"
+  }
+},
+{
+  "model": "auth.permission",
+  "pk": 37,
+  "fields": {
+    "name": "Can add codeudor",
+    "content_type": 10,
+    "codename": "add_codeudor"
+  }
+},
+{
+  "model": "auth.permission",
+  "pk": 38,
+  "fields": {
+    "name": "Can change codeudor",
+    "content_type": 10,
+    "codename": "change_codeudor"
+  }
+},
+{
+  "model": "auth.permission",
+  "pk": 39,
+  "fields": {
+    "name": "Can delete codeudor",
+    "content_type": 10,
+    "codename": "delete_codeudor"
+  }
+},
+{
+  "model": "auth.permission",
+  "pk": 40,
+  "fields": {
+    "name": "Can view codeudor",
+    "content_type": 10,
+    "codename": "view_codeudor"
+  }
+},
+{
+  "model": "auth.permission",
+  "pk": 41,
+  "fields": {
+    "name": "Can add cronograma pago",
+    "content_type": 11,
+    "codename": "add_cronogramapago"
+  }
+},
+{
+  "model": "auth.permission",
+  "pk": 42,
+  "fields": {
+    "name": "Can change cronograma pago",
+    "content_type": 11,
+    "codename": "change_cronogramapago"
+  }
+},
+{
+  "model": "auth.permission",
+  "pk": 43,
+  "fields": {
+    "name": "Can delete cronograma pago",
+    "content_type": 11,
+    "codename": "delete_cronogramapago"
+  }
+},
+{
+  "model": "auth.permission",
+  "pk": 44,
+  "fields": {
+    "name": "Can view cronograma pago",
+    "content_type": 11,
+    "codename": "view_cronogramapago"
+  }
+},
+{
+  "model": "auth.permission",
+  "pk": 45,
+  "fields": {
+    "name": "Can add Ruta",
+    "content_type": 12,
+    "codename": "add_ruta"
+  }
+},
+{
+  "model": "auth.permission",
+  "pk": 46,
+  "fields": {
+    "name": "Can change Ruta",
+    "content_type": 12,
+    "codename": "change_ruta"
+  }
+},
+{
+  "model": "auth.permission",
+  "pk": 47,
+  "fields": {
+    "name": "Can delete Ruta",
+    "content_type": 12,
+    "codename": "delete_ruta"
+  }
+},
+{
+  "model": "auth.permission",
+  "pk": 48,
+  "fields": {
+    "name": "Can view Ruta",
+    "content_type": 12,
+    "codename": "view_ruta"
+  }
+},
+{
+  "model": "auth.permission",
+  "pk": 49,
+  "fields": {
+    "name": "Can add Cobrador",
+    "content_type": 13,
+    "codename": "add_cobrador"
+  }
+},
+{
+  "model": "auth.permission",
+  "pk": 50,
+  "fields": {
+    "name": "Can change Cobrador",
+    "content_type": 13,
+    "codename": "change_cobrador"
+  }
+},
+{
+  "model": "auth.permission",
+  "pk": 51,
+  "fields": {
+    "name": "Can delete Cobrador",
+    "content_type": 13,
+    "codename": "delete_cobrador"
+  }
+},
+{
+  "model": "auth.permission",
+  "pk": 52,
+  "fields": {
+    "name": "Can view Cobrador",
+    "content_type": 13,
+    "codename": "view_cobrador"
+  }
+},
+{
+  "model": "auth.permission",
+  "pk": 53,
+  "fields": {
+    "name": "Can add Análisis de Cartera",
+    "content_type": 14,
+    "codename": "add_carteraanalisis"
+  }
+},
+{
+  "model": "auth.permission",
+  "pk": 54,
+  "fields": {
+    "name": "Can change Análisis de Cartera",
+    "content_type": 14,
+    "codename": "change_carteraanalisis"
+  }
+},
+{
+  "model": "auth.permission",
+  "pk": 55,
+  "fields": {
+    "name": "Can delete Análisis de Cartera",
+    "content_type": 14,
+    "codename": "delete_carteraanalisis"
+  }
+},
+{
+  "model": "auth.permission",
+  "pk": 56,
+  "fields": {
+    "name": "Can view Análisis de Cartera",
+    "content_type": 14,
+    "codename": "view_carteraanalisis"
+  }
+},
+{
+  "model": "auth.permission",
+  "pk": 57,
+  "fields": {
+    "name": "Can add Tarea de Cobro",
+    "content_type": 15,
+    "codename": "add_tareacobro"
+  }
+},
+{
+  "model": "auth.permission",
+  "pk": 58,
+  "fields": {
+    "name": "Can change Tarea de Cobro",
+    "content_type": 15,
+    "codename": "change_tareacobro"
+  }
+},
+{
+  "model": "auth.permission",
+  "pk": 59,
+  "fields": {
+    "name": "Can delete Tarea de Cobro",
+    "content_type": 15,
+    "codename": "delete_tareacobro"
+  }
+},
+{
+  "model": "auth.permission",
+  "pk": 60,
+  "fields": {
+    "name": "Can view Tarea de Cobro",
+    "content_type": 15,
+    "codename": "view_tareacobro"
+  }
+},
+{
+  "model": "auth.user",
+  "pk": 1,
+  "fields": {
+    "password": "pbkdf2_sha256$1000000$aSoM34AhXjuLRsQ90f22yu$1c4OCR6RUx3UzQf9HzMB4cdu00iF/GcqAVJsIYTdFgc=",
+    "last_login": "2025-09-25T14:23:41.856Z",
+    "is_superuser": true,
+    "username": "chalomontilla",
+    "first_name": "",
+    "last_name": "",
+    "email": "montillalondono@gmail.com",
+    "is_staff": true,
+    "is_active": true,
+    "date_joined": "2025-09-22T01:25:53.656Z",
+    "groups": [],
+    "user_permissions": []
+  }
+},
+{
+  "model": "auth.user",
+  "pk": 3,
+  "fields": {
+    "password": "pbkdf2_sha256$1000000$1PtghzebfJXKuG1YDBFEhw$7zbEl155haQkqxEIo4ohWSvACqZgK7mdmgi54nYf0R8=",
+    "last_login": "2025-09-24T23:30:59.200Z",
+    "is_superuser": true,
+    "username": "chalo",
+    "first_name": "",
+    "last_name": "",
+    "email": "montillalondono@gmail.com",
+    "is_staff": true,
+    "is_active": true,
+    "date_joined": "2025-09-24T23:15:46.138Z",
+    "groups": [],
+    "user_permissions": []
+  }
+},
+{
+  "model": "auth.user",
+  "pk": 4,
+  "fields": {
+    "password": "pbkdf2_sha256$1000000$fuLeLHYwH8kmeQL6CWXeEy$tRiLpub9uR4621BSkG7vuGt70/CEAUYRGMqCB5uUvHs=",
+    "last_login": null,
+    "is_superuser": false,
+    "username": "gonzo",
+    "first_name": "gonzalo",
+    "last_name": "montilla",
+    "email": "gonzo@gmail.com",
+    "is_staff": false,
+    "is_active": true,
+    "date_joined": "2025-09-24T23:21:20.372Z",
+    "groups": [],
+    "user_permissions": []
+  }
+},
+{
+  "model": "contenttypes.contenttype",
+  "pk": 1,
+  "fields": {
+    "app_label": "admin",
+    "model": "logentry"
+  }
+},
+{
+  "model": "contenttypes.contenttype",
+  "pk": 2,
+  "fields": {
+    "app_label": "auth",
+    "model": "permission"
+  }
+},
+{
+  "model": "contenttypes.contenttype",
+  "pk": 3,
+  "fields": {
+    "app_label": "auth",
+    "model": "group"
+  }
+},
+{
+  "model": "contenttypes.contenttype",
+  "pk": 4,
+  "fields": {
+    "app_label": "auth",
+    "model": "user"
+  }
+},
+{
+  "model": "contenttypes.contenttype",
+  "pk": 5,
+  "fields": {
+    "app_label": "contenttypes",
+    "model": "contenttype"
+  }
+},
+{
+  "model": "contenttypes.contenttype",
+  "pk": 6,
+  "fields": {
+    "app_label": "sessions",
+    "model": "session"
+  }
+},
+{
+  "model": "contenttypes.contenttype",
+  "pk": 7,
+  "fields": {
+    "app_label": "main",
+    "model": "cliente"
+  }
+},
+{
+  "model": "contenttypes.contenttype",
+  "pk": 8,
+  "fields": {
+    "app_label": "main",
+    "model": "credito"
+  }
+},
+{
+  "model": "contenttypes.contenttype",
+  "pk": 9,
+  "fields": {
+    "app_label": "main",
+    "model": "pago"
+  }
+},
+{
+  "model": "contenttypes.contenttype",
+  "pk": 10,
+  "fields": {
+    "app_label": "main",
+    "model": "codeudor"
+  }
+},
+{
+  "model": "contenttypes.contenttype",
+  "pk": 11,
+  "fields": {
+    "app_label": "main",
+    "model": "cronogramapago"
+  }
+},
+{
+  "model": "contenttypes.contenttype",
+  "pk": 12,
+  "fields": {
+    "app_label": "main",
+    "model": "ruta"
+  }
+},
+{
+  "model": "contenttypes.contenttype",
+  "pk": 13,
+  "fields": {
+    "app_label": "main",
+    "model": "cobrador"
+  }
+},
+{
+  "model": "contenttypes.contenttype",
+  "pk": 14,
+  "fields": {
+    "app_label": "main",
+    "model": "carteraanalisis"
+  }
+},
+{
+  "model": "contenttypes.contenttype",
+  "pk": 15,
+  "fields": {
+    "app_label": "main",
+    "model": "tareacobro"
+  }
+},
+{
+  "model": "sessions.session",
+  "pk": "rvw9pc81xri80lqzb5vbjvhi0pgvuxpk",
+  "fields": {
+    "session_data": ".eJxVjM0OwiAQhN-FsyEC5acevfsMZGF3pWogKe3J-O62SQ-auc33zbxFhHUpce00xwnFRShx-u0S5CfVHeAD6r3J3OoyT0nuijxol7eG9Loe7t9BgV62tQmkszc0ZlDBDgTsTPY5DQFYu4BoiRG9VtoQjXz2rLaY5JiJrFfi8wUE7zkI:1v1msn:jHojvGtEDWvJ6_8aA3ncjXDXhVsODuAql4FAxdyJwqA",
+    "expire_date": "2025-10-09T14:23:41.888Z"
+  }
+},
+{
+  "model": "sessions.session",
+  "pk": "sa4e2bh9dln5ym6e0r9fqqe8kuzaeg0s",
+  "fields": {
+    "session_data": ".eJxVjM0OwiAQhN-FsyFCV348eu8zENhdpGogKe3J-O62SQ86x_m-mbcIcV1KWDvPYSJxFUqcfrsU8cl1B_SI9d4ktrrMU5K7Ig_a5diIX7fD_TsosZdtfXYKtzgmk7JVDA5y1n5AbYbsAYwnc1HoCLR2ziJysmnw3iJbIE_i8wXxDjgw:1v0qnB:94pnrzOto-4zXIwH3DmIjiSrcku_T0XWQ4-fhMXuac8",
+    "expire_date": "2025-10-07T00:22:01.897Z"
+  }
+},
+{
+  "model": "main.cliente",
+  "pk": 19,
+  "fields": {
+    "nombres": "LUKE",
+    "apellidos": "SKYWALKER",
+    "cedula": "14698115",
+    "celular": "3235492939",
+    "telefono_fijo": "2810790",
+    "email": "luke@gmail.com",
+    "direccion": "CALLE 36 # 25 -24",
+    "barrio": "OBRERO",
+    "referencia1_nombre": "LEIA ORGANA",
+    "referencia1_telefono": "3165393281",
+    "referencia2_nombre": "C3PO ARTUDITO",
+    "referencia2_telefono": "3185797904",
+    "foto_rostro": "clientes/rostros/foto_rostro_1758830956811.jpg",
+    "foto_cedula_frontal": "clientes/cedulas/foto_cedula_frontal_1758830960813.jpg",
+    "foto_cedula_trasera": "clientes/cedulas/foto_cedula_trasera_1758830965697.jpg",
+    "foto_recibo_servicio": "clientes/servicios/foto_recibo_servicio_1758830969423.jpg",
+    "fecha_registro": "2025-09-25T20:09:30.362Z",
+    "activo": true
+  }
+},
+{
+  "model": "main.cliente",
+  "pk": 20,
+  "fields": {
+    "nombres": "MAESTRO",
+    "apellidos": "YODA",
+    "cedula": "260540212",
+    "celular": "3128168496",
+    "telefono_fijo": null,
+    "email": "yoda@gmail.com",
+    "direccion": "CALL 36 # 45 - 21",
+    "barrio": "OBRERO",
+    "referencia1_nombre": "MAESTRO WINDU",
+    "referencia1_telefono": "3135157852",
+    "referencia2_nombre": "CONDE DUKU",
+    "referencia2_telefono": "3215236987",
+    "foto_rostro": "clientes/rostros/foto_rostro_1758831363237.jpg",
+    "foto_cedula_frontal": "clientes/cedulas/foto_cedula_frontal_1758831366343.jpg",
+    "foto_cedula_trasera": "clientes/cedulas/foto_cedula_trasera_1758831369232.jpg",
+    "foto_recibo_servicio": "clientes/servicios/foto_recibo_servicio_1758831371814.jpg",
+    "fecha_registro": "2025-09-25T20:16:13.314Z",
+    "activo": true
+  }
+},
+{
+  "model": "main.codeudor",
+  "pk": 5,
+  "fields": {
+    "cliente": 19,
+    "nombres": "HAN",
+    "apellidos": "SOLO",
+    "cedula": "1113625964",
+    "celular": "3153567896",
+    "direccion": "CALLE 45 # 45 -21",
+    "barrio": "ZAMORANO",
+    "foto_rostro": "codeudores/rostros/foto_rostro_1758831010836.jpg",
+    "foto_cedula_frontal": "codeudores/cedulas/foto_cedula_frontal_1758831013766.jpg",
+    "foto_cedula_trasera": "codeudores/cedulas/foto_cedula_trasera_1758831016776.jpg",
+    "fecha_registro": "2025-09-25T20:10:18.294Z",
+    "activo": true
+  }
+},
+{
+  "model": "main.credito",
+  "pk": 26,
+  "fields": {
+    "cliente": 19,
+    "cobrador": 6,
+    "monto": "1000000.00",
+    "tasa_interes": "20.00",
+    "tipo_plazo": "QUINCENAL",
+    "cantidad_cuotas": 4,
+    "plazo_meses": 2,
+    "valor_cuota": "350000.00",
+    "total_interes": "400000.00",
+    "monto_total": "1400000.00",
+    "descripcion_pago": "Crédito informal de $1,000,000 al 20.0% mensual por 2.0 meses. 4 cuotas quincenales de $350,000. Total: $1,400,000 (Intereses: $400,000)",
+    "estado": "DESEMBOLSADO",
+    "fecha_solicitud": "2025-09-25T20:12:08.642Z",
+    "fecha_aprobacion": "2025-09-25T20:13:13.605Z",
+    "fecha_desembolso": "2025-09-25T20:13:17.630Z",
+    "fecha_vencimiento": null,
+    "dias_mora": 0,
+    "estado_mora": "AL_DIA",
+    "interes_moratorio": "0.00",
+    "tasa_mora": "2.00"
+  }
+},
+{
+  "model": "main.credito",
+  "pk": 27,
+  "fields": {
+    "cliente": 20,
+    "cobrador": 6,
+    "monto": "500000.00",
+    "tasa_interes": "20.00",
+    "tipo_plazo": "DIARIO",
+    "cantidad_cuotas": 60,
+    "plazo_meses": 2,
+    "valor_cuota": "11666.67",
+    "total_interes": "200000.00",
+    "monto_total": "700000.00",
+    "descripcion_pago": "Crédito informal de $500,000 al 20.0% mensual por 2.0 meses. 60 cuotas diarios de $11,667. Total: $700,000 (Intereses: $200,000)",
+    "estado": "DESEMBOLSADO",
+    "fecha_solicitud": "2025-09-25T20:17:52.618Z",
+    "fecha_aprobacion": "2025-09-25T20:18:43.908Z",
+    "fecha_desembolso": "2025-09-25T20:18:48.740Z",
+    "fecha_vencimiento": null,
+    "dias_mora": 0,
+    "estado_mora": "AL_DIA",
+    "interes_moratorio": "0.00",
+    "tasa_mora": "2.00"
+  }
+},
+{
+  "model": "main.cronogramapago",
+  "pk": 413,
+  "fields": {
+    "credito": 26,
+    "numero_cuota": 1,
+    "fecha_vencimiento": "2025-10-10",
+    "monto_cuota": "350000.00",
+    "monto_pagado": "0.00",
+    "estado": "PENDIENTE",
+    "fecha_pago": null,
+    "observaciones": ""
+  }
+},
+{
+  "model": "main.cronogramapago",
+  "pk": 414,
+  "fields": {
+    "credito": 26,
+    "numero_cuota": 2,
+    "fecha_vencimiento": "2025-10-25",
+    "monto_cuota": "350000.00",
+    "monto_pagado": "0.00",
+    "estado": "PENDIENTE",
+    "fecha_pago": null,
+    "observaciones": ""
+  }
+},
+{
+  "model": "main.cronogramapago",
+  "pk": 415,
+  "fields": {
+    "credito": 26,
+    "numero_cuota": 3,
+    "fecha_vencimiento": "2025-11-09",
+    "monto_cuota": "350000.00",
+    "monto_pagado": "0.00",
+    "estado": "PENDIENTE",
+    "fecha_pago": null,
+    "observaciones": ""
+  }
+},
+{
+  "model": "main.cronogramapago",
+  "pk": 416,
+  "fields": {
+    "credito": 26,
+    "numero_cuota": 4,
+    "fecha_vencimiento": "2025-11-24",
+    "monto_cuota": "350000.00",
+    "monto_pagado": "0.00",
+    "estado": "PENDIENTE",
+    "fecha_pago": null,
+    "observaciones": ""
+  }
+},
+{
+  "model": "main.cronogramapago",
+  "pk": 417,
+  "fields": {
+    "credito": 27,
+    "numero_cuota": 1,
+    "fecha_vencimiento": "2025-09-26",
+    "monto_cuota": "11666.67",
+    "monto_pagado": "0.00",
+    "estado": "PENDIENTE",
+    "fecha_pago": null,
+    "observaciones": ""
+  }
+},
+{
+  "model": "main.cronogramapago",
+  "pk": 418,
+  "fields": {
+    "credito": 27,
+    "numero_cuota": 2,
+    "fecha_vencimiento": "2025-09-27",
+    "monto_cuota": "11666.67",
+    "monto_pagado": "0.00",
+    "estado": "PENDIENTE",
+    "fecha_pago": null,
+    "observaciones": ""
+  }
+},
+{
+  "model": "main.cronogramapago",
+  "pk": 419,
+  "fields": {
+    "credito": 27,
+    "numero_cuota": 3,
+    "fecha_vencimiento": "2025-09-28",
+    "monto_cuota": "11666.67",
+    "monto_pagado": "0.00",
+    "estado": "PENDIENTE",
+    "fecha_pago": null,
+    "observaciones": ""
+  }
+},
+{
+  "model": "main.cronogramapago",
+  "pk": 420,
+  "fields": {
+    "credito": 27,
+    "numero_cuota": 4,
+    "fecha_vencimiento": "2025-09-29",
+    "monto_cuota": "11666.67",
+    "monto_pagado": "0.00",
+    "estado": "PENDIENTE",
+    "fecha_pago": null,
+    "observaciones": ""
+  }
+},
+{
+  "model": "main.cronogramapago",
+  "pk": 421,
+  "fields": {
+    "credito": 27,
+    "numero_cuota": 5,
+    "fecha_vencimiento": "2025-09-30",
+    "monto_cuota": "11666.67",
+    "monto_pagado": "0.00",
+    "estado": "PENDIENTE",
+    "fecha_pago": null,
+    "observaciones": ""
+  }
+},
+{
+  "model": "main.cronogramapago",
+  "pk": 422,
+  "fields": {
+    "credito": 27,
+    "numero_cuota": 6,
+    "fecha_vencimiento": "2025-10-01",
+    "monto_cuota": "11666.67",
+    "monto_pagado": "0.00",
+    "estado": "PENDIENTE",
+    "fecha_pago": null,
+    "observaciones": ""
+  }
+},
+{
+  "model": "main.cronogramapago",
+  "pk": 423,
+  "fields": {
+    "credito": 27,
+    "numero_cuota": 7,
+    "fecha_vencimiento": "2025-10-02",
+    "monto_cuota": "11666.67",
+    "monto_pagado": "0.00",
+    "estado": "PENDIENTE",
+    "fecha_pago": null,
+    "observaciones": ""
+  }
+},
+{
+  "model": "main.cronogramapago",
+  "pk": 424,
+  "fields": {
+    "credito": 27,
+    "numero_cuota": 8,
+    "fecha_vencimiento": "2025-10-03",
+    "monto_cuota": "11666.67",
+    "monto_pagado": "0.00",
+    "estado": "PENDIENTE",
+    "fecha_pago": null,
+    "observaciones": ""
+  }
+},
+{
+  "model": "main.cronogramapago",
+  "pk": 425,
+  "fields": {
+    "credito": 27,
+    "numero_cuota": 9,
+    "fecha_vencimiento": "2025-10-04",
+    "monto_cuota": "11666.67",
+    "monto_pagado": "0.00",
+    "estado": "PENDIENTE",
+    "fecha_pago": null,
+    "observaciones": ""
+  }
+},
+{
+  "model": "main.cronogramapago",
+  "pk": 426,
+  "fields": {
+    "credito": 27,
+    "numero_cuota": 10,
+    "fecha_vencimiento": "2025-10-05",
+    "monto_cuota": "11666.67",
+    "monto_pagado": "0.00",
+    "estado": "PENDIENTE",
+    "fecha_pago": null,
+    "observaciones": ""
+  }
+},
+{
+  "model": "main.cronogramapago",
+  "pk": 427,
+  "fields": {
+    "credito": 27,
+    "numero_cuota": 11,
+    "fecha_vencimiento": "2025-10-06",
+    "monto_cuota": "11666.67",
+    "monto_pagado": "0.00",
+    "estado": "PENDIENTE",
+    "fecha_pago": null,
+    "observaciones": ""
+  }
+},
+{
+  "model": "main.cronogramapago",
+  "pk": 428,
+  "fields": {
+    "credito": 27,
+    "numero_cuota": 12,
+    "fecha_vencimiento": "2025-10-07",
+    "monto_cuota": "11666.67",
+    "monto_pagado": "0.00",
+    "estado": "PENDIENTE",
+    "fecha_pago": null,
+    "observaciones": ""
+  }
+},
+{
+  "model": "main.cronogramapago",
+  "pk": 429,
+  "fields": {
+    "credito": 27,
+    "numero_cuota": 13,
+    "fecha_vencimiento": "2025-10-08",
+    "monto_cuota": "11666.67",
+    "monto_pagado": "0.00",
+    "estado": "PENDIENTE",
+    "fecha_pago": null,
+    "observaciones": ""
+  }
+},
+{
+  "model": "main.cronogramapago",
+  "pk": 430,
+  "fields": {
+    "credito": 27,
+    "numero_cuota": 14,
+    "fecha_vencimiento": "2025-10-09",
+    "monto_cuota": "11666.67",
+    "monto_pagado": "0.00",
+    "estado": "PENDIENTE",
+    "fecha_pago": null,
+    "observaciones": ""
+  }
+},
+{
+  "model": "main.cronogramapago",
+  "pk": 431,
+  "fields": {
+    "credito": 27,
+    "numero_cuota": 15,
+    "fecha_vencimiento": "2025-10-10",
+    "monto_cuota": "11666.67",
+    "monto_pagado": "0.00",
+    "estado": "PENDIENTE",
+    "fecha_pago": null,
+    "observaciones": ""
+  }
+},
+{
+  "model": "main.cronogramapago",
+  "pk": 432,
+  "fields": {
+    "credito": 27,
+    "numero_cuota": 16,
+    "fecha_vencimiento": "2025-10-11",
+    "monto_cuota": "11666.67",
+    "monto_pagado": "0.00",
+    "estado": "PENDIENTE",
+    "fecha_pago": null,
+    "observaciones": ""
+  }
+},
+{
+  "model": "main.cronogramapago",
+  "pk": 433,
+  "fields": {
+    "credito": 27,
+    "numero_cuota": 17,
+    "fecha_vencimiento": "2025-10-12",
+    "monto_cuota": "11666.67",
+    "monto_pagado": "0.00",
+    "estado": "PENDIENTE",
+    "fecha_pago": null,
+    "observaciones": ""
+  }
+},
+{
+  "model": "main.cronogramapago",
+  "pk": 434,
+  "fields": {
+    "credito": 27,
+    "numero_cuota": 18,
+    "fecha_vencimiento": "2025-10-13",
+    "monto_cuota": "11666.67",
+    "monto_pagado": "0.00",
+    "estado": "PENDIENTE",
+    "fecha_pago": null,
+    "observaciones": ""
+  }
+},
+{
+  "model": "main.cronogramapago",
+  "pk": 435,
+  "fields": {
+    "credito": 27,
+    "numero_cuota": 19,
+    "fecha_vencimiento": "2025-10-14",
+    "monto_cuota": "11666.67",
+    "monto_pagado": "0.00",
+    "estado": "PENDIENTE",
+    "fecha_pago": null,
+    "observaciones": ""
+  }
+},
+{
+  "model": "main.cronogramapago",
+  "pk": 436,
+  "fields": {
+    "credito": 27,
+    "numero_cuota": 20,
+    "fecha_vencimiento": "2025-10-15",
+    "monto_cuota": "11666.67",
+    "monto_pagado": "0.00",
+    "estado": "PENDIENTE",
+    "fecha_pago": null,
+    "observaciones": ""
+  }
+},
+{
+  "model": "main.cronogramapago",
+  "pk": 437,
+  "fields": {
+    "credito": 27,
+    "numero_cuota": 21,
+    "fecha_vencimiento": "2025-10-16",
+    "monto_cuota": "11666.67",
+    "monto_pagado": "0.00",
+    "estado": "PENDIENTE",
+    "fecha_pago": null,
+    "observaciones": ""
+  }
+},
+{
+  "model": "main.cronogramapago",
+  "pk": 438,
+  "fields": {
+    "credito": 27,
+    "numero_cuota": 22,
+    "fecha_vencimiento": "2025-10-17",
+    "monto_cuota": "11666.67",
+    "monto_pagado": "0.00",
+    "estado": "PENDIENTE",
+    "fecha_pago": null,
+    "observaciones": ""
+  }
+},
+{
+  "model": "main.cronogramapago",
+  "pk": 439,
+  "fields": {
+    "credito": 27,
+    "numero_cuota": 23,
+    "fecha_vencimiento": "2025-10-18",
+    "monto_cuota": "11666.67",
+    "monto_pagado": "0.00",
+    "estado": "PENDIENTE",
+    "fecha_pago": null,
+    "observaciones": ""
+  }
+},
+{
+  "model": "main.cronogramapago",
+  "pk": 440,
+  "fields": {
+    "credito": 27,
+    "numero_cuota": 24,
+    "fecha_vencimiento": "2025-10-19",
+    "monto_cuota": "11666.67",
+    "monto_pagado": "0.00",
+    "estado": "PENDIENTE",
+    "fecha_pago": null,
+    "observaciones": ""
+  }
+},
+{
+  "model": "main.cronogramapago",
+  "pk": 441,
+  "fields": {
+    "credito": 27,
+    "numero_cuota": 25,
+    "fecha_vencimiento": "2025-10-20",
+    "monto_cuota": "11666.67",
+    "monto_pagado": "0.00",
+    "estado": "PENDIENTE",
+    "fecha_pago": null,
+    "observaciones": ""
+  }
+},
+{
+  "model": "main.cronogramapago",
+  "pk": 442,
+  "fields": {
+    "credito": 27,
+    "numero_cuota": 26,
+    "fecha_vencimiento": "2025-10-21",
+    "monto_cuota": "11666.67",
+    "monto_pagado": "0.00",
+    "estado": "PENDIENTE",
+    "fecha_pago": null,
+    "observaciones": ""
+  }
+},
+{
+  "model": "main.cronogramapago",
+  "pk": 443,
+  "fields": {
+    "credito": 27,
+    "numero_cuota": 27,
+    "fecha_vencimiento": "2025-10-22",
+    "monto_cuota": "11666.67",
+    "monto_pagado": "0.00",
+    "estado": "PENDIENTE",
+    "fecha_pago": null,
+    "observaciones": ""
+  }
+},
+{
+  "model": "main.cronogramapago",
+  "pk": 444,
+  "fields": {
+    "credito": 27,
+    "numero_cuota": 28,
+    "fecha_vencimiento": "2025-10-23",
+    "monto_cuota": "11666.67",
+    "monto_pagado": "0.00",
+    "estado": "PENDIENTE",
+    "fecha_pago": null,
+    "observaciones": ""
+  }
+},
+{
+  "model": "main.cronogramapago",
+  "pk": 445,
+  "fields": {
+    "credito": 27,
+    "numero_cuota": 29,
+    "fecha_vencimiento": "2025-10-24",
+    "monto_cuota": "11666.67",
+    "monto_pagado": "0.00",
+    "estado": "PENDIENTE",
+    "fecha_pago": null,
+    "observaciones": ""
+  }
+},
+{
+  "model": "main.cronogramapago",
+  "pk": 446,
+  "fields": {
+    "credito": 27,
+    "numero_cuota": 30,
+    "fecha_vencimiento": "2025-10-25",
+    "monto_cuota": "11666.67",
+    "monto_pagado": "0.00",
+    "estado": "PENDIENTE",
+    "fecha_pago": null,
+    "observaciones": ""
+  }
+},
+{
+  "model": "main.cronogramapago",
+  "pk": 447,
+  "fields": {
+    "credito": 27,
+    "numero_cuota": 31,
+    "fecha_vencimiento": "2025-10-26",
+    "monto_cuota": "11666.67",
+    "monto_pagado": "0.00",
+    "estado": "PENDIENTE",
+    "fecha_pago": null,
+    "observaciones": ""
+  }
+},
+{
+  "model": "main.cronogramapago",
+  "pk": 448,
+  "fields": {
+    "credito": 27,
+    "numero_cuota": 32,
+    "fecha_vencimiento": "2025-10-27",
+    "monto_cuota": "11666.67",
+    "monto_pagado": "0.00",
+    "estado": "PENDIENTE",
+    "fecha_pago": null,
+    "observaciones": ""
+  }
+},
+{
+  "model": "main.cronogramapago",
+  "pk": 449,
+  "fields": {
+    "credito": 27,
+    "numero_cuota": 33,
+    "fecha_vencimiento": "2025-10-28",
+    "monto_cuota": "11666.67",
+    "monto_pagado": "0.00",
+    "estado": "PENDIENTE",
+    "fecha_pago": null,
+    "observaciones": ""
+  }
+},
+{
+  "model": "main.cronogramapago",
+  "pk": 450,
+  "fields": {
+    "credito": 27,
+    "numero_cuota": 34,
+    "fecha_vencimiento": "2025-10-29",
+    "monto_cuota": "11666.67",
+    "monto_pagado": "0.00",
+    "estado": "PENDIENTE",
+    "fecha_pago": null,
+    "observaciones": ""
+  }
+},
+{
+  "model": "main.cronogramapago",
+  "pk": 451,
+  "fields": {
+    "credito": 27,
+    "numero_cuota": 35,
+    "fecha_vencimiento": "2025-10-30",
+    "monto_cuota": "11666.67",
+    "monto_pagado": "0.00",
+    "estado": "PENDIENTE",
+    "fecha_pago": null,
+    "observaciones": ""
+  }
+},
+{
+  "model": "main.cronogramapago",
+  "pk": 452,
+  "fields": {
+    "credito": 27,
+    "numero_cuota": 36,
+    "fecha_vencimiento": "2025-10-31",
+    "monto_cuota": "11666.67",
+    "monto_pagado": "0.00",
+    "estado": "PENDIENTE",
+    "fecha_pago": null,
+    "observaciones": ""
+  }
+},
+{
+  "model": "main.cronogramapago",
+  "pk": 453,
+  "fields": {
+    "credito": 27,
+    "numero_cuota": 37,
+    "fecha_vencimiento": "2025-11-01",
+    "monto_cuota": "11666.67",
+    "monto_pagado": "0.00",
+    "estado": "PENDIENTE",
+    "fecha_pago": null,
+    "observaciones": ""
+  }
+},
+{
+  "model": "main.cronogramapago",
+  "pk": 454,
+  "fields": {
+    "credito": 27,
+    "numero_cuota": 38,
+    "fecha_vencimiento": "2025-11-02",
+    "monto_cuota": "11666.67",
+    "monto_pagado": "0.00",
+    "estado": "PENDIENTE",
+    "fecha_pago": null,
+    "observaciones": ""
+  }
+},
+{
+  "model": "main.cronogramapago",
+  "pk": 455,
+  "fields": {
+    "credito": 27,
+    "numero_cuota": 39,
+    "fecha_vencimiento": "2025-11-03",
+    "monto_cuota": "11666.67",
+    "monto_pagado": "0.00",
+    "estado": "PENDIENTE",
+    "fecha_pago": null,
+    "observaciones": ""
+  }
+},
+{
+  "model": "main.cronogramapago",
+  "pk": 456,
+  "fields": {
+    "credito": 27,
+    "numero_cuota": 40,
+    "fecha_vencimiento": "2025-11-04",
+    "monto_cuota": "11666.67",
+    "monto_pagado": "0.00",
+    "estado": "PENDIENTE",
+    "fecha_pago": null,
+    "observaciones": ""
+  }
+},
+{
+  "model": "main.cronogramapago",
+  "pk": 457,
+  "fields": {
+    "credito": 27,
+    "numero_cuota": 41,
+    "fecha_vencimiento": "2025-11-05",
+    "monto_cuota": "11666.67",
+    "monto_pagado": "0.00",
+    "estado": "PENDIENTE",
+    "fecha_pago": null,
+    "observaciones": ""
+  }
+},
+{
+  "model": "main.cronogramapago",
+  "pk": 458,
+  "fields": {
+    "credito": 27,
+    "numero_cuota": 42,
+    "fecha_vencimiento": "2025-11-06",
+    "monto_cuota": "11666.67",
+    "monto_pagado": "0.00",
+    "estado": "PENDIENTE",
+    "fecha_pago": null,
+    "observaciones": ""
+  }
+},
+{
+  "model": "main.cronogramapago",
+  "pk": 459,
+  "fields": {
+    "credito": 27,
+    "numero_cuota": 43,
+    "fecha_vencimiento": "2025-11-07",
+    "monto_cuota": "11666.67",
+    "monto_pagado": "0.00",
+    "estado": "PENDIENTE",
+    "fecha_pago": null,
+    "observaciones": ""
+  }
+},
+{
+  "model": "main.cronogramapago",
+  "pk": 460,
+  "fields": {
+    "credito": 27,
+    "numero_cuota": 44,
+    "fecha_vencimiento": "2025-11-08",
+    "monto_cuota": "11666.67",
+    "monto_pagado": "0.00",
+    "estado": "PENDIENTE",
+    "fecha_pago": null,
+    "observaciones": ""
+  }
+},
+{
+  "model": "main.cronogramapago",
+  "pk": 461,
+  "fields": {
+    "credito": 27,
+    "numero_cuota": 45,
+    "fecha_vencimiento": "2025-11-09",
+    "monto_cuota": "11666.67",
+    "monto_pagado": "0.00",
+    "estado": "PENDIENTE",
+    "fecha_pago": null,
+    "observaciones": ""
+  }
+},
+{
+  "model": "main.cronogramapago",
+  "pk": 462,
+  "fields": {
+    "credito": 27,
+    "numero_cuota": 46,
+    "fecha_vencimiento": "2025-11-10",
+    "monto_cuota": "11666.67",
+    "monto_pagado": "0.00",
+    "estado": "PENDIENTE",
+    "fecha_pago": null,
+    "observaciones": ""
+  }
+},
+{
+  "model": "main.cronogramapago",
+  "pk": 463,
+  "fields": {
+    "credito": 27,
+    "numero_cuota": 47,
+    "fecha_vencimiento": "2025-11-11",
+    "monto_cuota": "11666.67",
+    "monto_pagado": "0.00",
+    "estado": "PENDIENTE",
+    "fecha_pago": null,
+    "observaciones": ""
+  }
+},
+{
+  "model": "main.cronogramapago",
+  "pk": 464,
+  "fields": {
+    "credito": 27,
+    "numero_cuota": 48,
+    "fecha_vencimiento": "2025-11-12",
+    "monto_cuota": "11666.67",
+    "monto_pagado": "0.00",
+    "estado": "PENDIENTE",
+    "fecha_pago": null,
+    "observaciones": ""
+  }
+},
+{
+  "model": "main.cronogramapago",
+  "pk": 465,
+  "fields": {
+    "credito": 27,
+    "numero_cuota": 49,
+    "fecha_vencimiento": "2025-11-13",
+    "monto_cuota": "11666.67",
+    "monto_pagado": "0.00",
+    "estado": "PENDIENTE",
+    "fecha_pago": null,
+    "observaciones": ""
+  }
+},
+{
+  "model": "main.cronogramapago",
+  "pk": 466,
+  "fields": {
+    "credito": 27,
+    "numero_cuota": 50,
+    "fecha_vencimiento": "2025-11-14",
+    "monto_cuota": "11666.67",
+    "monto_pagado": "0.00",
+    "estado": "PENDIENTE",
+    "fecha_pago": null,
+    "observaciones": ""
+  }
+},
+{
+  "model": "main.cronogramapago",
+  "pk": 467,
+  "fields": {
+    "credito": 27,
+    "numero_cuota": 51,
+    "fecha_vencimiento": "2025-11-15",
+    "monto_cuota": "11666.67",
+    "monto_pagado": "0.00",
+    "estado": "PENDIENTE",
+    "fecha_pago": null,
+    "observaciones": ""
+  }
+},
+{
+  "model": "main.cronogramapago",
+  "pk": 468,
+  "fields": {
+    "credito": 27,
+    "numero_cuota": 52,
+    "fecha_vencimiento": "2025-11-16",
+    "monto_cuota": "11666.67",
+    "monto_pagado": "0.00",
+    "estado": "PENDIENTE",
+    "fecha_pago": null,
+    "observaciones": ""
+  }
+},
+{
+  "model": "main.cronogramapago",
+  "pk": 469,
+  "fields": {
+    "credito": 27,
+    "numero_cuota": 53,
+    "fecha_vencimiento": "2025-11-17",
+    "monto_cuota": "11666.67",
+    "monto_pagado": "0.00",
+    "estado": "PENDIENTE",
+    "fecha_pago": null,
+    "observaciones": ""
+  }
+},
+{
+  "model": "main.cronogramapago",
+  "pk": 470,
+  "fields": {
+    "credito": 27,
+    "numero_cuota": 54,
+    "fecha_vencimiento": "2025-11-18",
+    "monto_cuota": "11666.67",
+    "monto_pagado": "0.00",
+    "estado": "PENDIENTE",
+    "fecha_pago": null,
+    "observaciones": ""
+  }
+},
+{
+  "model": "main.cronogramapago",
+  "pk": 471,
+  "fields": {
+    "credito": 27,
+    "numero_cuota": 55,
+    "fecha_vencimiento": "2025-11-19",
+    "monto_cuota": "11666.67",
+    "monto_pagado": "0.00",
+    "estado": "PENDIENTE",
+    "fecha_pago": null,
+    "observaciones": ""
+  }
+},
+{
+  "model": "main.cronogramapago",
+  "pk": 472,
+  "fields": {
+    "credito": 27,
+    "numero_cuota": 56,
+    "fecha_vencimiento": "2025-11-20",
+    "monto_cuota": "11666.67",
+    "monto_pagado": "0.00",
+    "estado": "PENDIENTE",
+    "fecha_pago": null,
+    "observaciones": ""
+  }
+},
+{
+  "model": "main.cronogramapago",
+  "pk": 473,
+  "fields": {
+    "credito": 27,
+    "numero_cuota": 57,
+    "fecha_vencimiento": "2025-11-21",
+    "monto_cuota": "11666.67",
+    "monto_pagado": "0.00",
+    "estado": "PENDIENTE",
+    "fecha_pago": null,
+    "observaciones": ""
+  }
+},
+{
+  "model": "main.cronogramapago",
+  "pk": 474,
+  "fields": {
+    "credito": 27,
+    "numero_cuota": 58,
+    "fecha_vencimiento": "2025-11-22",
+    "monto_cuota": "11666.67",
+    "monto_pagado": "0.00",
+    "estado": "PENDIENTE",
+    "fecha_pago": null,
+    "observaciones": ""
+  }
+},
+{
+  "model": "main.cronogramapago",
+  "pk": 475,
+  "fields": {
+    "credito": 27,
+    "numero_cuota": 59,
+    "fecha_vencimiento": "2025-11-23",
+    "monto_cuota": "11666.67",
+    "monto_pagado": "0.00",
+    "estado": "PENDIENTE",
+    "fecha_pago": null,
+    "observaciones": ""
+  }
+},
+{
+  "model": "main.cronogramapago",
+  "pk": 476,
+  "fields": {
+    "credito": 27,
+    "numero_cuota": 60,
+    "fecha_vencimiento": "2025-11-24",
+    "monto_cuota": "11666.67",
+    "monto_pagado": "0.00",
+    "estado": "PENDIENTE",
+    "fecha_pago": null,
+    "observaciones": ""
+  }
+},
+{
+  "model": "main.pago",
+  "pk": 46,
+  "fields": {
+    "credito": 27,
+    "cuota": null,
+    "monto": "11666.67",
+    "fecha_pago": "2025-09-25T20:23:58.311Z",
+    "numero_cuota": 1,
+    "observaciones": ""
+  }
+},
+{
+  "model": "main.ruta",
+  "pk": 4,
+  "fields": {
+    "nombre": "RUTA 1",
+    "descripcion": "ZONA CENTRO",
+    "barrios": "CENTRO, URIBE, OBRERO, COLOMBIA, BARRIO NUEVO",
+    "zona": "ZONA CENTRO",
+    "activa": true,
+    "fecha_creacion": "2025-09-25T20:05:33.312Z",
+    "fecha_modificacion": "2025-09-25T20:05:33.312Z"
+  }
+},
+{
+  "model": "main.cobrador",
+  "pk": 6,
+  "fields": {
+    "nombres": "DARTH",
+    "apellidos": "VADER",
+    "tipo_documento": "CC",
+    "numero_documento": "14698789",
+    "celular": "3235499698",
+    "email": "darth@gmail.com",
+    "direccion": "CALLE 36 # 14 - 41",
+    "fecha_ingreso": "2010-01-31",
+    "activo": true,
+    "comision_porcentaje": "0.00",
+    "meta_diaria": "0.00",
+    "usuario": null,
+    "fecha_creacion": "2025-09-25T20:06:57.331Z",
+    "fecha_modificacion": "2025-09-25T20:06:57.331Z",
+    "rutas": [
+      4
+    ]
+  }
+}
+]

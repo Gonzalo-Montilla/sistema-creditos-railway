@@ -507,6 +507,14 @@
                                 Usuarios
                             </a>
                         </li>
+                        {% if user.is_superuser %}
+                        <li class="nav-item">
+                            <a class="nav-link" href="{% url 'media_status' %}" title="Diagnóstico de archivos media">
+                                <i class="bi bi-image me-2"></i>
+                                Estado Media
+                            </a>
+                        </li>
+                        {% endif %}
                     </ul>
                     
                     <hr class="my-3" style="border-color: rgba(255, 255, 255, 0.3);">
