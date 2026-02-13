@@ -126,11 +126,24 @@
         
         .sidebar .nav-link.active {
             color: white;
-            background-color: rgba(255, 255, 255, 0.2);
+            background-color: rgba(255, 255, 255, 0.25);
         }
+
+        .sidebar-section-label {
+            font-size: 0.65rem;
+            font-weight: 700;
+            letter-spacing: 0.08em;
+            color: rgba(255, 255, 255, 0.55);
+            padding: 0.5rem 1rem 0.25rem;
+            margin-top: 0.5rem;
+        }
+        .sidebar-section-label:first-child { margin-top: 0; padding-top: 0; }
         
         .main-content {
             min-height: 100vh;
+            min-width: 0;
+            max-width: 100%;
+            overflow-x: hidden;
             background-color: #f8f9fa;
         }
         
@@ -355,6 +368,31 @@
             color: #3b82f6;
             margin-right: 0.5rem;
         }
+
+        /* Barra de página unificada: título + acciones */
+        .page-header {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            justify-content: space-between;
+            gap: 0.75rem;
+            margin-bottom: 1.5rem;
+        }
+        .page-header .page-title {
+            margin-bottom: 0;
+            font-size: 1.5rem;
+            font-weight: 600;
+        }
+        .page-header .btn-group-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+
+        /* Breadcrumb */
+        .breadcrumb-nav {
+            font-size: 0.875rem;
+            margin-bottom: 0.75rem;
+        }
+        .breadcrumb-nav a { color: #0d6efd; text-decoration: none; }
+        .breadcrumb-nav a:hover { text-decoration: underline; }
+        .breadcrumb-nav .separator { color: #6c757d; margin: 0 0.35rem; }
         
         /* Estilos para el footer */
         .app-footer {
@@ -409,8 +447,8 @@
     <!-- Navbar móvil -->
     <div class="mobile-navbar">
         <div class="d-flex align-items-center">
-            <button class="mobile-menu-btn" onclick="toggleSidebar()">
-                <i class="fas fa-bars"></i>
+            <button class="mobile-menu-btn" onclick="toggleSidebar()" aria-label="Abrir menú">
+                <i class="bi bi-list"></i>
             </button>
             <div class="ms-3">
                 <div class="mobile-brand-crediflow">CREDIFLOW</div>
@@ -436,102 +474,94 @@
                         <p class="brand-subtitle">Sistema de Créditos y Cobros</p>
                     </div>
                     
-                    <ul class="nav flex-column">
+                    <!-- OPERACIONES -->
+                    <div class="sidebar-section-label">OPERACIONES</div>
+                    <ul class="nav flex-column mb-2">
                         <li class="nav-item">
-                            <a class="nav-link {% if request.resolver_match.url_name == 'dashboard' %}active{% endif %}" 
-                               href="{% url 'dashboard' %}">
-                                <i class="bi bi-house-door me-2"></i>
-                                Dashboard
+                            <a class="nav-link {% if request.resolver_match.url_name == 'dashboard' %}active{% endif %}" href="{% url 'dashboard' %}">
+                                <i class="bi bi-house-door me-2"></i>Inicio
                             </a>
                         </li>
                         <li class="nav-item">
-                            <a class="nav-link {% if 'valorizador' in request.resolver_match.url_name %}active{% endif %}" 
-                               href="{% url 'valorizador' %}">
-                                <i class="fas fa-calculator me-2"></i>
-                                Valorizador
+                            <a class="nav-link {% if 'cliente' in request.resolver_match.url_name %}active{% endif %}" href="{% url 'clientes' %}">
+                                <i class="bi bi-people me-2"></i>Clientes
                             </a>
                         </li>
                         <li class="nav-item">
-                            <a class="nav-link {% if 'cliente' in request.resolver_match.url_name %}active{% endif %}" 
-                               href="{% url 'clientes' %}">
-                                <i class="bi bi-people me-2"></i>
-                                Clientes
+                            <a class="nav-link {% if 'credito' in request.resolver_match.url_name %}active{% endif %}" href="{% url 'creditos' %}">
+                                <i class="bi bi-credit-card me-2"></i>Créditos
                             </a>
                         </li>
                         <li class="nav-item">
-                            <a class="nav-link {% if 'credito' in request.resolver_match.url_name %}active{% endif %}" 
-                               href="{% url 'creditos' %}">
-                                <i class="bi bi-credit-card me-2"></i>
-                                Créditos
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link {% if 'pago' in request.resolver_match.url_name %}active{% endif %}" 
-                               href="{% url 'pagos' %}">
-                                <i class="bi bi-currency-dollar me-2"></i>
-                                Pagos
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link {% if request.resolver_match.url_name == 'recaudacion_cobradores' or request.resolver_match.url_name == 'detalles_pagos_cobrador' %}active{% endif %}" 
-                               href="{% url 'recaudacion_cobradores' %}">
-                                <i class="bi bi-graph-up me-2"></i>
-                                Recaudación
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link {% if request.resolver_match.url_name == 'gestion_cartera' or request.resolver_match.url_name == 'cartera_vencida' or request.resolver_match.url_name == 'actualizar_cartera' %}active{% endif %}" 
-                               href="{% url 'gestion_cartera' %}">
-                                <i class="bi bi-wallet2 me-2"></i>
-                                Gestión Cartera
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link {% if 'tarea' in request.resolver_match.url_name or 'agenda' in request.resolver_match.url_name or 'supervisor' in request.resolver_match.url_name %}active{% endif %}" 
-                               href="{% url 'agenda_cobrador' %}">
-                                <i class="bi bi-calendar-check me-2"></i>
-                                Tareas de Cobro
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link {% if request.resolver_match.url_name == 'cobradores' or request.resolver_match.url_name == 'nuevo_cobrador' or request.resolver_match.url_name == 'detalle_cobrador' or request.resolver_match.url_name == 'editar_cobrador' or request.resolver_match.url_name == 'rutas' or request.resolver_match.url_name == 'nueva_ruta' or request.resolver_match.url_name == 'detalle_ruta' or request.resolver_match.url_name == 'editar_ruta' or request.resolver_match.url_name == 'gestion_diaria_cobros' %}active{% endif %}" 
-                               href="{% url 'cobradores' %}">
-                                <i class="bi bi-cash-coin me-2"></i>
-                                Cobradores
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link {% if 'usuario' in request.resolver_match.url_name %}active{% endif %}" 
-                               href="{% url 'lista_usuarios' %}">
-                                <i class="bi bi-people-fill me-2"></i>
-                                Usuarios
+                            <a class="nav-link {% if 'pago' in request.resolver_match.url_name %}active{% endif %}" href="{% url 'pagos' %}">
+                                <i class="bi bi-currency-dollar me-2"></i>Pagos
                             </a>
                         </li>
                     </ul>
-                    
-                    <hr class="my-3" style="border-color: rgba(255, 255, 255, 0.3);">
-                    
-                    <!-- Sección de Administración (solo superusuarios) -->
-                    {% if user.is_superuser %}
-                    <div class="text-center mb-2">
-                        <small class="text-white-50">ADMINISTRACIÓN</small>
-                    </div>
-                    <ul class="nav flex-column mb-3">
+
+                    <!-- COBRANZA -->
+                    <div class="sidebar-section-label">COBRANZA</div>
+                    <ul class="nav flex-column mb-2">
                         <li class="nav-item">
-                            <a class="nav-link" href="{% url 'media_status' %}" title="Diagnóstico del sistema de archivos">
-                                <i class="bi bi-gear me-2"></i>
-                                <small>Diagnóstico Sistema</small>
+                            <a class="nav-link {% if 'tarea' in request.resolver_match.url_name or 'agenda' in request.resolver_match.url_name or 'supervisor' in request.resolver_match.url_name %}active{% endif %}" href="{% url 'agenda_cobrador' %}">
+                                <i class="bi bi-calendar-check me-2"></i>Agenda / Tareas
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link {% if request.resolver_match.url_name == 'cobradores' or request.resolver_match.url_name == 'nuevo_cobrador' or request.resolver_match.url_name == 'detalle_cobrador' or request.resolver_match.url_name == 'editar_cobrador' or request.resolver_match.url_name == 'rutas' or request.resolver_match.url_name == 'nueva_ruta' or request.resolver_match.url_name == 'detalle_ruta' or request.resolver_match.url_name == 'editar_ruta' or request.resolver_match.url_name == 'gestion_diaria_cobros' %}active{% endif %}" href="{% url 'cobradores' %}">
+                                <i class="bi bi-person-badge me-2"></i>Cobradores y rutas
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link {% if request.resolver_match.url_name == 'recaudacion_cobradores' or request.resolver_match.url_name == 'detalles_pagos_cobrador' %}active{% endif %}" href="{% url 'recaudacion_cobradores' %}">
+                                <i class="bi bi-graph-up me-2"></i>Recaudación
                             </a>
                         </li>
                     </ul>
-                    <hr class="my-3" style="border-color: rgba(255, 255, 255, 0.3);">
-                    {% endif %}
-                    
+
+                    <!-- CARTERA Y REPORTES -->
+                    <div class="sidebar-section-label">CARTERA</div>
+                    <ul class="nav flex-column mb-2">
+                        <li class="nav-item">
+                            <a class="nav-link {% if request.resolver_match.url_name == 'gestion_cartera' or request.resolver_match.url_name == 'cartera_vencida' or request.resolver_match.url_name == 'actualizar_cartera' %}active{% endif %}" href="{% url 'gestion_cartera' %}">
+                                <i class="bi bi-wallet2 me-2"></i>Gestión de cartera
+                            </a>
+                        </li>
+                    </ul>
+
+                    <!-- HERRAMIENTAS -->
+                    <div class="sidebar-section-label">HERRAMIENTAS</div>
+                    <ul class="nav flex-column mb-2">
+                        <li class="nav-item">
+                            <a class="nav-link {% if 'valorizador' in request.resolver_match.url_name %}active{% endif %}" href="{% url 'valorizador' %}">
+                                <i class="bi bi-calculator me-2"></i>Valorizador
+                            </a>
+                        </li>
+                    </ul>
+
+                    <!-- CONFIGURACIÓN -->
+                    <div class="sidebar-section-label">CONFIGURACIÓN</div>
+                    <ul class="nav flex-column mb-2">
+                        <li class="nav-item">
+                            <a class="nav-link {% if 'usuario' in request.resolver_match.url_name %}active{% endif %}" href="{% url 'lista_usuarios' %}">
+                                <i class="bi bi-person-gear me-2"></i>Usuarios
+                            </a>
+                        </li>
+                        {% if user.is_superuser %}
+                        <li class="nav-item">
+                            <a class="nav-link" href="{% url 'media_status' %}" title="Diagnóstico del sistema">
+                                <i class="bi bi-gear me-2"></i>Diagnóstico
+                            </a>
+                        </li>
+                        {% endif %}
+                    </ul>
+
+                    <hr class="my-3" style="border-color: rgba(255, 255, 255, 0.25);">
+
                     <ul class="nav flex-column">
                         <li class="nav-item">
-                            <a class="nav-link" href="{% url 'logout' %}">
-                                <i class="bi bi-box-arrow-right me-2"></i>
-                                Cerrar Sesión
+                            <a class="nav-link text-white-50" href="{% url 'logout' %}">
+                                <i class="bi bi-box-arrow-right me-2"></i>Cerrar sesión
                             </a>
                         </li>
                     </ul>
@@ -560,6 +590,9 @@
                         {% endfor %}
                     {% endif %}
 
+                    <!-- Breadcrumb (opcional) -->
+                    {% block breadcrumb %}{% endblock %}
+
                     <!-- Page content -->
                     {% block content %}
                     {% endblock %}
@@ -568,8 +601,7 @@
                     <footer class="app-footer">
                         <div class="container">
                             <div class="footer-brand">
-                                <i class="fas fa-coins me-2"></i>
-                                CREDIFLOW
+                                <i class="bi bi-credit-card-2-front me-2"></i>CREDIFLOW
                             </div>
                             <p class="footer-copyright">
                                 © {{ "now"|date:"Y" }} Todos los derechos reservados.<br>

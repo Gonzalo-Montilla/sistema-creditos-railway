@@ -306,7 +306,7 @@ def media_status(request):
                     
                     <div class="card-body">
                         <div class="status-item">
-                            <i class="bi bi-folder2{''-open' if info['media_root_exists'] else ''}"></i>
+                            <i class="bi bi-folder2{'-open' if info['media_root_exists'] else ''}"></i>
                             <div class="status-label">Directorio media:</div>
                             <div class="status-value {'success' if info['media_root_exists'] else 'danger'}">
                                 {'Existe' if info['media_root_exists'] else 'No existe'}
@@ -334,14 +334,14 @@ def media_status(request):
                         </div>
                         
                         <div class="status-item">
-                            <i class="bi bi-cloud{''-check' if info['is_railway'] else '-slash'}"></i>
+                            <i class="bi bi-cloud{'-check' if info['is_railway'] else '-slash'}"></i>
                             <div class="status-label">Plataforma:</div>
                             <div class="status-value {'warning' if info['is_railway'] else 'success'}">
                                 {'Railway (Efímero)' if info['is_railway'] else 'Local/Persistente'}
                             </div>
                         </div>
                         
-                        {'<div class="alert alert-railway"><h5><i class="bi bi-exclamation-triangle me-2"></i>Información Importante</h5><p><strong>Railway utiliza un sistema de archivos efímero.</strong> Esto significa que todos los archivos subidos (imágenes de clientes, documentos, etc.) se pierden automáticamente cada vez que se hace un nuevo deploy de la aplicación.</p><p class="mb-0"><strong>Solución implementada:</strong> El sistema ahora genera automáticamente imágenes placeholder cuando los archivos no están disponibles, garantizando que la aplicación funcione sin errores.</p></div>' if info['is_railway'] else ''}
+                        {"<div class=\"alert alert-railway\"><h5><i class=\"bi bi-exclamation-triangle me-2\"></i>Información Importante</h5><p><strong>Railway utiliza un sistema de archivos efímero.</strong> Esto significa que todos los archivos subidos (imágenes de clientes, documentos, etc.) se pierden automáticamente cada vez que se hace un nuevo deploy de la aplicación.</p><p class=\"mb-0\"><strong>Solución implementada:</strong> El sistema ahora genera automáticamente imágenes placeholder cuando los archivos no están disponibles, garantizando que la aplicación funcione sin errores.</p></div>" if info['is_railway'] else ""}
                         
                         <div class="text-center mt-4">
                             <a href="javascript:history.back()" class="btn-back">

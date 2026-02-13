@@ -1,21 +1,25 @@
 {% extends 'base.html' %}
 
-{% block title %}Pagos - Sistema de Créditos{% endblock %}
+{% block title %}Pagos{% endblock %}
+
+{% block breadcrumb %}
+<nav class="breadcrumb-nav" aria-label="Navegación">
+    <a href="{% url 'dashboard' %}">Inicio</a><span class="separator">/</span><span>Pagos</span>
+</nav>
+{% endblock %}
 
 {% block content %}
-<div class="d-flex justify-content-between align-items-center mb-4">
-    <h1 class="page-title mb-0">
-        <i class="fas fa-money-bill-wave"></i> Gestión de Pagos
-    </h1>
-    <a href="{% url 'nuevo_pago' %}" class="btn btn-primary">
-        <i class="fas fa-plus"></i> Registrar Pago
-    </a>
+<div class="page-header">
+    <h1 class="page-title mb-0"><i class="bi bi-currency-dollar me-2"></i>Pagos</h1>
+    <div class="btn-group-actions">
+        <a href="{% url 'nuevo_pago' %}" class="btn btn-primary"><i class="bi bi-plus-circle"></i> Registrar pago</a>
+    </div>
 </div>
 
 <div class="row g-4 mb-5">
     <div class="col-xl-3 col-md-6">
         <div class="metric-card primary">
-            <i class="fas fa-receipt fa-3x"></i>
+            <i class="bi bi-receipt fs-1"></i>
             <div class="metric-number">{{ total_pagos }}</div>
             <h5>Total Pagos</h5>
             <p>Pagos registrados</p>
@@ -24,7 +28,7 @@
     
     <div class="col-xl-3 col-md-6">
         <div class="metric-card success">
-            <i class="fas fa-calendar-day fa-3x"></i>
+            <i class="bi bi-calendar-day fs-1"></i>
             <div class="metric-number">{{ pagos_hoy }}</div>
             <h5>Pagos Hoy</h5>
             <p>Recibidos hoy</p>
@@ -33,7 +37,7 @@
     
     <div class="col-xl-3 col-md-6">
         <div class="metric-card warning">
-            <i class="fas fa-dollar-sign fa-3x"></i>
+            <i class="bi bi-cash-stack fs-1"></i>
             <div class="metric-number">${{ recaudado_hoy|floatformat:0 }}</div>
             <h5>Recaudado Hoy</h5>
             <p>Ingresos del día</p>
@@ -42,7 +46,7 @@
     
     <div class="col-xl-3 col-md-6">
         <div class="metric-card danger">
-            <i class="fas fa-chart-line fa-3x"></i>
+            <i class="bi bi-graph-up fs-1"></i>
             <div class="metric-number">${{ promedio_mensual|floatformat:0 }}</div>
             <h5>Promedio Mensual</h5>
             <p>Últimos 30 días</p>
@@ -55,7 +59,7 @@
         <div class="row align-items-center">
             <div class="col">
                 <h5 class="mb-0">
-                    <i class="fas fa-list"></i> Historial de Pagos
+                    <i class="bi bi-list-ul"></i> Historial de pagos
                 </h5>
             </div>
             <div class="col-auto">

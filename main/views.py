@@ -1,4 +1,5 @@
 from django.shortcuts import render, redirect, get_object_or_404
+from django.urls import reverse
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
@@ -88,16 +89,31 @@ def dashboard(request):
 @login_required
 def clientes(request):
     from django.core.paginator import Paginator
+    from django.db.models import Q
     
-    clientes_list = Cliente.objects.filter(activo=True).order_by('-fecha_registro')
+    # Filtro: activos por defecto; ver_inactivos=1 para ver desactivados
+    ver_inactivos = request.GET.get('ver_inactivos') == '1'
+    activo_filter = False if ver_inactivos else True
     
-    # Calcular estadísticas de codeudores
-    total_clientes = clientes_list.count()
-    clientes_con_codeudor = clientes_list.filter(codeudor__isnull=False).count()
+    base_queryset = Cliente.objects.filter(activo=activo_filter).select_related('codeudor').order_by('-fecha_registro')
+    
+    # Búsqueda en servidor: q (cédula, nombres, apellidos, barrio)
+    q = request.GET.get('q', '').strip()
+    if q:
+        base_queryset = base_queryset.filter(
+            Q(cedula__icontains=q) |
+            Q(nombres__icontains=q) |
+            Q(apellidos__icontains=q) |
+            Q(barrio__icontains=q)
+        )
+    
+    # Estadísticas sobre el conjunto filtrado (antes de paginar)
+    total_clientes = base_queryset.count()
+    clientes_con_codeudor = base_queryset.filter(codeudor__isnull=False).count()
     clientes_sin_codeudor = total_clientes - clientes_con_codeudor
     
     # Paginación: 20 clientes por página
-    paginator = Paginator(clientes_list, 20)
+    paginator = Paginator(base_queryset, 20)
     page_number = request.GET.get('page')
     clientes = paginator.get_page(page_number)
     
@@ -106,6 +122,8 @@ def clientes(request):
         'total_clientes': total_clientes,
         'clientes_con_codeudor': clientes_con_codeudor,
         'clientes_sin_codeudor': clientes_sin_codeudor,
+        'q': q,
+        'ver_inactivos': ver_inactivos,
     }
     
     return render(request, 'clientes.html', context)
@@ -200,19 +218,6 @@ def nuevo_cliente(request):
         form = ClienteForm(request.POST, request.FILES)
         if form.is_valid():
             cliente = form.save()
-            
-            # Debug: Mostrar archivos recibidos
-            archivos_recibidos = []
-            for field_name in ['foto_rostro', 'foto_cedula_frontal', 'foto_cedula_trasera', 'foto_recibo_servicio']:
-                if field_name in request.FILES:
-                    archivo = request.FILES[field_name]
-                    archivos_recibidos.append(f'{field_name}: {archivo.name} ({archivo.size} bytes)')
-            
-            if archivos_recibidos:
-                print(f'Archivos guardados para {cliente.nombre_completo}:')
-                for archivo in archivos_recibidos:
-                    print(f'  - {archivo}')
-            
             messages.success(request, f'Cliente {cliente.nombre_completo} creado exitosamente')
             return redirect('detalle_cliente', cliente_id=cliente.id)  # Redirigir al detalle para ver los documentos
         else:
@@ -231,19 +236,6 @@ def editar_cliente(request, cliente_id):
         form = ClienteForm(request.POST, request.FILES, instance=cliente)
         if form.is_valid():
             cliente_actualizado = form.save()
-            
-            # Debug: Mostrar archivos recibidos
-            archivos_recibidos = []
-            for field_name in ['foto_rostro', 'foto_cedula_frontal', 'foto_cedula_trasera', 'foto_recibo_servicio']:
-                if field_name in request.FILES:
-                    archivo = request.FILES[field_name]
-                    archivos_recibidos.append(f'{field_name}: {archivo.name} ({archivo.size} bytes)')
-            
-            if archivos_recibidos:
-                print(f'Archivos actualizados para {cliente_actualizado.nombre_completo}:')
-                for archivo in archivos_recibidos:
-                    print(f'  - {archivo}')
-            
             messages.success(request, f'Cliente {cliente_actualizado.nombre_completo} actualizado exitosamente')
             return redirect('detalle_cliente', cliente_id=cliente.id)
         else:
@@ -265,9 +257,22 @@ def eliminar_cliente(request, cliente_id):
         return redirect('clientes')
     return render(request, 'confirmar_eliminar_cliente.html', {'cliente': cliente})
 
+@login_required
+def reactivar_cliente(request, cliente_id):
+    """Reactivar un cliente que estaba inactivo."""
+    cliente = get_object_or_404(Cliente, id=cliente_id)
+    if request.method == 'POST':
+        cliente.activo = True
+        cliente.save()
+        messages.success(request, f'Cliente {cliente.nombre_completo} reactivado exitosamente')
+        return redirect('detalle_cliente', cliente_id=cliente.id)
+    # GET: redirigir a lista de inactivos
+    return redirect(reverse('clientes') + '?ver_inactivos=1')
+
 # CRUD Créditos
 @login_required
 def nuevo_credito(request):
+    cliente_prellenado = None
     if request.method == 'POST':
         form = CreditoForm(request.POST)
         if form.is_valid():
@@ -301,8 +306,21 @@ def nuevo_credito(request):
                 for error in errors:
                     messages.error(request, f'{field_label}: {error}')
     else:
-        form = CreditoForm()
-    return render(request, 'nuevo_credito.html', {'form': form})
+        # Preseleccionar cliente si viene cliente_id (ej. desde detalle del cliente)
+        cliente_prellenado = None
+        cliente_id = request.GET.get('cliente_id')
+        if cliente_id:
+            try:
+                cliente_prellenado = Cliente.objects.get(id=cliente_id, activo=True)
+                form = CreditoForm(initial={'cedula_cliente': cliente_prellenado.cedula})
+            except Cliente.DoesNotExist:
+                form = CreditoForm()
+        else:
+            form = CreditoForm()
+    return render(request, 'nuevo_credito.html', {
+        'form': form,
+        'cliente_prellenado': cliente_prellenado,
+    })
 
 @login_required
 def editar_credito(request, credito_id):
@@ -507,7 +525,7 @@ def nuevo_codeudor(request, cliente_id):
         pass
     
     if request.method == 'POST':
-        form = CodeudorForm(request.POST, request.FILES)
+        form = CodeudorForm(request.POST, request.FILES, cliente=cliente)
         if form.is_valid():
             codeudor = form.save(commit=False)
             codeudor.cliente = cliente
@@ -515,7 +533,7 @@ def nuevo_codeudor(request, cliente_id):
             messages.success(request, f'Codeudor {codeudor.nombre_completo} creado exitosamente para {cliente.nombre_completo}')
             return redirect('detalle_cliente', cliente_id=cliente.id)
     else:
-        form = CodeudorForm()
+        form = CodeudorForm(cliente=cliente)
     
     return render(request, 'nuevo_codeudor.html', {'form': form, 'cliente': cliente})
 

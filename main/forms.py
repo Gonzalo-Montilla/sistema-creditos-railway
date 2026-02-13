@@ -47,7 +47,22 @@ class ClienteForm(forms.ModelForm):
             'activo': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
         }
 
+    def clean_cedula(self):
+        cedula = self.cleaned_data.get('cedula', '').strip()
+        if not cedula:
+            return cedula
+        qs = Cliente.objects.filter(cedula=cedula)
+        if self.instance and self.instance.pk:
+            qs = qs.exclude(pk=self.instance.pk)
+        if qs.exists():
+            raise ValidationError('Ya existe un cliente con esta cédula.')
+        return cedula
+
 class CodeudorForm(forms.ModelForm):
+    def __init__(self, *args, cliente=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._cliente_asociado = cliente  # Para validar cédula distinta al cliente al crear
+
     class Meta:
         model = Codeudor
         fields = ['nombres', 'apellidos', 'cedula', 'celular', 'direccion', 'barrio', 
@@ -63,6 +78,25 @@ class CodeudorForm(forms.ModelForm):
             'foto_cedula_frontal': forms.FileInput(attrs={'class': 'form-control', 'accept': 'image/*'}),
             'foto_cedula_trasera': forms.FileInput(attrs={'class': 'form-control', 'accept': 'image/*'}),
         }
+
+    def clean_cedula(self):
+        cedula = self.cleaned_data.get('cedula', '').strip()
+        if not cedula:
+            return cedula
+        qs = Codeudor.objects.filter(cedula=cedula)
+        if self.instance and self.instance.pk:
+            qs = qs.exclude(pk=self.instance.pk)
+        if qs.exists():
+            raise ValidationError('Ya existe un codeudor con esta cédula.')
+        return cedula
+
+    def clean(self):
+        cleaned_data = super().clean()
+        cedula = cleaned_data.get('cedula', '').strip()
+        cliente = self._cliente_asociado or (getattr(self.instance, 'cliente', None) if self.instance and self.instance.pk else None)
+        if cliente and cedula and cliente.cedula == cedula:
+            raise ValidationError({'cedula': 'La cédula del codeudor no puede ser igual a la del cliente.'})
+        return cleaned_data
 
 class CreditoForm(forms.ModelForm):
     # Campo para búsqueda por cédula (no se guarda en el modelo)
