@@ -126,11 +126,11 @@ def verificar_sistema_salud():
         logger.error(f"❌ Error en verificación de salud: {e}", exc_info=True)
         return False
 
-# Funciones auxiliares para Railway o servicios cloud
-def railway_daily_task():
+# Función para ejecutar desde cron del sistema o cualquier programador de tareas
+def daily_automation_task():
     """
-    Función principal para ejecutar en Railway mediante cron
-    Combina todas las tareas diarias necesarias
+    Ejecuta tareas diarias: generar tareas de cobro, salud del sistema, etc.
+    Úsala desde cron (Linux), Task Scheduler (Windows) o el scheduler de tu PaaS.
     """
     logger.info("=== INICIO DE TAREAS AUTOMATIZADAS DIARIAS ===")
     
@@ -151,3 +151,7 @@ def railway_daily_task():
         'tareas_creadas': tareas_creadas,
         'sistema_ok': sistema_ok
     }
+
+
+# Alias por compatibilidad con código que usaba el nombre anterior
+railway_daily_task = daily_automation_task

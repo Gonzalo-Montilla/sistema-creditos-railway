@@ -1,0 +1,114 @@
+{% extends 'base.html' %}
+
+{% block title %}Resumen cierre – {{ cobrador.nombre_completo }}{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2 class="mb-0"><i class="bi bi-person-badge"></i> Resumen de cobro – {{ cobrador.nombre_completo }}</h2>
+    <a href="{% url 'cierre_cobro_diario' %}?fecha={{ fecha|date:'Y-m-d' }}" class="btn btn-outline-primary"><i class="bi bi-arrow-left"></i> Cierre diario</a>
+</div>
+
+<p class="text-muted mb-3">Fecha: <strong>{{ fecha|date:"d/m/Y" }}</strong></p>
+
+<!-- Resumen en tarjetas -->
+<div class="row g-3 mb-4">
+    <div class="col-md-4">
+        <div class="card border-primary">
+            <div class="card-body text-center">
+                <h6 class="text-muted small">Lo que debía entregar (según sistema)</h6>
+                <h4 class="text-primary mb-0">${{ monto_esperado|floatformat:0 }}</h4>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card border-secondary">
+            <div class="card-body text-center">
+                <h6 class="text-muted small">Cantidad de pagos</h6>
+                <h4 class="mb-0">{{ cantidad_pagos }}</h4>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card border-{% if cierre %}success{% else %}light{% endif %}">
+            <div class="card-body text-center">
+                <h6 class="text-muted small">Estado</h6>
+                {% if cierre %}
+                <span class="badge bg-success">Cerrado</span>
+                {% if cierre.monto_recibido is not None %}
+                <p class="mb-0 small mt-1">Recibido: ${{ cierre.monto_recibido|floatformat:0 }}{% if cierre.diferencia is not None %} · Diferencia: ${{ cierre.diferencia|floatformat:0 }}{% endif %}</p>
+                {% endif %}
+                {% else %}
+                <span class="badge bg-secondary">Pendiente de cierre</span>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Listado de pagos del día -->
+<div class="card mb-4">
+    <div class="card-header">
+        <h5 class="mb-0">Pagos registrados ese día</h5>
+    </div>
+    <div class="card-body p-0">
+        {% if pagos %}
+        <div class="table-responsive">
+            <table class="table table-sm table-hover mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>Hora</th>
+                        <th>Cliente</th>
+                        <th>Crédito</th>
+                        <th class="text-end">Monto</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for p in pagos %}
+                    <tr>
+                        <td>{{ p.fecha_pago|time:"H:i" }}</td>
+                        <td>{{ p.credito.cliente.nombre_completo }}</td>
+                        <td>#{{ p.credito.id }}</td>
+                        <td class="text-end">${{ p.monto|floatformat:0 }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <p class="text-muted p-4 mb-0">No hay pagos registrados para este cobrador en esta fecha.</p>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Formulario de cierre / arqueo -->
+<div class="card" id="form-cierre">
+    <div class="card-header">
+        <h5 class="mb-0">{% if cierre %}Actualizar cierre{% else %}Cerrar cobro del día{% endif %}</h5>
+    </div>
+    <div class="card-body">
+        <p class="small text-muted mb-3">
+            Indique el monto que el cobrador le entregó. El sistema calculará la diferencia (arqueo) respecto a lo que debía según los pagos registrados.
+        </p>
+        <form method="post" action="{% url 'cerrar_cobro_cobrador' %}">
+            {% csrf_token %}
+            <input type="hidden" name="cobrador_id" value="{{ cobrador.id }}">
+            <input type="hidden" name="fecha" value="{{ fecha|date:'Y-m-d' }}">
+            <div class="row g-3">
+                <div class="col-md-4">
+                    <label class="form-label">Monto recibido (arqueo)</label>
+                    <input type="text" name="monto_recibido" class="form-control" placeholder="Ej: 500000" value="{% if cierre and cierre.monto_recibido %}{{ cierre.monto_recibido }}{% elif monto_esperado %}{{ monto_esperado }}{% endif %}">
+                </div>
+                <div class="col-md-8">
+                    <label class="form-label">Observaciones</label>
+                    <input type="text" name="observaciones" class="form-control" placeholder="Opcional" value="{% if cierre %}{{ cierre.observaciones }}{% endif %}">
+                </div>
+                <div class="col-12">
+                    <button type="submit" class="btn btn-success">
+                        <i class="bi bi-check-circle"></i> {% if cierre %}Actualizar cierre{% else %}Cerrar cobro{% endif %}
+                    </button>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

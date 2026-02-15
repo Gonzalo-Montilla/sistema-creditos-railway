@@ -4,6 +4,13 @@
 
 {% block extra_head %}
 <style>
+    /* Header del panel: fondo visible para que el texto blanco se lea */
+    .card.bg-gradient-primary {
+        background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+        border: none;
+    }
+    .card.bg-gradient-primary .opacity-8 { opacity: 0.9; }
+    
     .progress-mini {
         height: 8px;
         border-radius: 4px;
@@ -194,19 +201,53 @@
         </div>
     </div>
     
+    <!-- Alertas de cobranza -->
+    {% if alertas_pendientes_hoy or alertas_reprogramadas_problema or alertas_meta_bajo %}
+    <div class="row mb-3">
+        <div class="col-12">
+            <div class="card border-warning">
+                <div class="card-header py-2 bg-light">
+                    <i class="fas fa-exclamation-triangle text-warning"></i> Alertas
+                </div>
+                <div class="card-body py-2 small">
+                    {% if alertas_pendientes_hoy > 0 %}
+                    <span class="badge bg-warning text-dark me-2">{{ alertas_pendientes_hoy }} tarea(s) pendiente(s) hoy sin gestionar</span>
+                    <a href="{% url 'reporte_tareas_pendientes' %}?dias=1">Ver tareas pendientes</a>
+                    {% endif %}
+                    {% if alertas_reprogramadas_problema > 0 %}
+                    <span class="badge bg-info me-2">{{ alertas_reprogramadas_problema }} reprogramada(s) sin fecha o con fecha vencida</span>
+                    {% endif %}
+                    {% for a in alertas_meta_bajo %}
+                    <span class="badge bg-secondary me-2">{{ a.cobrador.nombre_completo }} bajo meta ({{ a.porcentaje_meta }}%)</span>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+    
     <!-- Controles de fecha y acciones -->
     <div class="row mb-3">
         <div class="col-md-6">
             <div class="btn-group" role="group">
-                <a href="?fecha={{ fecha|date:'Y-m-d'|add:'-1 day' }}" class="btn btn-outline-secondary">
+                <a href="?fecha={{ fecha_anterior }}{% if filtro_estado %}&filtro_estado={{ filtro_estado }}{% endif %}" class="btn btn-outline-secondary">
                     <i class="fas fa-chevron-left"></i> Anterior
                 </a>
                 <button type="button" class="btn btn-outline-primary" data-toggle="modal" data-target="#fechaModal">
                     {{ fecha|date:"d/m/Y" }}
                 </button>
-                <a href="?fecha={{ fecha|date:'Y-m-d'|add:'1 day' }}" class="btn btn-outline-secondary">
+                <a href="?fecha={{ fecha_siguiente }}{% if filtro_estado %}&filtro_estado={{ filtro_estado }}{% endif %}" class="btn btn-outline-secondary">
                     Siguiente <i class="fas fa-chevron-right"></i>
                 </a>
+            </div>
+            <div class="mt-2 mt-md-0 d-inline-block ml-md-2">
+                <label class="small text-muted me-1">Estado:</label>
+                <select class="form-select form-select-sm d-inline-block w-auto" onchange="window.location.href='?fecha={{ fecha|date:'Y-m-d' }}&filtro_estado='+this.value">
+                    <option value="">Todos</option>
+                    {% for codigo, etiqueta in estados_tarea %}
+                    <option value="{{ codigo }}" {% if filtro_estado == codigo %}selected{% endif %}>{{ etiqueta }}</option>
+                    {% endfor %}
+                </select>
             </div>
         </div>
         <div class="col-md-6 text-right">
@@ -237,13 +278,13 @@
                         <div>
                             <h6 class="mb-0">{{ cobrador.nombre_completo }}</h6>
                             <small class="text-muted">
-                                {% if data.rutas %}
+                                {% if data.sin_rutas %}
+                                    <span class="badge bg-warning text-dark">Sin rutas: no se generan tareas</span>
+                                {% else %}
                                     Rutas: 
                                     {% for ruta in data.rutas %}
                                         <span class="badge bg-info text-dark">{{ ruta.nombre }}</span>
                                     {% endfor %}
-                                {% else %}
-                                    Sin rutas asignadas
                                 {% endif %}
                             </small>
                         </div>
@@ -287,10 +328,16 @@
                             </div>
                         </div>
                         
-                        <!-- Monto recaudado -->
+                        <!-- Monto recaudado y meta (opcional) -->
                         <div class="text-center mb-3">
                             <div class="h5 text-success mb-0">${{ data.monto_cobrado|floatformat:0 }}</div>
                             <small class="text-muted">Recaudado hoy</small>
+                            {% if data.meta_diaria and data.meta_diaria > 0 and data.porcentaje_meta is not None %}
+                                <div class="mt-1 small">
+                                    Meta: ${{ data.meta_diaria|floatformat:0 }}
+                                    <span class="badge {% if data.porcentaje_meta >= 100 %}bg-success{% elif data.porcentaje_meta >= 50 %}bg-warning text-dark{% else %}bg-secondary{% endif %}">{{ data.porcentaje_meta|floatformat:0 }}%</span>
+                                </div>
+                            {% endif %}
                         </div>
                         
                         <!-- Últimas actividades -->
@@ -424,21 +471,28 @@
                     <div class="alert alert-info">
                         <i class="fas fa-info-circle"></i>
                         <strong>¿Qué hace esta función?</strong><br>
-                        Genera automáticamente las tareas de cobro para todos los cobradores activos 
-                        basándose en las cuotas vencidas y por vencer.
+                        Genera las tareas de cobro para la fecha elegida (por defecto hoy) para cada cobrador con rutas asignadas.
+                        Se incluyen: cuotas que vencen ese día y tareas reprogramadas para esa fecha.
                     </div>
                     
                     <div class="form-group">
                         <label>Fecha para generar tareas:</label>
                         <input type="date" class="form-control" name="fecha" value="{{ fecha|date:'Y-m-d' }}" required>
                         <small class="form-text text-muted">
-                            Se generarán tareas para las cuotas que venzan en esta fecha
+                            Se generarán tareas para las cuotas que venzan en esta fecha y las reprogramadas a esta fecha.
                         </small>
+                    </div>
+                    
+                    <div class="mb-2 small text-muted">
+                        <strong>Cobradores:</strong>
+                        {% for data in datos_cobradores %}
+                            {{ data.cobrador.nombre_completo }}{% if data.sin_rutas %} <span class="badge bg-warning text-dark">Sin rutas</span>{% endif %}{% if not forloop.last %}, {% endif %}
+                        {% endfor %}
                     </div>
                     
                     <div class="alert alert-warning">
                         <i class="fas fa-exclamation-triangle"></i>
-                        <strong>Nota:</strong> Si ya existen tareas para esta fecha, no se duplicarán.
+                        <strong>Nota:</strong> Si ya existen tareas para esta fecha, no se duplicarán. Los cobradores sin rutas no reciben tareas.
                     </div>
                 </div>
                 <div class="modal-footer">

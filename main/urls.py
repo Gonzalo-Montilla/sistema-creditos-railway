@@ -49,6 +49,7 @@ urlpatterns = [
     path('obtener-datos-credito/<int:credito_id>/', views.obtener_datos_credito, name='obtener_datos_credito'),
     path('obtener-pagos-credito/<int:credito_id>/', views.obtener_pagos_credito, name='obtener_pagos_credito'),
     path('generar-pdf-cronograma/<int:credito_id>/', views.generar_pdf_cronograma, name='generar_pdf_cronograma'),
+    path('resumen-credito/<int:credito_id>/', views.resumen_credito_json, name='resumen_credito_json'),
     
     # Pagos
     path('pagos/', views.pagos, name='pagos'),
@@ -75,13 +76,17 @@ urlpatterns = [
     
     # Gestión de cartera
     path('gestion-cartera/', views.gestion_cartera, name='gestion_cartera'),
+    path('resumen-dinero/', views.resumen_dinero, name='resumen_dinero'),
     path('cartera-vencida/', views.cartera_vencida, name='cartera_vencida'),
+    path('clientes-en-mora/', views.clientes_en_mora, name='clientes_en_mora'),
     path('actualizar-cartera/', views.actualizar_cartera, name='actualizar_cartera'),
     path('exportar-cartera-excel/', views.exportar_cartera_excel, name='exportar_cartera_excel'),
     path('kpis-cobradores/', views.kpis_cobradores, name='kpis_cobradores'),
     
     # Reportes de recaudación
     path('recaudacion-cobradores/', views.recaudacion_cobradores, name='recaudacion_cobradores'),
+    path('exportar-recaudacion-excel/', views.exportar_recaudacion_excel, name='exportar_recaudacion_excel'),
+    path('reporte-tareas-pendientes/', views.reporte_tareas_pendientes, name='reporte_tareas_pendientes'),
     path('detalles-pagos-cobrador/<int:cobrador_id>/', views.detalles_pagos_cobrador, name='detalles_pagos_cobrador'),
     
     # Sistema de tareas de cobro
@@ -92,6 +97,10 @@ urlpatterns = [
     path('tareas/actualizar/<int:tarea_id>/', views.actualizar_tarea, name='actualizar_tarea'),
     path('tareas/supervisor/', views.panel_supervisor, name='panel_supervisor'),
     path('tareas/generar/', views.generar_tareas_diarias, name='generar_tareas_diarias'),
+    # Cierre de cobro diario
+    path('cierre-cobro-diario/', views.cierre_cobro_diario, name='cierre_cobro_diario'),
+    path('cierre-cobro-diario/cobrador/<int:cobrador_id>/', views.resumen_cierre_cobrador, name='resumen_cierre_cobrador'),
+    path('cierre-cobro-diario/cerrar/', views.cerrar_cobro_cobrador, name='cerrar_cobro_cobrador'),
     
     # Gestión de Usuarios
     path('usuarios/', views.lista_usuarios, name='lista_usuarios'),

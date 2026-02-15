@@ -635,9 +635,12 @@ function actualizarTablaPagos(pagos) {
                 </td>
                 <td>
                     <div class="btn-group" role="group">
-                        <button class="btn btn-sm btn-outline-primary" onclick="verDetallePago(${pago.id})" title="Ver Recibo">
-                            <i class="bi bi-receipt"></i>
+                        <button class="btn btn-sm btn-outline-primary" onclick="verDetallePago(${pago.id})" title="Ver detalle">
+                            <i class="bi bi-eye"></i>
                         </button>
+                        <a href="/generar-recibo-pdf/${pago.id}/" target="_blank" class="btn btn-sm btn-outline-danger" title="Descargar recibo PDF">
+                            <i class="bi bi-file-pdf"></i>
+                        </a>
                         <button class="btn btn-sm btn-outline-success" onclick="verDetalleCredito(${pago.credito.id})" title="Ver Crédito">
                             <i class="bi bi-credit-card"></i>
                         </button>
@@ -802,14 +805,14 @@ function imprimirReporte() {
     ventanaImpresion.document.close();
 }
 
-// Función para exportar a Excel (simulada)
+// Exportar a Excel con los filtros actuales (fecha y cobrador del formulario)
 function exportarExcel() {
-    if (!datosActuales) {
-        alert('No hay datos para exportar');
-        return;
-    }
-    
-    alert('Funcionalidad de exportación a Excel en desarrollo.\nPor ahora puede usar el botón de imprimir y guardar como PDF.');
+    const params = new URLSearchParams();
+    params.set('fecha_desde', document.getElementById('fecha_desde').value);
+    params.set('fecha_hasta', document.getElementById('fecha_hasta').value);
+    const cobradorId = document.getElementById('cobrador_id').value;
+    if (cobradorId) params.set('cobrador_id', cobradorId);
+    window.open('{% url "exportar_recaudacion_excel" %}' + '?' + params.toString(), '_blank');
 }
 
 // Ver detalle de un pago específico

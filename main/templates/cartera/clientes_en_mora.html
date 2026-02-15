@@ -1,0 +1,124 @@
+{% extends 'base.html' %}
+
+{% block title %}Clientes en mora{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2><i class="bi bi-people-fill text-danger"></i> Clientes en mora</h2>
+    <div>
+        <a href="{% url 'cartera_vencida' %}" class="btn btn-outline-primary me-2">
+            <i class="bi bi-list-ul"></i> Ver créditos vencidos
+        </a>
+        <a href="{% url 'gestion_cartera' %}" class="btn btn-outline-secondary">
+            <i class="bi bi-arrow-left"></i> Gestión de cartera
+        </a>
+    </div>
+</div>
+
+<p class="text-muted">
+    Listado de <strong>clientes</strong> que tienen al menos un crédito en mora. Una fila por cliente con resumen de créditos, saldo adeudado y días máximos de mora.
+</p>
+
+<!-- Filtros -->
+<div class="card mb-4">
+    <div class="card-header">
+        <h5 class="mb-0"><i class="bi bi-funnel"></i> Filtros</h5>
+    </div>
+    <div class="card-body">
+        <form method="get" class="row g-3">
+            <div class="col-md-3">
+                <label for="estado_mora" class="form-label">Estado de mora</label>
+                <select name="estado_mora" id="estado_mora" class="form-select">
+                    <option value="">Todos</option>
+                    <option value="MORA_TEMPRANA" {% if estado_mora == 'MORA_TEMPRANA' %}selected{% endif %}>Mora temprana (1-30 días)</option>
+                    <option value="MORA_ALTA" {% if estado_mora == 'MORA_ALTA' %}selected{% endif %}>Mora alta (31-90 días)</option>
+                    <option value="MORA_CRITICA" {% if estado_mora == 'MORA_CRITICA' %}selected{% endif %}>Mora crítica (+90 días)</option>
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label for="dias_mora_min" class="form-label">Días de mora mínimos</label>
+                <input type="number" name="dias_mora_min" class="form-control" value="{{ dias_mora_min }}" placeholder="Ej: 30" min="1">
+            </div>
+            <div class="col-md-3">
+                <label for="cobrador_id" class="form-label">Cobrador</label>
+                <select name="cobrador_id" id="cobrador_id" class="form-select">
+                    <option value="">Todos</option>
+                    {% for c in cobradores %}
+                    <option value="{{ c.id }}" {% if cobrador_id == c.id|stringformat:"s" %}selected{% endif %}>{{ c.nombre_completo }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-3 d-flex align-items-end">
+                <button type="submit" class="btn btn-primary">
+                    <i class="bi bi-search"></i> Filtrar
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Listado -->
+<div class="card">
+    <div class="card-header">
+        <h5 class="mb-0">
+            <i class="bi bi-person-lines-fill"></i>
+            {{ total_clientes }} cliente(s) en mora
+        </h5>
+    </div>
+    <div class="card-body p-0">
+        {% if lista_clientes %}
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>Cliente</th>
+                        <th>Contacto</th>
+                        <th>Créditos en mora</th>
+                        <th>Saldo adeudado</th>
+                        <th>Días máx. mora</th>
+                        <th>Cobrador(es)</th>
+                        <th>Acciones</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in lista_clientes %}
+                    <tr>
+                        <td>
+                            <strong>{{ item.cliente.nombre_completo }}</strong>
+                            <br><small class="text-muted">Cédula: {{ item.cliente.cedula }}</small>
+                            {% if item.cliente.barrio %}
+                            <br><small class="text-muted"><i class="bi bi-geo-alt"></i> {{ item.cliente.barrio }}</small>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if item.cliente.celular %}<small><i class="bi bi-telephone"></i> {{ item.cliente.celular }}</small><br>{% endif %}
+                            {% if item.cliente.direccion %}<small class="text-muted">{{ item.cliente.direccion|truncatechars:30 }}</small>{% endif %}
+                        </td>
+                        <td>{{ item.creditos|length }}</td>
+                        <td><strong class="text-danger">${{ item.saldo_total|floatformat:0 }}</strong></td>
+                        <td>
+                            <span class="badge {% if item.max_dias_mora > 90 %}bg-danger{% elif item.max_dias_mora > 30 %}bg-warning text-dark{% else %}bg-secondary{% endif %}">
+                                {{ item.max_dias_mora }} días
+                            </span>
+                        </td>
+                        <td>
+                            {% for c in item.creditos|slice:":3" %}
+                            <small>{{ c.cobrador.nombre_completo|default:"—" }}</small>{% if not forloop.last %}<br>{% endif %}
+                            {% endfor %}
+                            {% if item.creditos|length > 3 %}<small class="text-muted">+{{ item.creditos|length|add:"-3" }} más</small>{% endif %}
+                        </td>
+                        <td>
+                            <a href="{% url 'detalle_cliente' item.cliente.id %}" class="btn btn-sm btn-outline-primary" title="Ver cliente">Ver</a>
+                            <a href="{% url 'cartera_vencida' %}?cliente_id={{ item.cliente.id }}" class="btn btn-sm btn-outline-secondary" title="Ver créditos en mora de este cliente">Créditos</a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <p class="text-muted p-4 mb-0">No hay clientes en mora con los filtros aplicados.</p>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

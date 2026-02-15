@@ -25,6 +25,21 @@
     <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
 </div>
 
+{% if email_enviado_param %}
+<div class="alert alert-info alert-dismissible fade show" role="alert">
+    <i class="fas fa-envelope me-2"></i>
+    <strong>Comprobante enviado por correo.</strong> Se envió el resumen del cobro y el PDF del recibo al correo del cliente.
+    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+</div>
+{% endif %}
+{% if sin_email_param %}
+<div class="alert alert-warning alert-dismissible fade show" role="alert">
+    <i class="fas fa-exclamation-triangle me-2"></i>
+    <strong>El cliente no tiene correo registrado.</strong> Puede enviar el resumen del cobro por WhatsApp con el botón <strong>Enviar por WhatsApp</strong> (el cliente puede descargar el recibo desde el enlace que se incluye en el mensaje).
+    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+</div>
+{% endif %}
+
 <div class="row">
     <!-- Información del Pago -->
     <div class="col-md-6 mb-4">
@@ -188,6 +203,7 @@ function descargarRecibo() {
 // Función para enviar por WhatsApp
 function enviarWhatsApp() {
     const celular = '{{ cliente.celular }}';
+    const urlRecibo = '{{ url_recibo_pdf|escapejs }}';
     const mensaje = `¡Hola {{ cliente.nombre|slice:":20" }}! 🏦
 
 Te enviamos el recibo de tu pago:
@@ -202,7 +218,7 @@ Te enviamos el recibo de tu pago:
 📈 Progreso: {{ progreso_pago|floatformat:1 }}%
 💲 Saldo pendiente: ${{ credito.saldo_pendiente|floatformat:0 }}
 
-Puedes descargar tu recibo completo aquí: {{ request.build_absolute_uri }}/generar-recibo-pdf/{{ pago.id }}/
+Puedes descargar tu recibo completo aquí: ` + urlRecibo + `
 
 ¡Gracias por tu pago puntual! 😊`;
     

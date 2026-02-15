@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 """
-Script para crear un superusuario en Railway
+Script para crear un superusuario en el primer despliegue (o local).
 """
 import os
 import sys

@@ -184,7 +184,8 @@ def media_status(request):
             'media_root_path': str(settings.MEDIA_ROOT),
             'files_count': files_count,
             'total_size': size_str,
-            'is_railway': bool(os.getenv('RAILWAY_ENVIRONMENT')),
+            # True si el entorno tiene almacenamiento efímero (archivos se pierden en cada deploy)
+'is_ephemeral': os.getenv('EPHEMERAL_STORAGE', os.getenv('RAILWAY_ENVIRONMENT', '')).lower() in ['true', '1', 'yes'],
         }
         
         # Crear HTML con estilos del sistema
@@ -265,7 +266,7 @@ def media_status(request):
                 .status-value.danger {{
                     color: #dc3545;
                 }}
-                .alert-railway {{
+                .alert-ephemeral {{
                     background: linear-gradient(135deg, #fff3cd, #ffeaa7);
                     border: none;
                     border-left: 4px solid #ffc107;
@@ -334,14 +335,14 @@ def media_status(request):
                         </div>
                         
                         <div class="status-item">
-                            <i class="bi bi-cloud{'-check' if info['is_railway'] else '-slash'}"></i>
-                            <div class="status-label">Plataforma:</div>
-                            <div class="status-value {'warning' if info['is_railway'] else 'success'}">
-                                {'Railway (Efímero)' if info['is_railway'] else 'Local/Persistente'}
+                            <i class="bi bi-cloud{'-check' if info['is_ephemeral'] else '-slash'}"></i>
+                            <div class="status-label">Almacenamiento:</div>
+                            <div class="status-value {'warning' if info['is_ephemeral'] else 'success'}">
+                                {'Efímero (se pierde en cada deploy)' if info['is_ephemeral'] else 'Persistente'}
                             </div>
                         </div>
                         
-                        {"<div class=\"alert alert-railway\"><h5><i class=\"bi bi-exclamation-triangle me-2\"></i>Información Importante</h5><p><strong>Railway utiliza un sistema de archivos efímero.</strong> Esto significa que todos los archivos subidos (imágenes de clientes, documentos, etc.) se pierden automáticamente cada vez que se hace un nuevo deploy de la aplicación.</p><p class=\"mb-0\"><strong>Solución implementada:</strong> El sistema ahora genera automáticamente imágenes placeholder cuando los archivos no están disponibles, garantizando que la aplicación funcione sin errores.</p></div>" if info['is_railway'] else ""}
+                        {"<div class=\"alert alert-ephemeral\"><h5><i class=\"bi bi-exclamation-triangle me-2\"></i>Información Importante</h5><p><strong>Este entorno usa almacenamiento efímero.</strong> Los archivos subidos (imágenes de clientes, documentos, etc.) pueden perderse en cada nuevo deploy.</p><p class=\"mb-0\"><strong>Solución:</strong> El sistema genera imágenes placeholder cuando los archivos no están disponibles. Para persistir archivos use almacenamiento externo (S3, volumen persistente, etc.).</p></div>" if info['is_ephemeral'] else ""}
                         
                         <div class="text-center mt-4">
                             <a href="javascript:history.back()" class="btn-back">

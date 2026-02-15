@@ -9,9 +9,6 @@
         <a href="{% url 'nueva_ruta' %}" class="btn btn-outline-primary me-2">
             <i class="bi bi-map"></i> Gestionar Rutas
         </a>
-        <a href="{% url 'gestion_diaria_cobros' %}" class="btn btn-outline-success me-2">
-            <i class="bi bi-calendar-check"></i> Gestión Diaria
-        </a>
         <a href="{% url 'nuevo_cobrador' %}" class="btn btn-primary">
             <i class="bi bi-plus-circle"></i> Nuevo Cobrador
         </a>
@@ -112,7 +109,7 @@
                                     <span class="badge bg-info text-white me-1">{{ ruta.nombre }}</span>
                                 {% endfor %}
                             {% else %}
-                                <span class="text-muted">Sin rutas asignadas</span>
+                                <span class="badge bg-warning text-dark">Sin rutas</span>
                             {% endif %}
                         </td>
                         <td>
@@ -170,11 +167,11 @@
     <div class="col-md-6">
         <div class="card border-success">
             <div class="card-body text-center">
-                <i class="bi bi-calendar-check" style="font-size: 2rem; color: #198754;"></i>
+                <i class="bi bi-calendar-day" style="font-size: 2rem; color: #198754;"></i>
                 <h5 class="card-title mt-2">Gestión Diaria</h5>
-                <p class="card-text">Monitorea los cobros programados para hoy</p>
+                <p class="card-text">Control de cobranza del día (métricas y créditos urgentes)</p>
                 <a href="{% url 'gestion_diaria_cobros' %}" class="btn btn-outline-success">
-                    <i class="bi bi-arrow-right"></i> Ver Agenda Hoy
+                    <i class="bi bi-arrow-right"></i> Ir a Gestión Diaria
                 </a>
             </div>
         </div>

@@ -503,18 +503,38 @@
                     <div class="sidebar-section-label">COBRANZA</div>
                     <ul class="nav flex-column mb-2">
                         <li class="nav-item">
-                            <a class="nav-link {% if 'tarea' in request.resolver_match.url_name or 'agenda' in request.resolver_match.url_name or 'supervisor' in request.resolver_match.url_name %}active{% endif %}" href="{% url 'agenda_cobrador' %}">
+                            <a class="nav-link {% if request.resolver_match.url_name == 'gestion_diaria_cobros' %}active{% endif %}" href="{% url 'gestion_diaria_cobros' %}">
+                                <i class="bi bi-calendar-day me-2"></i>Gestión Diaria
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link {% if request.resolver_match.url_name == 'panel_supervisor' %}active{% endif %}" href="{% url 'panel_supervisor' %}">
+                                <i class="bi bi-clipboard-data me-2"></i>Panel supervisor
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link {% if 'tarea' in request.resolver_match.url_name or 'agenda' in request.resolver_match.url_name %}active{% endif %}" href="{% url 'agenda_cobrador' %}">
                                 <i class="bi bi-calendar-check me-2"></i>Agenda / Tareas
                             </a>
                         </li>
                         <li class="nav-item">
-                            <a class="nav-link {% if request.resolver_match.url_name == 'cobradores' or request.resolver_match.url_name == 'nuevo_cobrador' or request.resolver_match.url_name == 'detalle_cobrador' or request.resolver_match.url_name == 'editar_cobrador' or request.resolver_match.url_name == 'rutas' or request.resolver_match.url_name == 'nueva_ruta' or request.resolver_match.url_name == 'detalle_ruta' or request.resolver_match.url_name == 'editar_ruta' or request.resolver_match.url_name == 'gestion_diaria_cobros' %}active{% endif %}" href="{% url 'cobradores' %}">
+                            <a class="nav-link {% if request.resolver_match.url_name == 'cobradores' or request.resolver_match.url_name == 'nuevo_cobrador' or request.resolver_match.url_name == 'detalle_cobrador' or request.resolver_match.url_name == 'editar_cobrador' or request.resolver_match.url_name == 'rutas' or request.resolver_match.url_name == 'nueva_ruta' or request.resolver_match.url_name == 'detalle_ruta' or request.resolver_match.url_name == 'editar_ruta' %}active{% endif %}" href="{% url 'cobradores' %}">
                                 <i class="bi bi-person-badge me-2"></i>Cobradores y rutas
                             </a>
                         </li>
                         <li class="nav-item">
                             <a class="nav-link {% if request.resolver_match.url_name == 'recaudacion_cobradores' or request.resolver_match.url_name == 'detalles_pagos_cobrador' %}active{% endif %}" href="{% url 'recaudacion_cobradores' %}">
                                 <i class="bi bi-graph-up me-2"></i>Recaudación
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link {% if request.resolver_match.url_name == 'reporte_tareas_pendientes' %}active{% endif %}" href="{% url 'reporte_tareas_pendientes' %}?dias=1">
+                                <i class="bi bi-clipboard-x me-2"></i>Tareas pendientes
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link {% if request.resolver_match.url_name == 'cierre_cobro_diario' or request.resolver_match.url_name == 'resumen_cierre_cobrador' %}active{% endif %}" href="{% url 'cierre_cobro_diario' %}">
+                                <i class="bi bi-cash-coin me-2"></i>Cierre de cobro diario
                             </a>
                         </li>
                     </ul>
@@ -525,6 +545,11 @@
                         <li class="nav-item">
                             <a class="nav-link {% if request.resolver_match.url_name == 'gestion_cartera' or request.resolver_match.url_name == 'cartera_vencida' or request.resolver_match.url_name == 'actualizar_cartera' %}active{% endif %}" href="{% url 'gestion_cartera' %}">
                                 <i class="bi bi-wallet2 me-2"></i>Gestión de cartera
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link {% if request.resolver_match.url_name == 'resumen_dinero' %}active{% endif %}" href="{% url 'resumen_dinero' %}">
+                                <i class="bi bi-cash-stack me-2"></i>Resumen del dinero
                             </a>
                         </li>
                     </ul>

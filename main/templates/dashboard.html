@@ -20,6 +20,69 @@
     </div>
 </div>
 
+<!-- Operaciones del día -->
+<div class="card mb-4 border-primary">
+    <div class="card-header bg-primary text-white py-2">
+        <h5 class="mb-0"><i class="bi bi-calendar-day me-2"></i>Operaciones del día ({{ request.user.username }})</h5>
+    </div>
+    <div class="card-body py-3">
+        <div class="row g-3">
+            <div class="col-md-4">
+                <div class="d-flex align-items-center p-3 rounded bg-success bg-opacity-10 border border-success">
+                    <i class="bi bi-bank fs-2 text-success me-3"></i>
+                    <div>
+                        <div class="fw-bold text-success">{{ desembolsos_hoy_count }}</div>
+                        <small class="text-muted">Desembolsos hoy</small>
+                        <div class="small fw-semibold">${{ desembolsos_hoy_monto|floatformat:0 }}</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="d-flex align-items-center p-3 rounded bg-warning bg-opacity-10 border border-warning">
+                    <i class="bi bi-currency-dollar fs-2 text-warning me-3"></i>
+                    <div>
+                        <div class="fw-bold text-warning">{{ pagos_hoy_count }}</div>
+                        <small class="text-muted">Pagos recibidos hoy</small>
+                        <div class="small fw-semibold">${{ pagos_hoy_monto|floatformat:0 }}</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="d-flex align-items-center p-3 rounded bg-info bg-opacity-10 border border-info">
+                    <i class="bi bi-calendar-check fs-2 text-info me-3"></i>
+                    <div>
+                        <div class="fw-bold text-info">{{ cuotas_vencen_hoy|length }}</div>
+                        <small class="text-muted">Cuotas que vencen hoy</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% if cuotas_vencen_hoy %}
+        <div class="mt-3">
+            <a class="btn btn-sm btn-outline-info" data-bs-toggle="collapse" href="#collapseCuotasHoy" role="button">Ver listado de cuotas</a>
+            <div class="collapse mt-2" id="collapseCuotasHoy">
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover mb-0">
+                        <thead><tr><th>Cliente</th><th>Crédito</th><th>Cuota</th><th>Monto</th><th>Vence</th></tr></thead>
+                        <tbody>
+                            {% for cuota in cuotas_vencen_hoy %}
+                            <tr>
+                                <td>{{ cuota.credito.cliente.nombre_completo }}</td>
+                                <td>#{{ cuota.credito.id }}</td>
+                                <td>#{{ cuota.numero_cuota }}</td>
+                                <td>${{ cuota.monto_cuota|floatformat:0 }}</td>
+                                <td>{{ cuota.fecha_vencimiento|date:"d/m/Y" }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
 <div class="row g-3 mb-4">
     <div class="col-6 col-md-3">
         <a href="{% url 'clientes' %}" class="text-decoration-none">

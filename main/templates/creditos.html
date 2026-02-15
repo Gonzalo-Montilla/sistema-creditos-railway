@@ -84,6 +84,28 @@
                 </select>
             </div>
         </div>
+        <div class="row align-items-center g-2 mt-2 pt-2 border-top">
+            <div class="col-auto">
+                <form method="get" action="{% url 'creditos' %}" class="d-flex flex-wrap align-items-center gap-2" id="formFiltrosCredito">
+                    {% if q %}<input type="hidden" name="q" value="{{ q }}">{% endif %}
+                    <label class="form-label mb-0 small text-muted">Cobrador:</label>
+                    <select name="cobrador" class="form-select form-select-sm" style="width:auto; max-width:180px;">
+                        <option value="">Todos</option>
+                        {% for cob in cobradores %}
+                        <option value="{{ cob.id }}" {% if filtro_cobrador_id == cob.id %}selected{% endif %}>{{ cob.nombre_completo }}</option>
+                        {% endfor %}
+                    </select>
+                    <label class="form-label mb-0 small text-muted">Desde:</label>
+                    <input type="date" name="fecha_desde" class="form-control form-control-sm" style="width:auto;" value="{{ filtro_fecha_desde|default:'' }}">
+                    <label class="form-label mb-0 small text-muted">Hasta:</label>
+                    <input type="date" name="fecha_hasta" class="form-control form-control-sm" style="width:auto;" value="{{ filtro_fecha_hasta|default:'' }}">
+                    <button type="submit" class="btn btn-sm btn-outline-primary"><i class="bi bi-funnel me-1"></i>Filtrar</button>
+                    {% if filtro_cobrador_id or filtro_fecha_desde or filtro_fecha_hasta %}
+                    <a href="{% url 'creditos' %}{% if q %}?q={{ q|urlencode }}{% endif %}" class="btn btn-sm btn-outline-secondary">Limpiar filtros</a>
+                    {% endif %}
+                </form>
+            </div>
+        </div>
     </div>
     <div class="card-body">
         {% if creditos %}
@@ -400,6 +422,38 @@
     </div>
 </div>
 
+<!-- Modal Resumen y cronograma (tras aprobar crédito) -->
+<div class="modal fade" id="modalResumenCredito" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="bi bi-file-text me-2"></i>Resumen del crédito y cronograma de pagos</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+            </div>
+            <div class="modal-body">
+                <div id="resumenCreditoCargando" class="text-center py-4"><span class="spinner-border text-primary"></span> Cargando...</div>
+                <div id="resumenCreditoContenido" style="display:none;">
+                    <h6 class="text-muted mb-2">Cliente</h6>
+                    <p id="resumenCliente" class="mb-3 small"></p>
+                    <h6 class="text-muted mb-2">Detalles del crédito</h6>
+                    <p id="resumenCreditoDetalle" class="mb-3 small"></p>
+                    <h6 class="text-muted mb-2">Cronograma de pagos</h6>
+                    <div class="table-responsive">
+                        <table class="table table-sm table-bordered" id="resumenCronogramaTable">
+                            <thead class="table-light"><tr><th>Cuota</th><th>Fecha vencimiento</th><th>Valor</th></tr></thead>
+                            <tbody id="resumenCronogramaBody"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <a id="btnDescargarResumenPdf" href="#" class="btn btn-primary" target="_blank"><i class="bi bi-download me-1"></i>Descargar PDF</a>
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- Modal Ver pagaré (vista previa + descargar) — mismo patrón que Habeas Data -->
 <div class="modal fade" id="modalVerPagare" tabindex="-1">
     <div class="modal-dialog modal-xl modal-dialog-centered">
@@ -440,6 +494,41 @@ function getCookie(name) {
 var pagareContext = { creditoId: null, cliente: {}, codeudor: null };
 var renovacionContext = { creditoId: null, otp: '', celular: '' };
 var retanqueoContext = { creditoId: null, otp: '', celular: '' };
+var resumenCreditoId = "{{ resumen_credito_id|default:''|escapejs }}";
+
+function abrirModalResumenCredito(creditoId) {
+    document.getElementById('resumenCreditoCargando').style.display = 'block';
+    document.getElementById('resumenCreditoContenido').style.display = 'none';
+    document.getElementById('btnDescargarResumenPdf').href = "{% url 'generar_pdf_cronograma' 0 %}".replace('/0/', '/' + creditoId + '/');
+    var modal = new bootstrap.Modal(document.getElementById('modalResumenCredito'));
+    modal.show();
+    fetch("{% url 'resumen_credito_json' 0 %}".replace('/0/', '/' + creditoId + '/'))
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            document.getElementById('resumenCreditoCargando').style.display = 'none';
+            if (data.success) {
+                var c = data.cliente;
+                var cr = data.credito;
+                document.getElementById('resumenCliente').textContent = c.nombre + ' | Cédula: ' + (c.cedula || '—') + ' | Cel: ' + (c.celular || '—') + ' | ' + (c.email || 'Sin correo');
+                document.getElementById('resumenCreditoDetalle').textContent =
+                    'Crédito #' + cr.id + ' | $' + Number(cr.monto).toLocaleString('es-CO') + ' | ' + cr.cantidad_cuotas + ' cuotas ' + cr.tipo_plazo.toLowerCase() + 's de $' + Number(cr.valor_cuota).toLocaleString('es-CO') + ' | Total: $' + Number(cr.monto_total).toLocaleString('es-CO');
+                var tbody = document.getElementById('resumenCronogramaBody');
+                tbody.innerHTML = '';
+                (data.cronograma || []).forEach(function(cuota) {
+                    var tr = document.createElement('tr');
+                    tr.innerHTML = '<td>' + cuota.numero_cuota + '</td><td>' + cuota.fecha_vencimiento + '</td><td>$' + Number(cuota.monto_cuota).toLocaleString('es-CO') + '</td>';
+                    tbody.appendChild(tr);
+                });
+                document.getElementById('resumenCreditoContenido').style.display = 'block';
+            } else {
+                document.getElementById('resumenCreditoCargando').textContent = data.message || 'Error al cargar.';
+            }
+        })
+        .catch(function() {
+            document.getElementById('resumenCreditoCargando').style.display = 'none';
+            document.getElementById('resumenCreditoCargando').textContent = 'Error de conexión.';
+        });
+}
 
 function abrirModalFirmarDocRetanqueo(creditoId) {
     retanqueoContext.creditoId = creditoId;
@@ -882,6 +971,10 @@ document.getElementById('estadoFilter').addEventListener('change', function() {
 
 // Animaciones modernas para las tarjetas
 document.addEventListener('DOMContentLoaded', function() {
+    // Si venimos de aprobar crédito, abrir modal de resumen y cronograma
+    if (resumenCreditoId) {
+        abrirModalResumenCredito(resumenCreditoId);
+    }
     // Animación de entrada de las tarjetas métricas
     const metricCards = document.querySelectorAll('.metric-card');
     metricCards.forEach((card, index) => {

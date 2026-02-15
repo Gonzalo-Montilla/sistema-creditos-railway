@@ -1,0 +1,99 @@
+{% extends 'base.html' %}
+
+{% block title %}Resumen del dinero{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h2 class="mb-0"><i class="bi bi-cash-stack"></i> Resumen del dinero</h2>
+    <a href="{% url 'gestion_cartera' %}" class="btn btn-outline-primary">
+        <i class="bi bi-arrow-left"></i> Gestión de cartera
+    </a>
+</div>
+
+<p class="text-muted mb-4">
+    Vista rápida del flujo de dinero: cuánto has prestado, cuánto te han devuelto y cuánto te siguen debiendo.
+</p>
+
+<!-- Flujo en 3 tarjetas: 1 → 2 → 3 (orden lógico de lectura) -->
+<div class="row g-4 mb-4">
+    <div class="col-12 col-md-4">
+        <div class="card h-100 border-primary border-2 shadow-sm">
+            <div class="card-body text-center py-4">
+                <div class="rounded-circle bg-primary bg-opacity-10 d-inline-flex align-items-center justify-content-center mb-3" style="width: 56px; height: 56px;">
+                    <i class="bi bi-bank text-primary" style="font-size: 1.75rem;"></i>
+                </div>
+                <h6 class="text-uppercase text-muted small mb-2">1. Lo que has prestado</h6>
+                <h3 class="text-primary mb-1">${{ total_desembolsado|floatformat:0 }}</h3>
+                <p class="small text-muted mb-0">Capital que salió a los clientes</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-12 col-md-4">
+        <div class="card h-100 border-success border-2 shadow-sm">
+            <div class="card-body text-center py-4">
+                <div class="rounded-circle bg-success bg-opacity-10 d-inline-flex align-items-center justify-content-center mb-3" style="width: 56px; height: 56px;">
+                    <i class="bi bi-cash-coin text-success" style="font-size: 1.75rem;"></i>
+                </div>
+                <h6 class="text-uppercase text-muted small mb-2">2. Lo que te han pagado</h6>
+                <h3 class="text-success mb-1">${{ total_cobrado|floatformat:0 }}</h3>
+                <p class="small text-muted mb-0">Todo lo que ya entró por pagos</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-12 col-md-4">
+        <div class="card h-100 border-info border-2 shadow-sm">
+            <div class="card-body text-center py-4">
+                <div class="rounded-circle bg-info bg-opacity-10 d-inline-flex align-items-center justify-content-center mb-3" style="width: 56px; height: 56px;">
+                    <i class="bi bi-wallet2 text-info" style="font-size: 1.75rem;"></i>
+                </div>
+                <h6 class="text-uppercase text-muted small mb-2">3. Lo que aún te deben</h6>
+                <h3 class="text-info mb-1">${{ saldo_cartera|floatformat:0 }}</h3>
+                <p class="small text-muted mb-0">Lo que falta por cobrar (capital + intereses)</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Nota explicativa: sin ecuación que confunda -->
+<div class="card border-0 bg-light mb-4">
+    <div class="card-body py-3">
+        <p class="mb-0 small">
+            <i class="bi bi-info-circle text-info me-1"></i>
+            <strong>¿Por qué los números no suman igual?</strong> Los créditos tienen interés. Lo que el cliente debe pagar en total (capital + interés) es mayor que lo que prestaste. Por eso «lo cobrado» + «lo que aún deben» puede ser mayor que «lo prestado»: esa diferencia incluye los intereses. Es normal.
+        </p>
+    </div>
+</div>
+
+<!-- Control para auditoría (colapsado o discreto) -->
+<div class="card mb-4">
+    <div class="card-header py-2 bg-light d-flex justify-content-between align-items-center" data-bs-toggle="collapse" data-bs-target="#detalleControl" aria-expanded="false">
+        <span class="small"><i class="bi bi-clipboard-check me-1"></i> Detalle de control (auditoría)</span>
+        <i class="bi bi-chevron-down"></i>
+    </div>
+    <div id="detalleControl" class="collapse">
+        <div class="card-body small">
+            <p class="mb-2">Diferencia calculada: <strong>Desembolsado − (Cobrado + Saldo)</strong> = <span class="{% if cuadra %}text-success{% else %}text-secondary{% endif %}">${{ diferencia|floatformat:0 }}</span></p>
+            {% if cuadra %}
+            <span class="text-success">Los registros cuadran (diferencia &le; $1).</span>
+            {% else %}
+            <span class="text-muted">Con créditos a interés esta diferencia suele ser negativa. Si sospechas un error en los datos, revisa créditos con pagos que superen el monto total.</span>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- Acciones -->
+<div class="row">
+    <div class="col-12">
+        <a href="{% url 'gestion_cartera' %}" class="btn btn-primary me-2">
+            <i class="bi bi-wallet2"></i> Gestión de cartera
+        </a>
+        <a href="{% url 'clientes_en_mora' %}" class="btn btn-outline-secondary me-2">
+            <i class="bi bi-people-fill"></i> Clientes en mora
+        </a>
+        <a href="{% url 'cartera_vencida' %}" class="btn btn-outline-danger">
+            <i class="bi bi-exclamation-triangle"></i> Cartera vencida
+        </a>
+    </div>
+</div>
+{% endblock %}

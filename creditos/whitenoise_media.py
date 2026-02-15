@@ -1,5 +1,5 @@
 """
-Configuración personalizada de WhiteNoise para servir archivos media en Railway
+Configuración personalizada de WhiteNoise para servir archivos media en producción.
 """
 
 from whitenoise import WhiteNoise

@@ -751,28 +751,33 @@ class CarteraAnalisis(models.Model):
             creditos_activos = Credito.objects.filter(estado__in=['DESEMBOLSADO', 'VENCIDO'])
             total_creditos = creditos_activos.count()
             
-            # Calcular cartera total de manera segura
+            # Cartera = saldo pendiente (lo que falta por cobrar), no monto_total
             try:
-                cartera_total_raw = creditos_activos.aggregate(total=Sum('monto_total'))['total']
-                cartera_total = Decimal(str(cartera_total_raw)) if cartera_total_raw else Decimal('0')
-            except:
+                from django.db.models.functions import Coalesce
+                from django.db.models import Value
+                from django.db.models import DecimalField
+                qs = creditos_activos.annotate(
+                    total_pagado=Coalesce(Sum('pago__monto'), Value(Decimal('0')), output_field=DecimalField())
+                )
                 cartera_total = Decimal('0')
+                cartera_al_dia_monto = Decimal('0')
+                for c in qs:
+                    monto_total = c.monto_total or c.monto or Decimal('0')
+                    saldo = max(Decimal('0'), monto_total - (c.total_pagado or Decimal('0')))
+                    cartera_total += saldo
+                    if c.estado_mora == 'AL_DIA':
+                        cartera_al_dia_monto += saldo
+                cartera_vencida_monto = cartera_total - cartera_al_dia_monto
+            except Exception:
+                cartera_total = Decimal('0')
+                cartera_al_dia_monto = Decimal('0')
+                cartera_vencida_monto = Decimal('0')
             
             # Contar por estado de mora
             creditos_al_dia = creditos_activos.filter(estado_mora='AL_DIA').count()
-            creditos_mora_temp = creditos_activos.filter(estado_mora='MORA_TEMPRANA').count() 
+            creditos_mora_temp = creditos_activos.filter(estado_mora='MORA_TEMPRANA').count()
             creditos_mora_alta = creditos_activos.filter(estado_mora='MORA_ALTA').count()
             creditos_mora_crit = creditos_activos.filter(estado_mora='MORA_CRITICA').count()
-            
-            # Calcular cartera al día de manera segura
-            try:
-                cartera_al_dia_raw = creditos_activos.filter(estado_mora='AL_DIA').aggregate(total=Sum('monto_total'))['total']
-                cartera_al_dia_monto = Decimal(str(cartera_al_dia_raw)) if cartera_al_dia_raw else Decimal('0')
-            except:
-                cartera_al_dia_monto = Decimal('0')
-            
-            # Calcular cartera vencida
-            cartera_vencida_monto = cartera_total - cartera_al_dia_monto
             
             # Calcular porcentaje de cartera vencida
             try:
@@ -867,35 +872,33 @@ class CarteraAnalisis(models.Model):
         # Métricas generales
         total_creditos = creditos_activos.count()
         
+        # Cartera = saldo pendiente (lo que falta por cobrar), no monto_total
         try:
-            cartera_total_raw = creditos_activos.aggregate(
-                total=Sum('monto_total')
-            )['total']
-            cartera_total = Decimal(str(cartera_total_raw)) if cartera_total_raw else Decimal('0')
-        except (InvalidOperation, ValueError, TypeError):
+            from django.db.models.functions import Coalesce
+            from django.db.models import Value
+            from django.db.models import DecimalField
+            qs = creditos_activos.annotate(
+                total_pagado=Coalesce(Sum('pago__monto'), Value(Decimal('0')), output_field=DecimalField())
+            )
             cartera_total = Decimal('0')
+            cartera_al_dia_monto = Decimal('0')
+            for c in qs:
+                monto_total = c.monto_total or c.monto or Decimal('0')
+                saldo = max(Decimal('0'), monto_total - (c.total_pagado or Decimal('0')))
+                cartera_total += saldo
+                if c.estado_mora == 'AL_DIA':
+                    cartera_al_dia_monto += saldo
+            cartera_vencida_monto = cartera_total - cartera_al_dia_monto
+        except (InvalidOperation, ValueError, TypeError, Exception):
+            cartera_total = Decimal('0')
+            cartera_al_dia_monto = Decimal('0')
+            cartera_vencida_monto = Decimal('0')
         
         # Métricas por estado de mora
         al_dia = creditos_activos.filter(estado_mora='AL_DIA').count()
         mora_temp = creditos_activos.filter(estado_mora='MORA_TEMPRANA').count()
         mora_alta = creditos_activos.filter(estado_mora='MORA_ALTA').count()
         mora_crit = creditos_activos.filter(estado_mora='MORA_CRITICA').count()
-        
-        try:
-            cartera_al_dia_raw = creditos_activos.filter(estado_mora='AL_DIA').aggregate(
-                total=Sum('monto_total')
-            )['total']
-            cartera_al_dia_monto = Decimal(str(cartera_al_dia_raw)) if cartera_al_dia_raw else Decimal('0')
-        except (InvalidOperation, ValueError, TypeError):
-            cartera_al_dia_monto = Decimal('0')
-        
-        try:
-            cartera_vencida_raw = creditos_activos.exclude(estado_mora='AL_DIA').aggregate(
-                total=Sum('monto_total')
-            )['total']
-            cartera_vencida_monto = Decimal(str(cartera_vencida_raw)) if cartera_vencida_raw else Decimal('0')
-        except (InvalidOperation, ValueError, TypeError):
-            cartera_vencida_monto = Decimal('0')
         
         # Intereses moratorios
         try:
@@ -1032,6 +1035,16 @@ class TareaCobro(models.Model):
     latitud = models.FloatField(null=True, blank=True, verbose_name="Latitud de visita")
     longitud = models.FloatField(null=True, blank=True, verbose_name="Longitud de visita")
     
+    # Auditoría: quién realizó la última acción (cobrar, reprogramar, etc.)
+    usuario_ultima_accion = models.ForeignKey(
+        User, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='tareas_cobro_modificadas', verbose_name="Usuario última acción"
+    )
+    # Motivo al reprogramar (opcional, para análisis)
+    motivo_reprogramacion = models.CharField(
+        max_length=255, blank=True, verbose_name="Motivo reprogramación"
+    )
+    
     # Metadatos
     fecha_creacion = models.DateTimeField(auto_now_add=True)
     fecha_actualizacion = models.DateTimeField(auto_now=True)
@@ -1157,8 +1170,8 @@ class TareaCobro(models.Model):
         
         return pago  # Retornamos el pago creado
     
-    def cambiar_estado(self, nuevo_estado, observaciones="", fecha_reprogramacion=None):
-        """Cambia el estado de la tarea"""
+    def cambiar_estado(self, nuevo_estado, observaciones="", fecha_reprogramacion=None, motivo_reprogramacion=""):
+        """Cambia el estado de la tarea (incrementa intentos_cobro)."""
         from django.utils import timezone
         
         self.estado = nuevo_estado
@@ -1166,8 +1179,11 @@ class TareaCobro(models.Model):
         self.observaciones = observaciones
         self.intentos_cobro += 1
         
-        if nuevo_estado == 'REPROGRAMADO' and fecha_reprogramacion:
-            self.fecha_reprogramacion = fecha_reprogramacion
+        if nuevo_estado == 'REPROGRAMADO':
+            if fecha_reprogramacion:
+                self.fecha_reprogramacion = fecha_reprogramacion
+            if motivo_reprogramacion:
+                self.motivo_reprogramacion = motivo_reprogramacion[:255]
         
         self.save()
     
@@ -1332,6 +1348,44 @@ class TareaCobro(models.Model):
     def __str__(self):
         return f"Tarea {self.id} - {self.cobrador.nombre_completo} - {self.cliente.nombre_completo} - {self.get_estado_display()}"
 
+
+class TareaCobroLog(models.Model):
+    """Registro de auditoría: cada cambio de estado o acción sobre una tarea de cobro."""
+    ACCIONES = [
+        ('CREADA', 'Tarea creada'),
+        ('COBRADO', 'Marcada como cobrada'),
+        ('NO_ENCONTRADO', 'Cliente no encontrado'),
+        ('NO_ESTABA', 'Cliente no estaba'),
+        ('NO_PUDO_PAGAR', 'No pudo pagar'),
+        ('REPROGRAMADO', 'Reprogramada'),
+        ('CANCELADO', 'Cancelada'),
+    ]
+    tarea = models.ForeignKey(
+        TareaCobro, on_delete=models.CASCADE, related_name='logs',
+        verbose_name="Tarea"
+    )
+    usuario = models.ForeignKey(
+        User, on_delete=models.SET_NULL, null=True, blank=True,
+        verbose_name="Usuario"
+    )
+    accion = models.CharField(max_length=20, choices=ACCIONES, verbose_name="Acción")
+    fecha = models.DateTimeField(auto_now_add=True, verbose_name="Fecha")
+    observaciones = models.TextField(blank=True, verbose_name="Observaciones")
+    motivo_reprogramacion = models.CharField(max_length=255, blank=True)
+    monto_registrado = models.DecimalField(
+        max_digits=12, decimal_places=2, null=True, blank=True,
+        verbose_name="Monto (si aplica)"
+    )
+
+    class Meta:
+        verbose_name = "Log tarea de cobro"
+        verbose_name_plural = "Logs tareas de cobro"
+        ordering = ['-fecha']
+
+    def __str__(self):
+        return f"{self.tarea_id} - {self.get_accion_display()} - {self.fecha}"
+
+
 class Ruta(models.Model):
     """Rutas geográficas para asignación de cobradores"""
     nombre = models.CharField(max_length=100, verbose_name="Nombre de la ruta")
@@ -1463,3 +1517,39 @@ class Cobrador(models.Model):
     
     def __str__(self):
         return f"{self.nombre_completo} - {self.numero_documento}"
+
+
+class CierreCobroDiario(models.Model):
+    """Registro del cierre de cobro de un cobrador en una fecha: lo que debía entregar vs lo recibido (arqueo)."""
+    cobrador = models.ForeignKey(Cobrador, on_delete=models.CASCADE, related_name='cierres_diarios')
+    fecha = models.DateField(verbose_name="Fecha de cierre")
+    # Lo que el sistema dice que cobró ese día (suma de pagos registrados a su nombre)
+    monto_esperado = models.DecimalField(
+        max_digits=12, decimal_places=2, default=0,
+        verbose_name="Monto según sistema (lo que cobró)"
+    )
+    cantidad_pagos = models.IntegerField(default=0, verbose_name="Cantidad de pagos")
+    # Lo que el cobrador entrega físicamente (arqueo)
+    monto_recibido = models.DecimalField(
+        max_digits=12, decimal_places=2, null=True, blank=True,
+        verbose_name="Monto recibido (arqueo)"
+    )
+    diferencia = models.DecimalField(
+        max_digits=12, decimal_places=2, null=True, blank=True,
+        verbose_name="Diferencia (recibido - esperado)"
+    )
+    cerrado_por = models.ForeignKey(
+        User, on_delete=models.SET_NULL, null=True, blank=True,
+        verbose_name="Cerrado por"
+    )
+    fecha_cierre = models.DateTimeField(auto_now_add=True, verbose_name="Fecha/hora de cierre")
+    observaciones = models.TextField(blank=True, verbose_name="Observaciones")
+
+    class Meta:
+        verbose_name = "Cierre de cobro diario"
+        verbose_name_plural = "Cierres de cobro diario"
+        ordering = ['-fecha', '-fecha_cierre']
+        unique_together = [['cobrador', 'fecha']]
+
+    def __str__(self):
+        return f"Cierre {self.cobrador.nombre_completo} - {self.fecha}"

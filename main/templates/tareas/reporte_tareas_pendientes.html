@@ -1,0 +1,110 @@
+{% extends 'base.html' %}
+
+{% block title %}Tareas pendientes sin gestionar - Cobranza{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1 class="page-title mb-0">
+        <i class="fas fa-clipboard-list text-warning"></i> Tareas pendientes sin gestionar
+    </h1>
+    <div>
+        <a href="{% url 'panel_supervisor' %}" class="btn btn-outline-primary">
+            <i class="fas fa-arrow-left"></i> Panel supervisor
+        </a>
+        <a href="{% url 'recaudacion_cobradores' %}" class="btn btn-outline-secondary">Recaudación</a>
+    </div>
+</div>
+
+<div class="card mb-4">
+    <div class="card-body">
+        <form method="get" class="row g-3 align-items-end">
+            <div class="col-auto">
+                <label class="form-label small">Mostrar tareas con asignación hace al menos</label>
+                <select name="dias" class="form-select form-select-sm">
+                    <option value="1" {% if dias_atraso == 1 %}selected{% endif %}>1 día</option>
+                    <option value="2" {% if dias_atraso == 2 %}selected{% endif %}>2 días</option>
+                    <option value="3" {% if dias_atraso == 3 %}selected{% endif %}>3 días</option>
+                    <option value="7" {% if dias_atraso == 7 %}selected{% endif %}>7 días</option>
+                </select>
+            </div>
+            <div class="col-auto">
+                <label class="form-label small">Cobrador</label>
+                <select name="cobrador_id" class="form-select form-select-sm">
+                    <option value="">Todos</option>
+                    {% for c in cobradores %}
+                    <option value="{{ c.id }}" {% if cobrador_id == c.id %}selected{% endif %}>{{ c.nombre_completo }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-auto">
+                <button type="submit" class="btn btn-primary btn-sm"><i class="fas fa-filter"></i> Filtrar</button>
+            </div>
+            <div class="col-auto ms-auto">
+                <a href="?{{ request.GET.urlencode }}&export=xlsx" class="btn btn-success btn-sm">
+                    <i class="fas fa-file-excel"></i> Exportar Excel
+                </a>
+            </div>
+        </form>
+    </div>
+</div>
+
+{% if por_cobrador %}
+<div class="card mb-3">
+    <div class="card-header bg-light">
+        <i class="fas fa-chart-pie"></i> Resumen por cobrador (tareas pendientes atrasadas)
+    </div>
+    <div class="card-body">
+        <div class="row">
+            {% for item in por_cobrador %}
+            <div class="col-md-4 col-lg-3 mb-2">
+                <span class="badge bg-warning text-dark">{{ item.cobrador__nombres }} {{ item.cobrador__apellidos }}: {{ item.total }}</span>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<div class="card">
+    <div class="card-header bg-light d-flex justify-content-between align-items-center">
+        <span><i class="fas fa-list"></i> Listado (fecha asignación &le; {{ fecha_limite|date:"d/m/Y" }})</span>
+        <span class="badge bg-warning text-dark">{{ total }} tarea(s)</span>
+    </div>
+    <div class="card-body p-0">
+        {% if tareas %}
+        <div class="table-responsive">
+            <table class="table table-hover table-sm mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>Fecha asignación</th>
+                        <th>Cobrador</th>
+                        <th>Cliente</th>
+                        <th>Crédito / Cuota</th>
+                        <th>Monto a cobrar</th>
+                        <th>Días atraso</th>
+                        <th>Acción</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for t in tareas %}
+                    <tr>
+                        <td>{{ t.fecha_asignacion|date:"d/m/Y" }}</td>
+                        <td>{{ t.cobrador.nombre_completo }}</td>
+                        <td>{{ t.cliente.nombre_completo }}</td>
+                        <td>#{{ t.credito.id }} / Cuota #{{ t.cuota.numero_cuota }}</td>
+                        <td>${{ t.monto_a_cobrar|floatformat:0 }}</td>
+                        <td><span class="badge bg-danger">{{ t.fecha_asignacion|timesince }}</span></td>
+                        <td>
+                            <a href="{% url 'agenda_cobrador_especifico' t.cobrador.id %}?fecha={{ t.fecha_asignacion|date:'Y-m-d' }}" class="btn btn-sm btn-outline-primary" title="Ir a agenda">Agenda</a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <p class="text-muted p-4 mb-0">No hay tareas pendientes con asignación anterior a {{ fecha_limite|date:"d/m/Y" }} con los filtros aplicados.</p>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

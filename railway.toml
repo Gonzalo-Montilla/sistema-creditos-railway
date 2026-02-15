@@ -1,3 +1,4 @@
+# Solo se usa si desplegás en Railway. Para otros entornos, ver DEPLOY.md
 [build]
 builder = "NIXPACKS"
 

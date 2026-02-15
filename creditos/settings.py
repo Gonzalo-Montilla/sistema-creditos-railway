@@ -17,6 +17,13 @@ import dj_database_url
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
+# Cargar variables de entorno desde .env (opcional; pip install python-dotenv)
+try:
+    from dotenv import load_dotenv
+    load_dotenv(BASE_DIR / '.env')
+except ImportError:
+    pass
+
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
@@ -24,18 +31,18 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # SECURITY WARNING: keep the secret key used in production secret!
 import os
 
-# Configuración robusta para Railway
-SECRET_KEY = os.getenv('SECRET_KEY', 'django-insecure-railway-production-key-2024-safe-default')
+# Clave secreta: definir SECRET_KEY en entorno de producción
+SECRET_KEY = os.getenv('SECRET_KEY', 'django-insecure-cambiar-en-produccion')
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.getenv('DEBUG', 'False').lower() in ['true', '1', 'yes']
 
-# Hosts permitidos - Railway y desarrollo
-ALLOWED_HOSTS = ['*']
+# Hosts permitidos (en producción conviene restringir con ALLOWED_HOSTS)
+ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', '*').split(',')
 
-# Configuración adicional para producción
+# SSL: el proxy inverso (nginx, load balancer, etc.) suele manejar HTTPS
 SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
-SECURE_SSL_REDIRECT = False  # Railway maneja SSL
+SECURE_SSL_REDIRECT = os.getenv('SECURE_SSL_REDIRECT', 'false').lower() in ['true', '1', 'yes']
 
 
 # Application definition
@@ -95,7 +102,7 @@ WSGI_APPLICATION = 'creditos.wsgi.application'
 DATABASE_URL = os.environ.get('DATABASE_URL')
 
 if DATABASE_URL:
-    # Producción - Railway con PostgreSQL
+    # Producción: PostgreSQL u otro (según DATABASE_URL)
     DATABASES = {
         'default': dj_database_url.parse(DATABASE_URL)
     }
@@ -144,16 +151,10 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/5.2/howto/static-files/
 
 STATIC_URL = '/static/'
-
-# Configuración para Railway
-if os.getenv('RAILWAY_ENVIRONMENT'):
-    # Producción en Railway
-    STATIC_ROOT = '/app/staticfiles'
-    STATICFILES_DIRS = []
-else:
-    # Desarrollo local
-    STATICFILES_DIRS = [BASE_DIR / 'static']
-    STATIC_ROOT = BASE_DIR / 'staticfiles'
+# STATIC_ROOT: en producción puede fijarse con la variable de entorno (ej. en PaaS)
+STATIC_ROOT = os.getenv('STATIC_ROOT', str(BASE_DIR / 'staticfiles'))
+# Directorio adicional de estáticos (desarrollo); en producción suele usarse solo collectstatic
+STATICFILES_DIRS = [BASE_DIR / 'static'] if (BASE_DIR / 'static').exists() else []
 
 # WhiteNoise configuration
 STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
@@ -179,6 +180,28 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 LOGIN_URL = 'login'
 LOGIN_REDIRECT_URL = 'dashboard'
 
+# ===== CORREO ELECTRÓNICO (OTP, documentos, etc.) =====
+# Para pruebas: crea un correo (Gmail, Outlook, etc.) y configura estas variables de entorno.
+# Opción 1: Envío real por SMTP (recomendado para pruebas)
+#   EMAIL_HOST=smtp.gmail.com
+#   EMAIL_PORT=587
+#   EMAIL_USE_TLS=True
+#   EMAIL_HOST_USER=tu-correo-pruebas@gmail.com
+#   EMAIL_HOST_PASSWORD=contraseña-de-aplicacion
+#   DEFAULT_FROM_EMAIL=tu-correo-pruebas@gmail.com
+# Opción 2: Solo ver en consola (EMAIL_BACKEND=console) — no envía, imprime en terminal.
+if os.getenv('EMAIL_BACKEND') == 'console':
+    EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
+    DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', 'noreply@creditos.local')
+else:
+    EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+    EMAIL_HOST = os.getenv('EMAIL_HOST', '')
+    EMAIL_PORT = int(os.getenv('EMAIL_PORT', '587'))
+    EMAIL_USE_TLS = os.getenv('EMAIL_USE_TLS', 'true').lower() in ['true', '1', 'yes']
+    EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER', '')
+    EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD', '')
+    DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', EMAIL_HOST_USER or 'noreply@creditos.local')
+
 # ===== AUTOMATIZACIÓN DE TAREAS DIARIAS =====
 # Configuración de tareas programadas para producción
 # Solo se configura si django_crontab está disponible
@@ -186,9 +209,10 @@ if 'django_crontab' in INSTALLED_APPS:
     CRONJOBS = [
         # Generar tareas de cobro diarias (Lunes a Viernes a las 6:00 AM)
         ('0 6 * * 1-5', 'django.core.management.call_command', ['ejecutar_tareas_automaticas', '--solo-tareas']),
-        
-        # Verificación completa del sistema (Domingos a las 7:00 AM)
-        ('0 7 * * 0', 'django.core.management.call_command', ['ejecutar_tareas_automaticas']),
+        # Recordatorios de cuotas por correo (todos los días a las 7:00 AM)
+        ('0 7 * * *', 'django.core.management.call_command', ['enviar_recordatorios_cuotas']),
+        # Verificación completa del sistema (Domingos a las 8:00 AM)
+        ('0 8 * * 0', 'django.core.management.call_command', ['ejecutar_tareas_automaticas']),
     ]
     
     # Configuración adicional para cron

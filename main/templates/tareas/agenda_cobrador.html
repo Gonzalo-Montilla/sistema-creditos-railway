@@ -195,6 +195,12 @@
     <!-- Header con información del cobrador -->
     <div class="card mb-3">
         <div class="card-body py-3">
+            {% if es_hoy %}
+            <div class="alert alert-light border mb-2 py-2 small">
+                <i class="fas fa-info-circle text-primary"></i>
+                <strong>Clientes a recaudar hoy.</strong> Esta lista se genera desde las 6:00 AM con los pagos que vencen hoy y los reprogramados para hoy.
+            </div>
+            {% endif %}
             <div class="row align-items-center">
                 <div class="col-8">
                     <h5 class="mb-1">{{ cobrador.nombre_completo }}</h5>
@@ -245,19 +251,49 @@
         </div>
     </div>
     
-    <!-- Controles de fecha -->
+    <!-- Controles de fecha (selector visible + Anterior/Siguiente + Hoy) -->
     <div class="row mb-3">
         <div class="col-12">
-            <div class="btn-group btn-group-sm w-100" role="group">
-                <a href="?fecha={{ fecha|date:'Y-m-d'|add:'-1 day' }}" class="btn btn-outline-secondary">
-                    <i class="fas fa-chevron-left"></i> Anterior
-                </a>
-                <button type="button" class="btn btn-outline-primary" data-toggle="modal" data-target="#fechaModal">
-                    {{ fecha|date:"d/m/Y" }}
-                </button>
-                <a href="?fecha={{ fecha|date:'Y-m-d'|add:'1 day' }}" class="btn btn-outline-secondary">
-                    Siguiente <i class="fas fa-chevron-right"></i>
-                </a>
+            <div class="card border-primary">
+                <div class="card-body py-2">
+                    <label class="form-label small text-muted mb-1 d-block">Ver agenda del día</label>
+                    <div class="btn-group btn-group-sm w-100 flex-wrap" role="group">
+                        <a href="?fecha={{ fecha_anterior }}" class="btn btn-outline-secondary">
+                            <i class="fas fa-chevron-left"></i> Anterior
+                        </a>
+                        <button type="button" class="btn btn-primary flex-grow-1" data-toggle="modal" data-target="#fechaModal" id="btnFechaActual">
+                            <i class="fas fa-calendar-alt me-1"></i> {{ fecha|date:"d/m/Y" }}
+                        </button>
+                        <a href="?fecha={{ fecha_siguiente }}" class="btn btn-outline-secondary">
+                            Siguiente <i class="fas fa-chevron-right"></i>
+                        </a>
+                        <a href="?fecha={% now 'Y-m-d' %}" class="btn btn-outline-success">Hoy</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Filtros por estado y prioridad -->
+    <div class="row mb-2">
+        <div class="col-12">
+            <div class="d-flex flex-wrap align-items-center gap-2">
+                <span class="small text-muted">Filtrar:</span>
+                <select id="filtroEstado" class="form-select form-select-sm" style="max-width: 160px;">
+                    <option value="">Todos los estados</option>
+                    <option value="PENDIENTE">Pendiente</option>
+                    <option value="EN_PROCESO">En proceso</option>
+                    <option value="COBRADO">Cobrado</option>
+                    <option value="NO_ENCONTRADO">No encontrado</option>
+                    <option value="REPROGRAMADO">Reprogramado</option>
+                </select>
+                <select id="filtroPrioridad" class="form-select form-select-sm" style="max-width: 140px;">
+                    <option value="">Todas prioridades</option>
+                    <option value="ALTA">Alta</option>
+                    <option value="MEDIA">Media</option>
+                    <option value="BAJA">Baja</option>
+                </select>
+                <button type="button" class="btn btn-outline-secondary btn-sm" id="btnLimpiarFiltros">Ver todas</button>
             </div>
         </div>
     </div>
@@ -265,7 +301,7 @@
     <!-- Lista de tareas -->
     {% if tareas %}
         {% for tarea in tareas %}
-        <div class="task-card card {{ tarea.estado|lower }}" data-tarea-id="{{ tarea.id }}">
+        <div class="task-card card {{ tarea.estado|lower }}" data-tarea-id="{{ tarea.id }}" data-estado="{{ tarea.estado }}" data-prioridad="{{ tarea.prioridad|default:'' }}">
             <div class="card-body py-3">
                 <div class="row">
                     <div class="col-8">
@@ -318,6 +354,9 @@
                                 <span class="badge bg-danger">Alta</span>
                             {% elif tarea.prioridad == 'MEDIA' %}
                                 <span class="badge bg-warning text-dark">Media</span>
+                            {% endif %}
+                            {% if tarea.intentos_cobro > 0 %}
+                                <span class="badge bg-secondary" title="Intentos de cobro">{{ tarea.intentos_cobro }}</span>
                             {% endif %}
                         </div>
                         
@@ -520,10 +559,10 @@
                                name="fecha_reprogramacion" required>
                     </div>
                     
-                    <div class="form-group">
-                        <label>Motivo de Reprogramación</label>
+                    <div class="form-group mt-2">
+                        <label>Motivo de reprogramación (opcional)</label>
                         <textarea class="form-control" id="motivoReprogramacion" 
-                                  name="observaciones" rows="2" placeholder="Ej: Cliente no estaba en casa"></textarea>
+                                  name="motivo_reprogramacion" rows="2" placeholder="Ej: Cliente no estaba en casa, direcci&#243;n incorrecta"></textarea>
                     </div>
                 </form>
             </div>
@@ -557,6 +596,31 @@ function cambiarFecha() {
     const fecha = document.getElementById('fechaInput').value;
     window.location.href = '?fecha=' + fecha;
 }
+
+// Filtros por estado y prioridad (muestra/oculta tarjetas)
+function aplicarFiltrosAgenda() {
+    const estado = document.getElementById('filtroEstado').value;
+    const prioridad = document.getElementById('filtroPrioridad').value;
+    document.querySelectorAll('.task-card').forEach(function(card) {
+        const cardEstado = (card.dataset.estado || '').trim();
+        const cardPrioridad = (card.dataset.prioridad || '').trim();
+        const matchEstado = !estado || cardEstado === estado;
+        const matchPrioridad = !prioridad || cardPrioridad === prioridad;
+        card.style.display = (matchEstado && matchPrioridad) ? '' : 'none';
+    });
+}
+document.addEventListener('DOMContentLoaded', function() {
+    const filtroEstado = document.getElementById('filtroEstado');
+    const filtroPrioridad = document.getElementById('filtroPrioridad');
+    const btnLimpiar = document.getElementById('btnLimpiarFiltros');
+    if (filtroEstado) filtroEstado.addEventListener('change', aplicarFiltrosAgenda);
+    if (filtroPrioridad) filtroPrioridad.addEventListener('change', aplicarFiltrosAgenda);
+    if (btnLimpiar) btnLimpiar.addEventListener('click', function() {
+        if (filtroEstado) filtroEstado.value = '';
+        if (filtroPrioridad) filtroPrioridad.value = '';
+        document.querySelectorAll('.task-card').forEach(function(c) { c.style.display = ''; });
+    });
+});
 
 function marcarCobrado(tareaId) {
     console.log('🎯 marcarCobrado llamado con tareaId:', tareaId);
@@ -769,10 +833,14 @@ function enviarFormularioCobroCompleto() {
     .then(data => {
         console.log('📊 Datos de respuesta:', data);
         if (data.success) {
-            // 🎯 USAR EL MISMO FLUJO QUE nuevo_pago
-            alert('Pago registrado exitosamente! Redirigiendo a confirmación...');
-            // Redirigir a la página de confirmación (la misma que funciona en nuevo_pago)
-            window.location.href = data.redirect_url;
+            // Redirigir a confirmación; pasar parámetros para mostrar si se envió correo o si no hay email (WhatsApp)
+            let url = data.redirect_url;
+            if (data.email_enviado) {
+                url += (url.indexOf('?') >= 0 ? '&' : '?') + 'email_enviado=1';
+            } else if (data.tiene_email === false) {
+                url += (url.indexOf('?') >= 0 ? '&' : '?') + 'sin_email=1';
+            }
+            window.location.href = url;
         } else {
             alert('Error: ' + (data.error || 'Error desconocido'));
             restaurarBotonCobro();

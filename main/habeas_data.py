@@ -178,7 +178,7 @@ def generar_pdf_habeas_data(tipo, obj, codigo=None, fecha_firma=None):
     from reportlab.lib.pagesizes import letter
     from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
     from reportlab.lib.units import inch
-    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
+    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image
 
     if codigo is None:
         codigo = getattr(obj, 'codigo_habeas_data', None) or (
@@ -243,13 +243,28 @@ def generar_pdf_habeas_data(tipo, obj, codigo=None, fecha_firma=None):
     flow.append(Paragraph(texto_ley, normal))
     flow.append(Spacer(1, 0.3 * inch))
 
-    # Datos del titular
-    if tipo == 'cliente':
-        flow.append(Paragraph('<b>Datos del titular (Cliente)</b>', normal))
-    else:
-        flow.append(Paragraph('<b>Datos del titular (Codeudor)</b>', normal))
-    flow.append(Paragraph(f'Nombre: {obj.nombre_completo}', normal_small))
-    flow.append(Paragraph(f'Documento de identidad: {obj.cedula}', normal_small))
+    # Datos del titular + foto al lado (bien alineados)
+    foto_rostro = getattr(obj, 'foto_rostro', None)
+    img_celda = Paragraph('<br/><br/><i>Sin foto</i>', ParagraphStyle('Placeholder', parent=normal_small, alignment=1))
+    if foto_rostro and hasattr(foto_rostro, 'path'):
+        try:
+            img_celda = Image(foto_rostro.path, width=1.1 * inch, height=1.35 * inch)
+        except Exception:
+            pass
+    titulo_titular = '<b>Datos del titular (Cliente)</b>' if tipo == 'cliente' else '<b>Datos del titular (Codeudor)</b>'
+    datos_titular = [
+        [Paragraph(titulo_titular, normal), img_celda],
+        [Paragraph(f'Nombre: {obj.nombre_completo}', normal_small), ''],
+        [Paragraph(f'Documento de identidad: {obj.cedula}', normal_small), ''],
+    ]
+    tbl_titular = Table(datos_titular, colWidths=[4.2 * inch, 1.35 * inch], rowHeights=[None, None, None])
+    tbl_titular.setStyle(TableStyle([
+        ('SPAN', (1, 0), (1, 2)),  # foto ocupa las 3 filas a la derecha
+        ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+        ('LEFTPADDING', (0, 0), (0, -1), 0),
+        ('RIGHTPADDING', (1, 0), (1, -1), 6),
+    ]))
+    flow.append(tbl_titular)
     flow.append(Spacer(1, 0.35 * inch))
 
     # Línea separadora

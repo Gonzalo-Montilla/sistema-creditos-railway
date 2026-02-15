@@ -3,11 +3,11 @@ from django.urls import reverse
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
-from django.db.models import Sum, Count
+from django.db.models import Sum, Count, Q
 from django.utils import timezone
 from django.http import JsonResponse, HttpResponse
 from django.template.loader import get_template
-from .models import Cliente, Credito, Pago, Codeudor, CronogramaPago, Cobrador, Ruta, TareaCobro
+from .models import Cliente, Credito, Pago, Codeudor, CronogramaPago, Cobrador, Ruta, TareaCobro, TareaCobroLog, CierreCobroDiario
 from .forms import ClienteForm, CreditoForm, PagoForm, CodeudorForm
 from .habeas_data import solicitar_otp_habeas_data, validar_otp_y_firmar, regenerar_pdf_habeas_data
 from .pagare import solicitar_otp_pagare, validar_otp_pagare, regenerar_pdf_pagare
@@ -66,6 +66,7 @@ def logout_view(request):
 
 @login_required
 def dashboard(request):
+    hoy = timezone.now().date()
     # Obtener estadísticas
     total_clientes = Cliente.objects.filter(activo=True).count()
     total_creditos = Credito.objects.exclude(estado='PAGADO').count()
@@ -81,6 +82,25 @@ def dashboard(request):
         total=Sum('monto')
     )['total'] or 0
     
+    # Operaciones del día
+    desembolsos_hoy = Credito.objects.filter(
+        estado='DESEMBOLSADO',
+        fecha_desembolso__date=hoy,
+    )
+    desembolsos_hoy_count = desembolsos_hoy.count()
+    desembolsos_hoy_monto = desembolsos_hoy.aggregate(t=Sum('monto'))['t'] or 0
+    
+    pagos_hoy = Pago.objects.filter(fecha_pago__date=hoy)
+    pagos_hoy_count = pagos_hoy.count()
+    pagos_hoy_monto = pagos_hoy.aggregate(t=Sum('monto'))['t'] or 0
+    
+    cuotas_vencen_hoy = list(
+        CronogramaPago.objects.filter(
+            fecha_vencimiento=hoy,
+            estado='PENDIENTE',
+        ).select_related('credito', 'credito__cliente').order_by('credito__cliente__nombres', 'numero_cuota')[:50]
+    )
+    
     context = {
         'total_clientes': total_clientes,
         'total_creditos': total_creditos,
@@ -88,7 +108,12 @@ def dashboard(request):
         'creditos_vencidos': creditos_vencidos,
         'monto_total_prestado': monto_total_prestado,
         'monto_total_recaudado': monto_total_recaudado,
-        'actividad_reciente': [],  # Por ahora vacío
+        'actividad_reciente': [],
+        'desembolsos_hoy_count': desembolsos_hoy_count,
+        'desembolsos_hoy_monto': desembolsos_hoy_monto,
+        'pagos_hoy_count': pagos_hoy_count,
+        'pagos_hoy_monto': pagos_hoy_monto,
+        'cuotas_vencen_hoy': cuotas_vencen_hoy,
     }
     
     return render(request, 'dashboard.html', context)
@@ -154,6 +179,29 @@ def creditos(request):
             filtro = filtro | Q(id=int(q))
         creditos_list = creditos_list.filter(filtro)
     
+    # Filtro por cobrador
+    cobrador_id = request.GET.get('cobrador', '').strip()
+    if cobrador_id and cobrador_id.isdigit():
+        creditos_list = creditos_list.filter(cobrador_id=int(cobrador_id))
+    
+    # Filtro por rango de fechas (fecha_solicitud)
+    fecha_desde = request.GET.get('fecha_desde', '').strip()
+    fecha_hasta = request.GET.get('fecha_hasta', '').strip()
+    if fecha_desde:
+        try:
+            from datetime import datetime as dt
+            d = dt.strptime(fecha_desde, '%Y-%m-%d').date()
+            creditos_list = creditos_list.filter(fecha_solicitud__date__gte=d)
+        except ValueError:
+            pass
+    if fecha_hasta:
+        try:
+            from datetime import datetime as dt
+            d = dt.strptime(fecha_hasta, '%Y-%m-%d').date()
+            creditos_list = creditos_list.filter(fecha_solicitud__date__lte=d)
+        except ValueError:
+            pass
+    
     # Calcular estadísticas (sobre la lista filtrada)
     total_creditos = creditos_list.count()
     creditos_aprobados = creditos_list.filter(estado='APROBADO').count()
@@ -167,6 +215,15 @@ def creditos(request):
     page_number = request.GET.get('page')
     creditos = paginator.get_page(page_number)
     
+    resumen_credito_id = request.GET.get('resumen_credito', '').strip()
+    if resumen_credito_id and resumen_credito_id.isdigit():
+        c = Credito.objects.filter(id=int(resumen_credito_id)).first()
+        if not c or c.estado not in ('APROBADO', 'DESEMBOLSADO'):
+            resumen_credito_id = ''
+    
+    cobradores = Cobrador.objects.filter(activo=True).order_by('nombres', 'apellidos')
+    filtro_cobrador_id = int(cobrador_id) if cobrador_id.isdigit() else None
+    
     context = {
         'creditos': creditos,
         'total_creditos': total_creditos,
@@ -176,6 +233,11 @@ def creditos(request):
         'creditos_desembolsados': creditos_desembolsados,
         'creditos_pagados': creditos_pagados,
         'q': q,
+        'resumen_credito_id': resumen_credito_id,
+        'cobradores': cobradores,
+        'filtro_cobrador_id': filtro_cobrador_id,
+        'filtro_fecha_desde': fecha_desde,
+        'filtro_fecha_hasta': fecha_hasta,
     }
     return render(request, 'creditos.html', context)
 
@@ -380,31 +442,70 @@ def nuevo_pago(request):
                 pass
         
         if form.is_valid():
-            pago = form.save()
-            credito = pago.credito
-            
-            # Actualizar estado del crédito si está completamente pagado
-            if credito.esta_al_dia():
-                credito.estado = 'PAGADO'
-                credito.save()
-                messages.success(
-                    request, 
-                    f'Pago #{pago.id} registrado exitosamente. '
-                    f'¡El crédito #{credito.id} de {credito.cliente.nombre_completo} está completamente pagado!'
+            credito = form.cleaned_data['credito']
+            monto_pago = form.cleaned_data['monto']
+            monto_total_credito = credito.monto_total or credito.monto
+            total_ya_pagado = credito.total_pagado()
+            if total_ya_pagado + monto_pago > monto_total_credito:
+                form.add_error(
+                    'monto',
+                    f'El monto (${monto_pago:,.0f}) supera el saldo pendiente del crédito. '
+                    f'Saldo pendiente: ${monto_total_credito - total_ya_pagado:,.0f}.'
                 )
             else:
-                saldo = credito.saldo_pendiente()
+                pago = form.save()
+                credito = pago.credito
+                
+                # Actualizar estado del crédito si está completamente pagado
+                if credito.esta_al_dia():
+                    credito.estado = 'PAGADO'
+                    credito.save()
+                    messages.success(
+                        request, 
+                        f'Pago #{pago.id} registrado exitosamente. '
+                        f'¡El crédito #{credito.id} de {credito.cliente.nombre_completo} está completamente pagado!'
+                    )
+                else:
+                    saldo = credito.saldo_pendiente()
+                    messages.success(
+                        request, 
+                        f'Pago #{pago.id} registrado exitosamente. '
+                        f'Saldo pendiente: ${saldo}'
+                    )
                 messages.success(
-                    request, 
-                    f'Pago #{pago.id} registrado exitosamente. '
-                    f'Saldo pendiente: ${saldo}'
+                    request,
+                    f'¡Pago registrado exitosamente! Puede descargar o enviar el recibo al cliente.'
                 )
-            # Redirigir a página de confirmación con el pago recién creado
-            messages.success(
-                request,
-                f'¡Pago registrado exitosamente! Puede descargar o enviar el recibo al cliente.'
-            )
-            return redirect('confirmacion_pago', pago_id=pago.id)
+                # Enviar comprobante por correo si el cliente tiene email
+                email_cliente = (credito.cliente.email or '').strip()
+                if email_cliente:
+                    try:
+                        from django.core.mail import EmailMessage
+                        from django.conf import settings
+                        pdf_buffer = _generar_recibo_pdf_bytes(pago)
+                        nombre_pdf = f'recibo_pago_{pago.id:05d}.pdf'
+                        asunto = f'Comprobante de pago #{pago.id:05d} - Crédito #{credito.id}'
+                        cuerpo = (
+                            f'Hola {credito.cliente.nombre_completo},\n\n'
+                            f'Adjunto encontrará el comprobante de su pago por ${pago.monto:,.0f} '
+                            f'(cuota #{pago.numero_cuota}, crédito #{credito.id}).\n\n'
+                            f'Conserve este recibo para sus registros.\n\n'
+                            f'Atentamente,\nSistema de Créditos'
+                        )
+                        email = EmailMessage(
+                            asunto,
+                            cuerpo,
+                            getattr(settings, 'DEFAULT_FROM_EMAIL', 'noreply@creditos.local'),
+                            [email_cliente],
+                        )
+                        email.attach(nombre_pdf, pdf_buffer.getvalue(), 'application/pdf')
+                        email.send(fail_silently=True)
+                        messages.success(request, f'Se envió el comprobante por correo a {email_cliente}.')
+                    except Exception:
+                        messages.warning(request, 'No se pudo enviar el comprobante por correo; puede descargar el PDF en la confirmación.')
+                else:
+                    messages.info(request, 'El cliente no tiene correo registrado; descargue el recibo y entréguelo en mano.')
+                return redirect('confirmacion_pago', pago_id=pago.id)
         else:
             # Si hay errores, mostrarlos como mensajes
             for error in form.non_field_errors():
@@ -477,11 +578,17 @@ def aprobar_credito(request, credito_id):
     credito.fecha_aprobacion = timezone.now()
     credito.save()
     
+    # Generar cronograma al aprobar (para resumen y envío al desembolsar)
+    try:
+        credito.generar_cronograma()
+    except Exception:
+        pass  # no bloquear aprobación
+    
     messages.success(
         request,
         f'¡Crédito #{credito.id} de {credito.cliente.nombre_completo} por ${credito.monto} APROBADO exitosamente!'
     )
-    return redirect('creditos')
+    return redirect(reverse('creditos') + f'?resumen_credito={credito.id}')
 
 @login_required
 def rechazar_credito(request, credito_id):
@@ -535,28 +642,61 @@ def desembolsar_credito(request, credito_id):
     credito.fecha_desembolso = timezone.now()
     credito.save()
     
-    # Generar cronograma de pagos
-    try:
-        credito.generar_cronograma()
-        cronograma_creado = True
-        total_cuotas = credito.cronograma.count()
-    except Exception as e:
-        cronograma_creado = False
-        messages.warning(request, f'Error al generar cronograma: {str(e)}')
+    # Asegurar cronograma (ya se genera al aprobar; por si acaso)
+    if not credito.cronograma.exists():
+        try:
+            credito.generar_cronograma()
+        except Exception:
+            pass
+    total_cuotas = credito.cronograma.count()
+    primera_vencimiento = credito.cronograma.first().fecha_vencimiento.strftime('%d/%m/%Y') if credito.cronograma.exists() else '—'
     
-    # Mensaje de éxito
+    # Generar PDF resumen + cronograma y enviar por correo al cliente
+    email_enviado = False
+    email_cliente = (credito.cliente.email or '').strip()
+    if email_cliente:
+        try:
+            from django.core.mail import EmailMessage
+            from django.conf import settings
+            pdf_buffer = _generar_pdf_resumen_cronograma_bytes(credito)
+            nombre_pdf = f'resumen_cronograma_credito_{credito.id:04d}.pdf'
+            asunto = f'Su crédito #{credito.id} ha sido desembolsado - Resumen y cronograma de pagos'
+            cuerpo = (
+                f'Hola {credito.cliente.nombre_completo},\n\n'
+                f'Su crédito por ${credito.monto:,.0f} ha sido desembolsado.\n\n'
+                f'Adjunto encontrará el resumen del crédito y el cronograma de pagos '
+                f'({credito.cantidad_cuotas} cuotas de ${credito.valor_cuota:,.0f}). '
+                f'Primera cuota vence: {primera_vencimiento}.\n\n'
+                f'Conserve este documento para sus registros.\n\n'
+                f'Atentamente,\nSistema de Créditos'
+            )
+            email = EmailMessage(
+                asunto,
+                cuerpo,
+                getattr(settings, 'DEFAULT_FROM_EMAIL', 'noreply@creditos.local'),
+                [email_cliente],
+            )
+            email.attach(nombre_pdf, pdf_buffer.getvalue(), 'application/pdf')
+            email.send(fail_silently=True)
+            email_enviado = True
+        except Exception:
+            pass
+    
     messages.success(
-        request, 
+        request,
         f'¡Desembolso de ${credito.monto:,.2f} realizado exitosamente a {credito.cliente.nombre_completo}!'
     )
-    
-    if cronograma_creado:
-        messages.info(
-            request,
-            f'Cronograma generado: {total_cuotas} cuotas {credito.get_tipo_plazo_display().lower()}s '
-            f'de ${credito.valor_cuota:,.2f} cada una. '
-            f'Primera cuota vence: {credito.cronograma.first().fecha_vencimiento.strftime("%d/%m/%Y")}'
-        )
+    messages.info(
+        request,
+        f'{total_cuotas} cuotas {credito.get_tipo_plazo_display().lower()}s de ${credito.valor_cuota:,.2f}. '
+        f'Primera cuota vence: {primera_vencimiento}.'
+    )
+    if email_enviado:
+        messages.success(request, f'Se envió el resumen y cronograma por correo a {email_cliente}.')
+    elif email_cliente:
+        messages.warning(request, 'No se pudo enviar el correo con el cronograma; puede descargar el PDF desde el listado.')
+    else:
+        messages.info(request, 'El cliente no tiene correo registrado; descargue el PDF y entréguelo en mano.')
     
     return redirect('creditos')
 
@@ -1081,6 +1221,11 @@ def confirmacion_pago(request, pago_id):
                 ultimo_dia = monthrange(año, mes)[1]
                 proxima_fecha_pago = fecha_pago.replace(year=año, month=mes, day=min(fecha_pago.day, ultimo_dia))
     
+    # Parámetros desde agenda (Registrar cobro): mostrar si se envió correo o si no hay email
+    email_enviado_param = request.GET.get('email_enviado') == '1'
+    sin_email_param = request.GET.get('sin_email') == '1'
+    url_recibo_pdf = request.build_absolute_uri(reverse('generar_recibo_pdf', args=[pago.id]))
+    
     context = {
         'pago': pago,
         'credito': credito,
@@ -1089,7 +1234,10 @@ def confirmacion_pago(request, pago_id):
         'total_cuotas': total_cuotas,
         'progreso_pago': progreso_pago,
         'proxima_fecha_pago': proxima_fecha_pago,
-        'credito_completado': credito.estado == 'PAGADO'
+        'credito_completado': credito.estado == 'PAGADO',
+        'email_enviado_param': email_enviado_param,
+        'sin_email_param': sin_email_param,
+        'url_recibo_pdf': url_recibo_pdf,
     }
     
     return render(request, 'confirmacion_pago.html', context)
@@ -1234,13 +1382,12 @@ def obtener_pagos_credito(request, credito_id):
     })
 
 
-# Vista para generar PDF del cronograma
-@login_required
-def generar_pdf_cronograma(request, credito_id):
-    """Genera PDF del cronograma de pagos optimizado para una sola página"""
-    credito = get_object_or_404(Credito, id=credito_id)
-    
-    # Crear buffer para el PDF con márgenes más pequeños
+def _generar_pdf_resumen_cronograma_bytes(credito):
+    """
+    Genera el PDF resumen del crédito + cronograma de pagos.
+    Usa el cronograma de la BD si existe (generado al aprobar); si no, calcula fechas.
+    Retorna BytesIO con el PDF listo para adjuntar o devolver como respuesta.
+    """
     buffer = BytesIO()
     doc = SimpleDocTemplate(
         buffer, 
@@ -1315,41 +1462,48 @@ def generar_pdf_cronograma(request, credito_id):
     # Cronograma de pagos
     story.append(Paragraph("CRONOGRAMA DE PAGOS", subtitle_style))
     
-    # Generar fechas del cronograma
     cronograma_data = [['Cuota N°', 'Fecha de Pago', 'Valor Cuota', 'Saldo Pendiente']]
+    cuotas_bd = credito.cronograma.all().order_by('numero_cuota')
     
-    fecha_base = timezone.now().date()
-    saldo_pendiente = float(credito.monto_total)
-    
-    for i in range(credito.cantidad_cuotas):
-        if credito.tipo_plazo == 'DIARIO':
-            fecha_pago = fecha_base + timedelta(days=i+1)
-        elif credito.tipo_plazo == 'SEMANAL':
-            fecha_pago = fecha_base + timedelta(weeks=i+1)
-        elif credito.tipo_plazo == 'QUINCENAL':
-            fecha_pago = fecha_base + timedelta(days=(i+1)*15)
-        else:  # MENSUAL
-            mes = fecha_base.month + (i + 1)
-            año = fecha_base.year
-            while mes > 12:
-                mes -= 12
-                año += 1
-            
-            try:
-                fecha_pago = fecha_base.replace(year=año, month=mes)
-            except ValueError:
-                from calendar import monthrange
-                ultimo_dia = monthrange(año, mes)[1]
-                fecha_pago = fecha_base.replace(year=año, month=mes, day=min(fecha_base.day, ultimo_dia))
-        
-        saldo_pendiente -= float(credito.valor_cuota)
-        
-        cronograma_data.append([
-            f"{i+1}",
-            fecha_pago.strftime('%d/%m/%Y'),
-            f"${credito.valor_cuota:,.0f}",
-            f"${max(0, saldo_pendiente):,.0f}"
-        ])
+    if cuotas_bd.exists():
+        saldo = float(credito.monto_total or credito.monto)
+        for c in cuotas_bd:
+            saldo -= float(c.monto_cuota)
+            cronograma_data.append([
+                str(c.numero_cuota),
+                c.fecha_vencimiento.strftime('%d/%m/%Y'),
+                f"${c.monto_cuota:,.0f}",
+                f"${max(0, saldo):,.0f}"
+            ])
+    else:
+        fecha_base = timezone.now().date()
+        saldo_pendiente = float(credito.monto_total or credito.monto)
+        for i in range(credito.cantidad_cuotas):
+            if credito.tipo_plazo == 'DIARIO':
+                fecha_pago = fecha_base + timedelta(days=i+1)
+            elif credito.tipo_plazo == 'SEMANAL':
+                fecha_pago = fecha_base + timedelta(weeks=i+1)
+            elif credito.tipo_plazo == 'QUINCENAL':
+                fecha_pago = fecha_base + timedelta(days=(i+1)*15)
+            else:
+                mes = fecha_base.month + (i + 1)
+                año = fecha_base.year
+                while mes > 12:
+                    mes -= 12
+                    año += 1
+                try:
+                    fecha_pago = fecha_base.replace(year=año, month=mes)
+                except ValueError:
+                    from calendar import monthrange
+                    ultimo_dia = monthrange(año, mes)[1]
+                    fecha_pago = fecha_base.replace(year=año, month=mes, day=min(fecha_base.day, ultimo_dia))
+            saldo_pendiente -= float(credito.valor_cuota)
+            cronograma_data.append([
+                f"{i+1}",
+                fecha_pago.strftime('%d/%m/%Y'),
+                f"${credito.valor_cuota:,.0f}",
+                f"${max(0, saldo_pendiente):,.0f}"
+            ])
     
     # Tabla del cronograma optimizada
     cronograma_table = Table(cronograma_data, colWidths=[0.8*inch, 1.2*inch, 1.2*inch, 1.3*inch])
@@ -1378,15 +1532,64 @@ def generar_pdf_cronograma(request, credito_id):
     
     story.append(Paragraph(contacto_texto, normal_style))
     
-    # Generar PDF
     doc.build(story)
-    
-    # Retornar respuesta
     buffer.seek(0)
-    response = HttpResponse(buffer.read(), content_type='application/pdf')
-    response['Content-Disposition'] = f'attachment; filename="cronograma_credito_{credito.id:04d}.pdf"'
-    
+    return buffer
+
+
+@login_required
+def generar_pdf_cronograma(request, credito_id):
+    """Genera y descarga el PDF resumen + cronograma del crédito."""
+    credito = get_object_or_404(Credito, id=credito_id)
+    try:
+        buffer = _generar_pdf_resumen_cronograma_bytes(credito)
+    except Exception:
+        return HttpResponse('Error al generar el PDF.', status=500)
+    response = HttpResponse(buffer.getvalue(), content_type='application/pdf')
+    response['Content-Disposition'] = f'attachment; filename="resumen_cronograma_credito_{credito.id:04d}.pdf"'
     return response
+
+
+@login_required
+def resumen_credito_json(request, credito_id):
+    """Devuelve JSON con resumen del crédito y cronograma para el modal tras aprobar."""
+    credito = get_object_or_404(Credito, id=credito_id)
+    if credito.estado != 'APROBADO' and credito.estado != 'DESEMBOLSADO':
+        return JsonResponse({'success': False, 'message': 'Crédito no disponible'}, status=400)
+    if not credito.cronograma.exists():
+        try:
+            credito.generar_cronograma()
+        except Exception:
+            pass
+    cliente = credito.cliente
+    cuotas = list(
+        credito.cronograma.all().order_by('numero_cuota').values(
+            'numero_cuota', 'fecha_vencimiento', 'monto_cuota'
+        )
+    )
+    for c in cuotas:
+        c['fecha_vencimiento'] = c['fecha_vencimiento'].strftime('%d/%m/%Y')
+        c['monto_cuota'] = float(c['monto_cuota'])
+    return JsonResponse({
+        'success': True,
+        'cliente': {
+            'nombre': cliente.nombre_completo,
+            'cedula': cliente.cedula or '',
+            'celular': cliente.celular or '',
+            'email': cliente.email or '',
+        },
+        'credito': {
+            'id': credito.id,
+            'monto': float(credito.monto),
+            'monto_total': float(credito.monto_total or credito.monto),
+            'cantidad_cuotas': credito.cantidad_cuotas,
+            'valor_cuota': float(credito.valor_cuota),
+            'tipo_plazo': credito.get_tipo_plazo_display(),
+            'fecha_solicitud': credito.fecha_solicitud.strftime('%d/%m/%Y') if credito.fecha_solicitud else '',
+        },
+        'cronograma': cuotas,
+    })
+
 
 # Vistas adicionales para gestión de pagos
 @login_required
@@ -1421,12 +1624,8 @@ def detalle_pago(request, pago_id):
             'error': str(e)
         })
 
-@login_required
-def generar_recibo_pdf(request, pago_id):
-    """Genera PDF del recibo de pago"""
-    pago = get_object_or_404(Pago, id=pago_id)
-    
-    # Crear buffer para el PDF
+def _generar_recibo_pdf_bytes(pago):
+    """Genera el PDF del recibo de pago en memoria. Retorna BytesIO."""
     buffer = BytesIO()
     doc = SimpleDocTemplate(
         buffer, 
@@ -1607,15 +1806,23 @@ def generar_recibo_pdf(request, pago_id):
     
     story.append(Paragraph(contacto_texto, normal_style))
     
-    # Generar PDF
     doc.build(story)
-    
-    # Retornar respuesta
     buffer.seek(0)
-    response = HttpResponse(buffer.read(), content_type='application/pdf')
+    return buffer
+
+
+@login_required
+def generar_recibo_pdf(request, pago_id):
+    """Genera y descarga PDF del recibo de pago."""
+    pago = get_object_or_404(Pago, id=pago_id)
+    try:
+        buffer = _generar_recibo_pdf_bytes(pago)
+    except Exception:
+        return HttpResponse('Error al generar el recibo.', status=500)
+    response = HttpResponse(buffer.getvalue(), content_type='application/pdf')
     response['Content-Disposition'] = f'attachment; filename="recibo_pago_{pago.id:05d}.pdf"'
-    
     return response
+
 
 # Vista AJAX para buscar créditos de un cliente en formulario de pago
 @login_required
@@ -1881,6 +2088,8 @@ def editar_ruta(request, ruta_id):
 @login_required
 def gestion_diaria_cobros(request):
     """Dashboard de Control de Cobranza Diaria - Vista Administrador"""
+    import logging
+    logger = logging.getLogger(__name__)
     from datetime import date, timedelta
     from django.db.models import Sum, Count, Q
     from decimal import Decimal
@@ -1899,7 +2108,14 @@ def gestion_diaria_cobros(request):
     ).select_related('cliente', 'cobrador').order_by('-dias_mora', 'fecha_vencimiento')
     
     # Total de la cartera activa (todos los créditos pendientes)
-    total_cartera_activa = sum([credito.saldo_pendiente() for credito in creditos_activos])
+    try:
+        total_cartera_activa = sum(
+            (credito.saldo_pendiente() if hasattr(credito, 'saldo_pendiente') else 0)
+            for credito in creditos_activos
+        )
+    except Exception as e:
+        logger.warning('Error sumando cartera activa: %s', e)
+        total_cartera_activa = 0
     
     # Créditos que requieren gestión urgente (en mora o que vencen hoy)
     creditos_urgentes = creditos_activos.filter(
@@ -1907,7 +2123,14 @@ def gestion_diaria_cobros(request):
     )
     
     # Total a gestionar (créditos urgentes)
-    total_a_gestionar = sum([credito.saldo_pendiente() for credito in creditos_urgentes])
+    try:
+        total_a_gestionar = sum(
+            (credito.saldo_pendiente() if hasattr(credito, 'saldo_pendiente') else 0)
+            for credito in creditos_urgentes
+        )
+    except Exception as e:
+        logger.warning('Error sumando total a gestionar: %s', e)
+        total_a_gestionar = 0
     
     # Convertir a Decimal
     total_cartera_activa = Decimal(str(total_cartera_activa)) if total_cartera_activa else Decimal('0')
@@ -1926,43 +2149,60 @@ def gestion_diaria_cobros(request):
     
     # Meta diaria (ejemplo: 10% de la cartera activa)
     meta_diaria = total_cartera_activa * Decimal('0.10')
-    porcentaje_meta = float(monto_recaudado_hoy / meta_diaria * 100) if meta_diaria > 0 else 0
+    try:
+        porcentaje_meta = float(monto_recaudado_hoy / meta_diaria * 100) if meta_diaria and float(meta_diaria) > 0 else 0
+    except (TypeError, ZeroDivisionError, ValueError):
+        porcentaje_meta = 0
     
     # ===== PREPARAR DATOS DE LA TABLA PRINCIPAL (SOLO CRÉDITOS URGENTES) =====
     tareas_cobro = []
     for credito in creditos_urgentes:
+        try:
+            if getattr(credito, 'cliente', None) is None:
+                continue
+        except Exception:
+            continue
         # Verificar si ya fue pagado hoy
         pago_hoy = pagos_recibidos_hoy.filter(credito=credito).first()
         
         estado_pago = 'PAGADO' if pago_hoy else 'PENDIENTE'
         monto_pagado = pago_hoy.monto if pago_hoy else 0
-        hora_pago = pago_hoy.fecha_pago.time() if pago_hoy else None
+        try:
+            hora_pago = pago_hoy.fecha_pago.time() if pago_hoy and getattr(pago_hoy, 'fecha_pago', None) else None
+        except (AttributeError, ValueError):
+            hora_pago = None
         
-        # Determinar prioridad
-        if credito.dias_mora > 90:
+        # Determinar prioridad (dias_mora puede ser None en datos legacy)
+        dias_mora = getattr(credito, 'dias_mora', 0) or 0
+        if dias_mora > 90:
             prioridad = 'CRITICA'
             color_prioridad = 'danger'
-        elif credito.dias_mora > 30:
+        elif dias_mora > 30:
             prioridad = 'ALTA'
             color_prioridad = 'warning'
-        elif credito.dias_mora > 0:
+        elif dias_mora > 0:
             prioridad = 'MEDIA'
             color_prioridad = 'info'
         else:
             prioridad = 'NORMAL'
             color_prioridad = 'success'
         
+        try:
+            monto_a_cobrar = credito.saldo_pendiente()
+        except Exception:
+            monto_a_cobrar = Decimal('0')
+        
         tareas_cobro.append({
             'credito': credito,
             'cliente': credito.cliente,
-            'cobrador': credito.cobrador,
-            'monto_a_cobrar': credito.saldo_pendiente(),
+            'cobrador': getattr(credito, 'cobrador', None),
+            'monto_a_cobrar': monto_a_cobrar,
             'estado_pago': estado_pago,
             'monto_pagado': monto_pagado,
             'hora_pago': hora_pago,
             'prioridad': prioridad,
             'color_prioridad': color_prioridad,
-            'dias_mora': credito.dias_mora,
+            'dias_mora': dias_mora,
         })
     
     # ===== ESTADÍSTICAS POR COBRADOR =====
@@ -2007,6 +2247,35 @@ def gestion_diaria_cobros(request):
     monto_ayer = Decimal(str(monto_ayer)) if monto_ayer else Decimal('0')
     variacion_diaria = float((monto_recaudado_hoy - monto_ayer) / monto_ayer * 100) if monto_ayer > 0 else 0
     
+    # ===== RECAUDADO HOY POR COBRADOR (real: pesos, cuotas, créditos con pago) =====
+    recaudado_hoy_por_cobrador = []
+    try:
+        for cobrador in Cobrador.objects.filter(activo=True):
+            pagos_hoy_cobrador = Pago.objects.filter(
+                credito__cobrador=cobrador,
+                fecha_pago__date=hoy
+            )
+            monto_hoy = pagos_hoy_cobrador.aggregate(total=Sum('monto'))['total'] or Decimal('0')
+            monto_hoy = Decimal(str(monto_hoy)) if monto_hoy else Decimal('0')
+            cantidad_pagos_hoy = pagos_hoy_cobrador.count()
+            creditos_con_pago_hoy = pagos_hoy_cobrador.values('credito').distinct().count()
+            meta_cobrador = getattr(cobrador, 'meta_diaria', None) or Decimal('0')
+            try:
+                pct_meta = round(float(monto_hoy / meta_cobrador * 100), 0) if meta_cobrador and float(meta_cobrador) > 0 else None
+            except (TypeError, ZeroDivisionError, ValueError):
+                pct_meta = None
+            recaudado_hoy_por_cobrador.append({
+                'cobrador': cobrador,
+                'monto_recaudado_hoy': monto_hoy,
+                'cuotas_cobradas_hoy': cantidad_pagos_hoy,
+                'creditos_con_pago_hoy': creditos_con_pago_hoy,
+                'porcentaje_meta': pct_meta,
+            })
+        recaudado_hoy_por_cobrador.sort(key=lambda x: x['monto_recaudado_hoy'], reverse=True)
+    except Exception as e:
+        logger.exception('Error en recaudado_hoy_por_cobrador: %s', e)
+        recaudado_hoy_por_cobrador = []
+    
     context = {
         'fecha_hoy': hoy,
         # Métricas principales
@@ -2027,6 +2296,8 @@ def gestion_diaria_cobros(request):
         # Comparaciones
         'monto_ayer': monto_ayer,
         'variacion_diaria': variacion_diaria,
+        # Recaudado hoy por cobrador (pesos, cuotas, créditos con pago)
+        'recaudado_hoy_por_cobrador': recaudado_hoy_por_cobrador,
     }
     
     return render(request, 'cobradores/gestion_diaria.html', context)
@@ -2123,6 +2394,50 @@ def gestion_cartera(request):
     
     return render(request, 'cartera/gestion_cartera.html', context)
 
+
+@login_required
+def resumen_dinero(request):
+    """Resumen del dinero: desembolsado, cobrado, saldo en cartera. Ecuación de conciliación."""
+    from decimal import Decimal
+    from django.db.models import Sum
+
+    # Créditos que alguna vez fueron desembolsados (tienen fecha_desembolso)
+    creditos_desembolsados = Credito.objects.filter(
+        estado__in=['DESEMBOLSADO', 'VENCIDO', 'PAGADO'],
+        fecha_desembolso__isnull=False
+    )
+    total_desembolsado = creditos_desembolsados.aggregate(t=Sum('monto'))['t'] or Decimal('0')
+    total_desembolsado = Decimal(str(total_desembolsado))
+
+    # Total cobrado histórico (todos los pagos)
+    total_cobrado_raw = Pago.objects.aggregate(t=Sum('monto'))['t'] or Decimal('0')
+    total_cobrado = Decimal(str(total_cobrado_raw))
+
+    # Saldo en cartera = suma de saldo_pendiente() de créditos con saldo > 0
+    creditos_con_saldo = Credito.objects.filter(
+        estado__in=['DESEMBOLSADO', 'VENCIDO']
+    )
+    saldo_cartera = sum(c.saldo_pendiente() for c in creditos_con_saldo)
+    if not isinstance(saldo_cartera, Decimal):
+        saldo_cartera = Decimal(str(saldo_cartera))
+
+    # Ecuación: desembolsado ≈ cobrado + saldo (puede haber pequeña diferencia por redondeos)
+    diferencia = total_desembolsado - (total_cobrado + saldo_cartera)
+    # Tolerancia 1 peso por posibles redondeos
+    cuadra = abs(diferencia) <= Decimal('1')
+    if not isinstance(diferencia, Decimal):
+        diferencia = Decimal(str(diferencia))
+
+    context = {
+        'total_desembolsado': total_desembolsado,
+        'total_cobrado': total_cobrado,
+        'saldo_cartera': saldo_cartera,
+        'diferencia': diferencia,
+        'cuadra': cuadra,
+    }
+    return render(request, 'cartera/resumen_dinero.html', context)
+
+
 @login_required
 def cartera_vencida(request):
     """Vista de cartera vencida con filtros"""
@@ -2133,6 +2448,7 @@ def cartera_vencida(request):
     estado_mora = request.GET.get('estado_mora', '')
     dias_mora_min = request.GET.get('dias_mora_min', '')
     cobrador_id = request.GET.get('cobrador_id', '')
+    cliente_id = request.GET.get('cliente_id', '')
     
     # Base query
     creditos_vencidos_list = Credito.objects.filter(
@@ -2158,6 +2474,14 @@ def cartera_vencida(request):
         except ValueError:
             pass
     
+    cliente_filtro = None
+    if cliente_id:
+        try:
+            creditos_vencidos_list = creditos_vencidos_list.filter(cliente_id=int(cliente_id))
+            cliente_filtro = Cliente.objects.filter(id=int(cliente_id)).first()
+        except ValueError:
+            pass
+    
     # Ordenar por días de mora descendente
     creditos_vencidos_list = creditos_vencidos_list.order_by('-dias_mora')
     
@@ -2175,9 +2499,73 @@ def cartera_vencida(request):
         'estado_mora': estado_mora,
         'dias_mora_min': dias_mora_min,
         'cobrador_id': cobrador_id,
+        'cliente_id': cliente_id,
+        'cliente_filtro': cliente_filtro,
     }
     
     return render(request, 'cartera/cartera_vencida.html', context)
+
+
+@login_required
+def clientes_en_mora(request):
+    """Listado de clientes que tienen al menos un crédito en mora (agrupado por cliente)."""
+    from collections import defaultdict
+    from decimal import Decimal
+
+    # Filtros (mismos que cartera_vencida)
+    estado_mora = request.GET.get('estado_mora', '')
+    dias_mora_min = request.GET.get('dias_mora_min', '')
+    cobrador_id = request.GET.get('cobrador_id', '')
+
+    creditos_mora = Credito.objects.filter(
+        estado__in=['DESEMBOLSADO', 'VENCIDO'],
+        dias_mora__gt=0
+    ).select_related('cliente', 'cobrador')
+
+    if estado_mora:
+        creditos_mora = creditos_mora.filter(estado_mora=estado_mora)
+    if dias_mora_min:
+        try:
+            creditos_mora = creditos_mora.filter(dias_mora__gte=int(dias_mora_min))
+        except ValueError:
+            pass
+    if cobrador_id:
+        try:
+            creditos_mora = creditos_mora.filter(cobrador_id=int(cobrador_id))
+        except ValueError:
+            pass
+
+    creditos_mora = creditos_mora.order_by('cliente__apellidos', 'cliente__nombres', '-dias_mora')
+
+    # Agrupar por cliente
+    por_cliente = defaultdict(lambda: {'cliente': None, 'creditos': [], 'saldo_total': Decimal('0'), 'max_dias_mora': 0})
+    for c in creditos_mora:
+        por_cliente[c.cliente_id]['cliente'] = c.cliente
+        por_cliente[c.cliente_id]['creditos'].append(c)
+        por_cliente[c.cliente_id]['saldo_total'] += c.saldo_pendiente()
+        por_cliente[c.cliente_id]['max_dias_mora'] = max(
+            por_cliente[c.cliente_id]['max_dias_mora'],
+            c.dias_mora or 0
+        )
+
+    # Lista ordenada por días de mora (mayor primero)
+    lista_clientes = sorted(
+        por_cliente.values(),
+        key=lambda x: (-x['max_dias_mora'], x['cliente'].apellidos or '', x['cliente'].nombres or '')
+    )
+
+    cobradores = Cobrador.objects.filter(activo=True)
+
+    context = {
+        'lista_clientes': lista_clientes,
+        'cobradores': cobradores,
+        'estado_mora': estado_mora,
+        'dias_mora_min': dias_mora_min,
+        'cobrador_id': cobrador_id,
+        'total_clientes': len(lista_clientes),
+    }
+    return render(request, 'cartera/clientes_en_mora.html', context)
+
 
 # ========================================
 # VISTAS PARA GESTIÓN DE USUARIOS
@@ -2743,9 +3131,17 @@ def agenda_cobrador(request, cobrador_id=None):
     tareas_por_estado = tareas.values('estado').annotate(cantidad=Count('id'))
     estadisticas_estado = {item['estado']: item['cantidad'] for item in tareas_por_estado}
     
+    # Fechas para navegación (anterior/siguiente día)
+    fecha_anterior = (fecha - timedelta(days=1)).strftime('%Y-%m-%d')
+    fecha_siguiente = (fecha + timedelta(days=1)).strftime('%Y-%m-%d')
+    es_hoy = (fecha == date.today())
+    
     context = {
         'cobrador': cobrador,
         'fecha': fecha,
+        'fecha_anterior': fecha_anterior,
+        'fecha_siguiente': fecha_siguiente,
+        'es_hoy': es_hoy,
         'tareas': tareas,
         'total_tareas': total_tareas,
         'tareas_completadas': tareas_completadas,
@@ -2842,6 +3238,17 @@ def procesar_cobro_completo(request, tarea_id):
         
         from decimal import Decimal
         
+        # Validar que el pago no supere el saldo pendiente del crédito
+        credito = tarea.credito
+        monto_total_credito = credito.monto_total or credito.monto
+        total_ya_pagado = credito.total_pagado()
+        saldo_pend = monto_total_credito - total_ya_pagado
+        if monto_decimal > saldo_pend:
+            return JsonResponse({
+                'success': False,
+                'error': f'El monto (${monto_decimal:,.0f}) supera el saldo pendiente del crédito (${saldo_pend:,.0f}).'
+            })
+        
         print(f"[DEBUG] Usando monto_decimal para crear pago: {monto_decimal}")
         
         # 🎯 USAR EXACTAMENTE LA MISMA LÓGICA QUE nuevo_pago - CREAR PAGO
@@ -2871,7 +3278,17 @@ def procesar_cobro_completo(request, tarea_id):
             tarea.latitud = float(latitud)
         if longitud:
             tarea.longitud = float(longitud)
+        tarea.usuario_ultima_accion = request.user
         tarea.save()
+        
+        # Auditoría: log de la acción
+        TareaCobroLog.objects.create(
+            tarea=tarea,
+            usuario=request.user,
+            accion='COBRADO',
+            observaciones=observaciones,
+            monto_registrado=monto_decimal,
+        )
         
         # Actualizar cuota
         tarea.cuota.monto_pagado += monto_decimal  # Usar directamente el Decimal ya validado
@@ -2882,12 +3299,44 @@ def procesar_cobro_completo(request, tarea_id):
             tarea.cuota.estado = 'PARCIAL'
         tarea.cuota.save()
         
+        # Enviar comprobante por correo si el cliente tiene email (misma lógica que nuevo_pago)
+        cliente = credito.cliente
+        email_cliente = (cliente.email or '').strip()
+        email_enviado = False
+        if email_cliente:
+            try:
+                from django.core.mail import EmailMessage
+                from django.conf import settings
+                pdf_buffer = _generar_recibo_pdf_bytes(pago)
+                nombre_pdf = f'recibo_pago_{pago.id:05d}.pdf'
+                asunto = f'Comprobante de pago #{pago.id:05d} - Crédito #{credito.id}'
+                cuerpo = (
+                    f'Hola {cliente.nombre_completo},\n\n'
+                    f'Adjunto encontrará el comprobante de su pago por ${pago.monto:,.0f} '
+                    f'(cuota #{pago.numero_cuota}, crédito #{credito.id}).\n\n'
+                    f'Conserve este recibo para sus registros.\n\n'
+                    f'Atentamente,\nSistema de Créditos'
+                )
+                email = EmailMessage(
+                    asunto,
+                    cuerpo,
+                    getattr(settings, 'DEFAULT_FROM_EMAIL', 'noreply@creditos.local'),
+                    [email_cliente],
+                )
+                email.attach(nombre_pdf, pdf_buffer.getvalue(), 'application/pdf')
+                email.send(fail_silently=True)
+                email_enviado = True
+            except Exception:
+                pass
+        
         # 🎯 REDIRIGIR AL MISMO FLUJO QUE nuevo_pago
         return JsonResponse({
             'success': True,
             'mensaje': 'Pago registrado exitosamente',
             'pago_id': pago.id,
-            'redirect_url': f'/confirmacion-pago/{pago.id}/'
+            'redirect_url': f'/confirmacion-pago/{pago.id}/',
+            'email_enviado': email_enviado,
+            'tiene_email': bool(email_cliente),
         })
         
     except Exception as e:
@@ -2912,6 +3361,9 @@ def actualizar_tarea(request, tarea_id):
         
         nuevo_estado = request.POST.get('estado')
         observaciones = request.POST.get('observaciones', '')
+        motivo_reprogramacion = request.POST.get('motivo_reprogramacion', '').strip()
+        if nuevo_estado == 'REPROGRAMADO' and motivo_reprogramacion:
+            observaciones = motivo_reprogramacion  # guardar motivo también en observaciones
         monto_cobrado = request.POST.get('monto_cobrado')
         latitud = request.POST.get('latitud')
         longitud = request.POST.get('longitud')
@@ -2967,6 +3419,17 @@ def actualizar_tarea(request, tarea_id):
                         'error': f'El monto ${monto_decimal} parece muy alto. Verifique el valor.'
                     })
                 
+                # Validar que no supere el saldo pendiente del crédito
+                credito = tarea.credito
+                monto_total_credito = credito.monto_total or credito.monto
+                total_ya_pagado = credito.total_pagado()
+                saldo_pend = monto_total_credito - total_ya_pagado
+                if monto_decimal > saldo_pend:
+                    return JsonResponse({
+                        'success': False,
+                        'error': f'El monto (${monto_decimal:,.0f}) supera el saldo pendiente del crédito (${saldo_pend:,.0f}).'
+                    })
+                
                 lat = float(latitud) if latitud else None
                 lng = float(longitud) if longitud else None
                 
@@ -2985,7 +3448,24 @@ def actualizar_tarea(request, tarea_id):
                 except ValueError:
                     pass
             
-            tarea.cambiar_estado(nuevo_estado, observaciones, fecha_reprog)
+            tarea.cambiar_estado(nuevo_estado, observaciones, fecha_reprog, motivo_reprogramacion)
+        
+        # Auditoría: quién realizó la acción y log
+        tarea.usuario_ultima_accion = request.user
+        tarea.save(update_fields=['usuario_ultima_accion'])
+        acciones_permitidas = [c[0] for c in TareaCobroLog.ACCIONES]
+        log_accion = nuevo_estado if nuevo_estado in acciones_permitidas else 'NO_ENCONTRADO'
+        monto_log = None
+        if nuevo_estado == 'COBRADO' and 'pago_creado' in locals():
+            monto_log = getattr(pago_creado, 'monto', None)
+        TareaCobroLog.objects.create(
+            tarea=tarea,
+            usuario=request.user,
+            accion=log_accion,
+            observaciones=observaciones,
+            motivo_reprogramacion=motivo_reprogramacion[:255] if motivo_reprogramacion else '',
+            monto_registrado=monto_log,
+        )
         
         # Preparar respuesta base
         response_data = {
@@ -3021,7 +3501,7 @@ def actualizar_tarea(request, tarea_id):
 def panel_supervisor(request):
     """Panel de supervisor para ver progreso de todos los cobradores"""
     from datetime import date, timedelta
-    from django.db.models import Count, Sum, Avg
+    from django.db.models import Count, Sum, Avg, Q
     from .models import TareaCobro
     
     # Fecha a consultar (por defecto hoy)
@@ -3033,6 +3513,10 @@ def panel_supervisor(request):
             fecha = date.today()
     else:
         fecha = date.today()
+    
+    # Filtro por estado (opcional): PENDIENTE, COBRADO, NO_ENCONTRADO, REPROGRAMADO, etc.
+    filtro_estado = request.GET.get('filtro_estado', '').strip()
+    estados_validos = [e[0] for e in TareaCobro.ESTADOS]
     
     # Obtener todos los cobradores activos
     cobradores = Cobrador.objects.filter(activo=True)
@@ -3048,6 +3532,8 @@ def panel_supervisor(request):
             cobrador=cobrador,
             fecha_asignacion=fecha
         ).select_related('cuota__credito__cliente')
+        if filtro_estado and filtro_estado in estados_validos:
+            tareas = tareas.filter(estado=filtro_estado)
         
         total_tareas = tareas.count()
         tareas_cobradas = tareas.filter(estado='COBRADO').count()
@@ -3060,6 +3546,9 @@ def panel_supervisor(request):
         # Últimas tareas actualizadas
         ultimas_tareas = tareas.exclude(estado='PENDIENTE').order_by('-fecha_visita')[:3]
         
+        rutas_qs = cobrador.rutas.all()
+        meta_diaria = cobrador.meta_diaria or 0
+        porcentaje_meta = round(float(monto_cobrado / meta_diaria * 100), 0) if meta_diaria and float(meta_diaria) > 0 else None
         datos_cobradores.append({
             'cobrador': cobrador,
             'total_tareas': total_tareas,
@@ -3068,7 +3557,10 @@ def panel_supervisor(request):
             'monto_cobrado': monto_cobrado,
             'porcentaje': porcentaje,
             'ultimas_tareas': ultimas_tareas,
-            'rutas': cobrador.rutas.all()
+            'rutas': rutas_qs,
+            'sin_rutas': not rutas_qs.exists(),
+            'meta_diaria': meta_diaria,
+            'porcentaje_meta': porcentaje_meta,
         })
         
         total_general_tareas += total_tareas
@@ -3081,18 +3573,46 @@ def panel_supervisor(request):
     # Estadísticas generales
     porcentaje_general = (total_general_cobradas / total_general_tareas * 100) if total_general_tareas > 0 else 0
     
-    # Tareas por estado (todas)
+    # Tareas por estado (todas, sin filtrar para mostrar totales por estado)
     todas_tareas = TareaCobro.objects.filter(fecha_asignacion=fecha)
     estadisticas_estado = todas_tareas.values('estado').annotate(cantidad=Count('id'))
     
+    # Fechas anterior/siguiente para navegación (Django template no tiene add days)
+    fecha_anterior = (fecha - timedelta(days=1)).strftime('%Y-%m-%d')
+    fecha_siguiente = (fecha + timedelta(days=1)).strftime('%Y-%m-%d')
+    
+    # Alertas: pendientes al cierre, reprogramadas sin fecha o con fecha pasada, meta no cumplida
+    hoy = date.today()
+    alertas_pendientes_hoy = 0
+    if fecha == hoy:
+        alertas_pendientes_hoy = TareaCobro.objects.filter(
+            fecha_asignacion=fecha, estado='PENDIENTE'
+        ).count()
+    reprogramadas_problema = TareaCobro.objects.filter(
+        estado='REPROGRAMADO'
+    ).filter(
+        Q(fecha_reprogramacion__isnull=True) | Q(fecha_reprogramacion__lt=hoy)
+    ).count()
+    alertas_meta_bajo = []
+    for d in datos_cobradores:
+        if d['meta_diaria'] and float(d['meta_diaria']) > 0 and d['porcentaje_meta'] is not None and d['porcentaje_meta'] < 70:
+            alertas_meta_bajo.append({'cobrador': d['cobrador'], 'porcentaje_meta': d['porcentaje_meta']})
+    
     context = {
         'fecha': fecha,
+        'filtro_estado': filtro_estado,
+        'estados_tarea': TareaCobro.ESTADOS,
+        'fecha_anterior': fecha_anterior,
+        'fecha_siguiente': fecha_siguiente,
         'datos_cobradores': datos_cobradores,
         'total_general_tareas': total_general_tareas,
         'total_general_cobradas': total_general_cobradas,
         'total_general_monto': total_general_monto,
         'porcentaje_general': porcentaje_general,
-        'estadisticas_estado': {item['estado']: item['cantidad'] for item in estadisticas_estado}
+        'estadisticas_estado': {item['estado']: item['cantidad'] for item in estadisticas_estado},
+        'alertas_pendientes_hoy': alertas_pendientes_hoy,
+        'alertas_reprogramadas_problema': reprogramadas_problema,
+        'alertas_meta_bajo': alertas_meta_bajo,
     }
     
     return render(request, 'tareas/panel_supervisor.html', context)
@@ -3118,6 +3638,146 @@ def generar_tareas_diarias(request):
     
     return redirect('panel_supervisor')
 
+
+# ========================================
+# CIERRE DE COBRO DIARIO
+# ========================================
+
+@login_required
+def cierre_cobro_diario(request):
+    """Lista cobradores activos y para la fecha elegida: lo que debían entregar y estado de cierre."""
+    from datetime import date
+    from django.db.models import Sum
+
+    fecha_str = request.GET.get('fecha')
+    if fecha_str:
+        try:
+            fecha = datetime.strptime(fecha_str, '%Y-%m-%d').date()
+        except ValueError:
+            fecha = date.today()
+    else:
+        fecha = date.today()
+
+    cobradores = Cobrador.objects.filter(activo=True)
+    filas = []
+    for cobrador in cobradores:
+        pagos_dia = Pago.objects.filter(
+            credito__cobrador=cobrador,
+            fecha_pago__date=fecha
+        )
+        monto_esperado = pagos_dia.aggregate(Sum('monto'))['monto__sum'] or 0
+        cantidad_pagos = pagos_dia.count()
+        cierre = CierreCobroDiario.objects.filter(cobrador=cobrador, fecha=fecha).first()
+        filas.append({
+            'cobrador': cobrador,
+            'fecha': fecha,
+            'monto_esperado': monto_esperado,
+            'cantidad_pagos': cantidad_pagos,
+            'cierre': cierre,
+            'cerrado': cierre is not None,
+        })
+    # Ordenar por monto esperado descendente (los que más cobraron primero)
+    filas.sort(key=lambda x: (-float(x['monto_esperado']), x['cobrador'].apellidos or ''))
+
+    # Historial de cierres (últimos 30 días)
+    historial = CierreCobroDiario.objects.select_related('cobrador', 'cerrado_por').order_by('-fecha', '-fecha_cierre')[:50]
+
+    context = {
+        'fecha': fecha,
+        'filas': filas,
+        'historial': historial,
+    }
+    return render(request, 'cobranza/cierre_cobro_diario.html', context)
+
+
+@login_required
+def resumen_cierre_cobrador(request, cobrador_id):
+    """Detalle de lo que cobró un cobrador en una fecha: listado de pagos y opción de cerrar con arqueo."""
+    from datetime import date
+    from django.db.models import Sum
+
+    cobrador = get_object_or_404(Cobrador, id=cobrador_id)
+    fecha_str = request.GET.get('fecha') or request.POST.get('fecha')
+    if fecha_str:
+        try:
+            fecha = datetime.strptime(fecha_str, '%Y-%m-%d').date()
+        except ValueError:
+            fecha = date.today()
+    else:
+        fecha = date.today()
+
+    pagos = Pago.objects.filter(
+        credito__cobrador=cobrador,
+        fecha_pago__date=fecha
+    ).select_related('credito__cliente').order_by('fecha_pago')
+    monto_esperado = pagos.aggregate(Sum('monto'))['monto__sum'] or 0
+    cierre = CierreCobroDiario.objects.filter(cobrador=cobrador, fecha=fecha).first()
+
+    context = {
+        'cobrador': cobrador,
+        'fecha': fecha,
+        'pagos': pagos,
+        'monto_esperado': monto_esperado,
+        'cantidad_pagos': pagos.count(),
+        'cierre': cierre,
+    }
+    return render(request, 'cobranza/resumen_cierre_cobrador.html', context)
+
+
+@login_required
+def cerrar_cobro_cobrador(request):
+    """POST: registra el cierre (monto recibido) y calcula diferencia (arqueo)."""
+    from datetime import date, datetime
+    from decimal import Decimal
+    from django.db.models import Sum
+
+    if request.method != 'POST':
+        return redirect('cierre_cobro_diario')
+    cobrador_id = request.POST.get('cobrador_id')
+    fecha_str = request.POST.get('fecha')
+    monto_recibido_str = request.POST.get('monto_recibido', '').strip()
+    observaciones = request.POST.get('observaciones', '').strip()
+    if not cobrador_id or not fecha_str:
+        messages.error(request, 'Faltan datos (cobrador o fecha).')
+        return redirect('cierre_cobro_diario')
+    cobrador = get_object_or_404(Cobrador, id=cobrador_id)
+    try:
+        fecha = datetime.strptime(fecha_str, '%Y-%m-%d').date()
+    except ValueError:
+        fecha = date.today()
+    monto_esperado = Pago.objects.filter(
+        credito__cobrador=cobrador,
+        fecha_pago__date=fecha
+    ).aggregate(Sum('monto'))['monto__sum'] or Decimal('0')
+    cantidad_pagos = Pago.objects.filter(credito__cobrador=cobrador, fecha_pago__date=fecha).count()
+    monto_recibido = None
+    if monto_recibido_str:
+        try:
+            monto_recibido = Decimal(str(monto_recibido_str).replace(',', '.'))
+        except Exception:
+            pass
+    diferencia = None
+    if monto_recibido is not None:
+        diferencia = monto_recibido - monto_esperado
+    cierre, created = CierreCobroDiario.objects.update_or_create(
+        cobrador=cobrador,
+        fecha=fecha,
+        defaults={
+            'monto_esperado': monto_esperado,
+            'cantidad_pagos': cantidad_pagos,
+            'monto_recibido': monto_recibido,
+            'diferencia': diferencia,
+            'cerrado_por': request.user,
+            'observaciones': observaciones,
+        }
+    )
+    if created:
+        messages.success(request, f'Cierre registrado para {cobrador.nombre_completo} - {fecha.strftime("%d/%m/%Y")}.')
+    else:
+        messages.success(request, f'Cierre actualizado para {cobrador.nombre_completo}.')
+    return redirect('cierre_cobro_diario' + '?fecha=' + fecha.strftime('%Y-%m-%d'))
+
+
 # ========================================
 # REPORTES DE RECAUDACIÓN
 # ========================================
@@ -3139,8 +3799,18 @@ def recaudacion_cobradores(request):
     if not fecha_hasta:
         fecha_hasta = date.today().strftime('%Y-%m-%d')
     
-    # Filtrar pagos por fechas
-    filtros_pagos = Q(fecha_pago__date__gte=fecha_desde) & Q(fecha_pago__date__lte=fecha_hasta)
+    # Parsear a date para filtros consistentes
+    from datetime import datetime as dt
+    try:
+        fecha_inicio = dt.strptime(fecha_desde, '%Y-%m-%d').date()
+    except (ValueError, TypeError):
+        fecha_inicio = date.today()
+    try:
+        fecha_fin = dt.strptime(fecha_hasta, '%Y-%m-%d').date()
+    except (ValueError, TypeError):
+        fecha_fin = date.today()
+    
+    filtros_pagos = Q(fecha_pago__date__gte=fecha_inicio) & Q(fecha_pago__date__lte=fecha_fin)
     
     # Si se especifica un cobrador, filtrar solo ese
     if cobrador_id:
@@ -3171,10 +3841,6 @@ def recaudacion_cobradores(request):
         # Cumplimiento de meta (si tiene meta diaria)
         cumplimiento_meta = 0
         if cobrador.meta_diaria and cobrador.meta_diaria > 0:
-            # Calcular días en el período
-            from datetime import datetime
-            fecha_inicio = datetime.strptime(fecha_desde, '%Y-%m-%d').date()
-            fecha_fin = datetime.strptime(fecha_hasta, '%Y-%m-%d').date()
             dias_periodo = (fecha_fin - fecha_inicio).days + 1
             meta_periodo = cobrador.meta_diaria * dias_periodo
             cumplimiento_meta = (total_recaudado / meta_periodo * 100) if meta_periodo > 0 else 0
@@ -3217,6 +3883,158 @@ def recaudacion_cobradores(request):
     
     return render(request, 'cobradores/recaudacion_cobradores.html', context)
 
+
+@login_required
+def exportar_recaudacion_excel(request):
+    """Exporta el reporte de recaudación (mismo filtro que recaudacion_cobradores) a Excel."""
+    from datetime import date
+    from datetime import datetime as dt
+    from django.db.models import Q, Sum
+    import pandas as pd
+    import io
+
+    fecha_desde = request.GET.get('fecha_desde') or date.today().strftime('%Y-%m-%d')
+    fecha_hasta = request.GET.get('fecha_hasta') or date.today().strftime('%Y-%m-%d')
+    cobrador_id = request.GET.get('cobrador_id')
+    try:
+        fecha_inicio = dt.strptime(fecha_desde, '%Y-%m-%d').date()
+        fecha_fin = dt.strptime(fecha_hasta, '%Y-%m-%d').date()
+    except (ValueError, TypeError):
+        fecha_inicio = date.today()
+        fecha_fin = date.today()
+
+    filtros = Q(fecha_pago__date__gte=fecha_inicio) & Q(fecha_pago__date__lte=fecha_fin)
+    if cobrador_id:
+        try:
+            filtros &= Q(credito__cobrador_id=int(cobrador_id))
+        except ValueError:
+            pass
+
+    pagos = Pago.objects.filter(filtros).select_related(
+        'credito__cliente', 'credito__cobrador'
+    ).order_by('-fecha_pago')
+
+    # Hoja 1: Resumen por cobrador
+    cobradores_activos = Cobrador.objects.filter(activo=True)
+    resumen = []
+    for c in cobradores_activos:
+        qs = pagos.filter(credito__cobrador=c)
+        total = qs.aggregate(Sum('monto'))['monto__sum'] or 0
+        cnt = qs.count()
+        if cnt == 0 and cobrador_id:
+            continue
+        meta_per = 0
+        if c.meta_diaria and (fecha_fin - fecha_inicio).days >= 0:
+            dias = (fecha_fin - fecha_inicio).days + 1
+            meta_per = round(float(total / (float(c.meta_diaria) * dias) * 100), 1) if c.meta_diaria else 0
+        resumen.append({
+            'Cobrador': c.nombre_completo,
+            'Total recaudado': float(total),
+            'Cantidad pagos': cnt,
+            'Cumplimiento meta (%)': meta_per,
+        })
+    df_resumen = pd.DataFrame(resumen)
+
+    # Hoja 2: Detalle de pagos
+    detalle = []
+    for p in pagos[:2000]:
+        detalle.append({
+            'Fecha': p.fecha_pago.strftime('%d/%m/%Y %H:%M'),
+            'Cobrador': p.credito.cobrador.nombre_completo if p.credito.cobrador else '',
+            'Cliente': p.credito.cliente.nombre_completo,
+            'Cédula': p.credito.cliente.cedula,
+            'Crédito ID': p.credito_id,
+            'Cuota': p.numero_cuota,
+            'Monto': float(p.monto),
+        })
+    df_detalle = pd.DataFrame(detalle)
+
+    output = io.BytesIO()
+    with pd.ExcelWriter(output, engine='openpyxl') as writer:
+        df_resumen.to_excel(writer, sheet_name='Resumen por cobrador', index=False)
+        df_detalle.to_excel(writer, sheet_name='Detalle pagos', index=False)
+    output.seek(0)
+    response = HttpResponse(
+        output.getvalue(),
+        content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    )
+    response['Content-Disposition'] = (
+        f'attachment; filename="recaudacion_{fecha_desde}_{fecha_hasta}.xlsx"'
+    )
+    return response
+
+
+@login_required
+def reporte_tareas_pendientes(request):
+    """Lista tareas en estado PENDIENTE con fecha de asignación ya pasada (sin gestionar a tiempo)."""
+    from datetime import date, timedelta
+    from django.db.models import Q, Count
+
+    dias_atraso = request.GET.get('dias', '1')
+    try:
+        dias_atraso = max(0, int(dias_atraso))
+    except ValueError:
+        dias_atraso = 1
+    cobrador_id = request.GET.get('cobrador_id', '').strip()
+    fecha_limite = date.today() - timedelta(days=dias_atraso)
+
+    tareas_qs = TareaCobro.objects.filter(
+        estado='PENDIENTE',
+        fecha_asignacion__lte=fecha_limite,
+    ).select_related('cobrador', 'cuota__credito__cliente').order_by('fecha_asignacion', 'cobrador')
+
+    if cobrador_id:
+        try:
+            tareas_qs = tareas_qs.filter(cobrador_id=int(cobrador_id))
+        except ValueError:
+            pass
+
+    tareas = list(tareas_qs[:500])
+    cobradores = Cobrador.objects.filter(activo=True)
+
+    # Resumen por cobrador
+    por_cobrador = tareas_qs.values('cobrador__nombres', 'cobrador__apellidos', 'cobrador_id').annotate(
+        total=Count('id')
+    ).order_by('-total')
+
+    export = request.GET.get('export') == 'xlsx'
+    if export:
+        import pandas as pd
+        import io
+        rows = []
+        for t in tareas_qs[:2000]:
+            rows.append({
+                'Fecha asignación': t.fecha_asignacion.strftime('%d/%m/%Y'),
+                'Cobrador': t.cobrador.nombre_completo,
+                'Cliente': t.cliente.nombre_completo,
+                'Crédito': t.credito.id,
+                'Cuota': t.cuota.numero_cuota,
+                'Monto a cobrar': float(t.monto_a_cobrar) if t.monto_a_cobrar else 0,
+                'Días atraso': (date.today() - t.fecha_asignacion).days,
+            })
+        df = pd.DataFrame(rows)
+        output = io.BytesIO()
+        df.to_excel(output, engine='openpyxl', index=False)
+        output.seek(0)
+        response = HttpResponse(
+            output.getvalue(),
+            content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        )
+        response['Content-Disposition'] = 'attachment; filename="tareas_pendientes_sin_gestionar.xlsx"'
+        return response
+
+    context = {
+        'tareas': tareas,
+        'cobradores': cobradores,
+        'dias_atraso': dias_atraso,
+        'cobrador_id': int(cobrador_id) if cobrador_id else None,
+        'fecha_limite': fecha_limite,
+        'por_cobrador': por_cobrador,
+        'total': len(tareas),
+    }
+    return render(request, 'tareas/reporte_tareas_pendientes.html', context)
+
+
 # Vista AJAX para obtener detalles de pagos por cobrador
 @login_required
 def detalles_pagos_cobrador(request, cobrador_id):
@@ -3234,12 +4052,19 @@ def detalles_pagos_cobrador(request, cobrador_id):
             fecha_desde = date.today().strftime('%Y-%m-%d')
         if not fecha_hasta:
             fecha_hasta = date.today().strftime('%Y-%m-%d')
+        try:
+            from datetime import datetime as dt
+            fecha_inicio_ajax = dt.strptime(fecha_desde, '%Y-%m-%d').date()
+            fecha_fin_ajax = dt.strptime(fecha_hasta, '%Y-%m-%d').date()
+        except (ValueError, TypeError):
+            fecha_inicio_ajax = date.today()
+            fecha_fin_ajax = date.today()
         
         # Filtrar pagos del cobrador
         pagos = Pago.objects.filter(
             credito__cobrador=cobrador,
-            fecha_pago__date__gte=fecha_desde,
-            fecha_pago__date__lte=fecha_hasta
+            fecha_pago__date__gte=fecha_inicio_ajax,
+            fecha_pago__date__lte=fecha_fin_ajax
         ).select_related(
             'credito__cliente'
         ).order_by('-fecha_pago')
