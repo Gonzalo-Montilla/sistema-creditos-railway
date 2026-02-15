@@ -112,7 +112,7 @@
                             </button>
                         </div>
                         {% if form.monto.errors %}
-                            <div class="text-danger">{{ form.monto.errors }}</div>
+                            <div class="text-danger" id="monto-error-wrap">{{ form.monto.errors }}</div>
                         {% endif %}
                         <small class="form-text text-muted" id="monto-help">El monto se llenará automáticamente al seleccionar un crédito</small>
                     </div>
@@ -238,8 +238,8 @@ function buscarCliente() {
     // Ocultar información previa
     document.getElementById('cliente-info').style.display = 'none';
     
-    // Realizar búsqueda AJAX
-    fetch(`/buscar-creditos-cliente/?cedula=${encodeURIComponent(cedula)}`)
+    // Realizar búsqueda AJAX (solo devuelve créditos con saldo pendiente; sin caché)
+    fetch(`/buscar-creditos-cliente/?cedula=${encodeURIComponent(cedula)}&_=${Date.now()}`)
         .then(response => response.json())
         .then(data => {
             if (data.success) {
@@ -288,6 +288,14 @@ function mostrarClienteEncontrado(cliente) {
     document.getElementById('cliente-info').style.display = 'block';
 }
 
+// Quitar mensaje de error del monto al cambiar crédito o valor (evita mostrar error de un intento anterior)
+function limpiarErrorMonto() {
+    const wrap = document.getElementById('monto-error-wrap');
+    const input = document.getElementById('id_monto');
+    if (wrap) { wrap.innerHTML = ''; wrap.style.display = 'none'; }
+    if (input) input.classList.remove('is-invalid');
+}
+
 // Función para llenar el select de créditos
 function llenarCreditosSelect(creditos) {
     const select = document.getElementById('credito_select');
@@ -308,6 +316,7 @@ function llenarCreditosSelect(creditos) {
     
     // Agregar event listener para cuando se seleccione un crédito
     select.addEventListener('change', function() {
+        limpiarErrorMonto();
         const creditoId = this.value;
         if (creditoId) {
             const creditoSeleccionado = creditosDisponibles.find(c => c.id == creditoId);
@@ -322,6 +331,7 @@ function llenarCreditosSelect(creditos) {
 
 // Función para llenar información de la cuota automáticamente
 function llenarInformacionCuota(credito) {
+    limpiarErrorMonto();
     // Llenar monto con el valor de la cuota
     const montoInput = document.getElementById('id_monto');
     if (montoInput) {
@@ -501,6 +511,13 @@ document.addEventListener('DOMContentLoaded', function() {
             limpiarFormulario();
         }
     });
+    
+    // Al cambiar el monto, quitar mensaje de error anterior (ej. "monto muy bajo")
+    const montoInputEl = document.getElementById('id_monto');
+    if (montoInputEl) {
+        montoInputEl.addEventListener('input', limpiarErrorMonto);
+        montoInputEl.addEventListener('change', limpiarErrorMonto);
+    }
     
     // Botón para editar monto manualmente
     document.addEventListener('click', function(e) {

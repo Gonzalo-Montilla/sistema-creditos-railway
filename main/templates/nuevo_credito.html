@@ -172,6 +172,17 @@
                         </div>
                     </div>
                     
+                    <div class="row mb-3">
+                        <div class="col-12">
+                            <div class="form-check">
+                                {{ form.es_renovacion }}
+                                <label class="form-check-label" for="{{ form.es_renovacion.id_for_label }}">
+                                    <i class="bi bi-arrow-repeat"></i> Crédito por renovación (no requiere pagaré; el cliente firmará documento de renovación)
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                    
                     <div class="d-grid gap-2 d-md-flex justify-content-md-end">
                         <a href="{% url 'creditos' %}" class="btn btn-secondary me-md-2">
                             <i class="fas fa-times"></i> Cancelar

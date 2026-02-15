@@ -60,6 +60,48 @@
             {% endif %}
         </div>
         {% endif %}
+        <hr class="my-3">
+        <h6 class="card-section-label">Autorización Habeas Data (Ley 1581)</h6>
+        {% if cliente.tiene_habeas_data_firmado %}
+        <p class="mb-1 small text-success"><i class="bi bi-check-circle me-1"></i>Autorización firmada el {{ cliente.fecha_autorizacion_habeas_data|date:"d/m/Y H:i" }}</p>
+        <div class="d-flex flex-wrap gap-2 align-items-center">
+            <button type="button" class="btn btn-sm btn-outline-primary" onclick="abrirModalVerHabeasData('cliente', {{ cliente.id }})"><i class="bi bi-eye me-1"></i>Ver / Descargar autorización</button>
+            <button type="button" class="btn btn-sm btn-outline-secondary" onclick="regenerarPdfHabeasData('cliente', {{ cliente.id }})" title="Generar de nuevo el PDF con código único y formato actual"><i class="bi bi-arrow-clockwise me-1"></i>Regenerar PDF (nuevo formato)</button>
+        </div>
+        {% else %}
+        <p class="mb-2 small text-muted">El titular debe firmar la autorización para tratamiento de datos.</p>
+        <button type="button" class="btn btn-sm btn-primary" onclick="solicitarHabeasData('cliente', {{ cliente.id }}, '{{ cliente.nombre_completo|escapejs }}')"><i class="bi bi-shield-check me-1"></i>Solicitar autorización Habeas Data</button>
+        {% endif %}
+        <hr class="my-3">
+        <h6 class="card-section-label">Pagaré(s) de créditos</h6>
+        <p class="mb-2 small text-muted">Documentos de pagaré firmados asociados a créditos de este cliente.</p>
+        {% for credito in creditos_con_pagare %}
+        <div class="mb-2 d-flex flex-wrap align-items-center gap-2">
+            <span class="small">Crédito #{{ credito.id|stringformat:"04d" }}</span>
+            <button type="button" class="btn btn-sm btn-outline-primary" onclick="abrirModalVerPagare({{ credito.id }})"><i class="bi bi-eye me-1"></i>Ver / Descargar pagaré</button>
+            <button type="button" class="btn btn-sm btn-outline-secondary" onclick="regenerarPdfPagare({{ credito.id }})" title="Regenerar PDF con páginas independientes y anexo de cédulas"><i class="bi bi-arrow-clockwise me-1"></i>Regenerar PDF (nuevo formato)</button>
+        </div>
+        {% empty %}
+        <p class="mb-0 small text-muted">No hay pagaré(s) firmados.</p>
+        {% endfor %}
+        <hr class="my-3">
+        <h6 class="card-section-label">Documento de renovación de crédito</h6>
+        <p class="mb-2 small text-muted">Aceptación de condiciones del crédito (siempre se muestra el último documento firmado).</p>
+        {% if cliente.tiene_documento_renovacion %}
+        <p class="mb-1 small text-success"><i class="bi bi-check-circle me-1"></i>Última firma el {{ cliente.fecha_firma_renovacion|date:"d/m/Y H:i" }}</p>
+        <button type="button" class="btn btn-sm btn-outline-primary" onclick="abrirModalVerRenovacion({{ cliente.id }})"><i class="bi bi-eye me-1"></i>Ver / Descargar documento de renovación</button>
+        {% else %}
+        <p class="mb-2 small text-muted">No hay documento de renovación firmado.</p>
+        {% endif %}
+        {% if creditos_para_renovacion %}
+        <p class="mt-2 mb-1 small text-muted">Solicitar firma para un crédito en trámite:</p>
+        {% for credito in creditos_para_renovacion %}
+        <div class="mb-2 d-flex flex-wrap align-items-center gap-2">
+            <span class="small">Crédito #{{ credito.id|stringformat:"04d" }}</span>
+            <button type="button" class="btn btn-sm btn-primary" onclick="solicitarRenovacion({{ credito.id }})"><i class="bi bi-pen me-1"></i>Solicitar firma doc. renovación</button>
+        </div>
+        {% endfor %}
+        {% endif %}
     </div>
 </div>
 
@@ -159,6 +201,18 @@
                 </dl>
             </div>
         </div>
+        <hr class="my-3">
+        <h6 class="card-section-label">Autorización Habeas Data (Ley 1581)</h6>
+        {% if codeudor.tiene_habeas_data_firmado %}
+        <p class="mb-1 small text-success"><i class="bi bi-check-circle me-1"></i>Autorización firmada el {{ codeudor.fecha_autorizacion_habeas_data|date:"d/m/Y H:i" }}</p>
+        <div class="d-flex flex-wrap gap-2 align-items-center">
+            <button type="button" class="btn btn-sm btn-outline-primary" onclick="abrirModalVerHabeasData('codeudor', {{ codeudor.id }})"><i class="bi bi-eye me-1"></i>Ver / Descargar autorización</button>
+            <button type="button" class="btn btn-sm btn-outline-secondary" onclick="regenerarPdfHabeasData('codeudor', {{ codeudor.id }})" title="Generar de nuevo el PDF con código único y formato actual"><i class="bi bi-arrow-clockwise me-1"></i>Regenerar PDF (nuevo formato)</button>
+        </div>
+        {% else %}
+        <p class="mb-2 small text-muted">El codeudor debe firmar la autorización para tratamiento de datos.</p>
+        <button type="button" class="btn btn-sm btn-primary" onclick="solicitarHabeasData('codeudor', {{ codeudor.id }}, '{{ codeudor.nombres }} {{ codeudor.apellidos }}')"><i class="bi bi-shield-check me-1"></i>Solicitar autorización Habeas Data</button>
+        {% endif %}
     </div>
 </div>
 
@@ -273,7 +327,12 @@
                             {% else %}<span class="badge bg-secondary">{{ credito.get_estado_display }}</span>{% endif %}
                         </td>
                         <td>{{ credito.fecha_solicitud|date:"d/m/Y" }}</td>
-                        <td class="text-end"><a href="{% url 'editar_credito' credito.id %}" class="btn btn-sm btn-outline-primary" title="Ver/editar"><i class="bi bi-eye"></i></a></td>
+                        <td class="text-end">
+                            <a href="{% url 'editar_credito' credito.id %}" class="btn btn-sm btn-outline-primary" title="Ver/editar"><i class="bi bi-eye"></i></a>
+                            {% if credito.puede_retanquear %}
+                            <a href="{% url 'retanqueo_credito' credito.id %}" class="btn btn-sm btn-outline-info ms-1" title="Retanquear: liquidar este crédito y crear uno nuevo"><i class="bi bi-arrow-repeat"></i></a>
+                            {% endif %}
+                        </td>
                     </tr>
                     {% endfor %}
                 </tbody>
@@ -286,6 +345,107 @@
             <a href="{% url 'nuevo_credito' %}?cliente_id={{ cliente.id }}" class="btn btn-primary"><i class="bi bi-plus-circle"></i> Crear crédito</a>
         </div>
         {% endif %}
+    </div>
+</div>
+
+<!-- Modal Vista previa autorización Habeas Data (cliente o codeudor) -->
+<div class="modal fade" id="modalVerHabeasData" tabindex="-1">
+    <div class="modal-dialog modal-xl modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="bi bi-file-earmark-pdf me-2"></i>Autorización Habeas Data — Vista previa</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+            </div>
+            <div class="modal-body p-0">
+                <iframe id="iframeHabeasDataPdf" style="width:100%; height:75vh; border:0;" title="Vista previa PDF"></iframe>
+            </div>
+            <div class="modal-footer">
+                <a id="btnDescargarHabeasData" href="#" class="btn btn-primary" download><i class="bi bi-download me-1"></i>Descargar PDF</a>
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Habeas Data OTP -->
+<div class="modal fade" id="habeasDataModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="bi bi-shield-check me-2"></i>Autorización Habeas Data</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+            </div>
+            <div class="modal-body">
+                <p id="habeasModalMessage" class="mb-3 small"></p>
+                <label for="habeasOtpInput" class="form-label">Código OTP (6 dígitos)</label>
+                <input type="text" id="habeasOtpInput" class="form-control form-control-lg text-center" maxlength="6" placeholder="000000" pattern="[0-9]*" inputmode="numeric" autocomplete="one-time-code">
+                <div id="habeasOtpError" class="invalid-feedback"></div>
+                <div class="mt-3 d-flex flex-wrap gap-2">
+                    <button type="button" class="btn btn-primary" id="habeasValidarBtn" onclick="validarOtpHabeasData()"><i class="bi bi-check-lg me-1"></i>Validar y firmar</button>
+                    <button type="button" class="btn btn-outline-success" id="habeasWhatsAppBtn" onclick="enviarOtpPorWhatsApp()" style="display:none;"><i class="bi bi-whatsapp me-1"></i>No llegó el correo? Enviar código por WhatsApp</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Vista previa documento de renovación -->
+<div class="modal fade" id="modalVerRenovacion" tabindex="-1">
+    <div class="modal-dialog modal-xl modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="bi bi-file-earmark-pdf me-2"></i>Documento de renovación — Vista previa</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+            </div>
+            <div class="modal-body p-0">
+                <iframe id="iframeRenovacionPdf" style="width:100%; height:75vh; border:0;" title="Vista previa renovación"></iframe>
+            </div>
+            <div class="modal-footer">
+                <a id="btnDescargarRenovacion" href="#" class="btn btn-primary" target="_blank"><i class="bi bi-download me-1"></i>Descargar PDF</a>
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal OTP documento de renovación -->
+<div class="modal fade" id="modalRenovacionOTP" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="bi bi-pen me-2"></i>Documento de renovación</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+            </div>
+            <div class="modal-body">
+                <p id="renovacionModalMessage" class="mb-3 small"></p>
+                <label for="renovacionOtpInput" class="form-label">Código OTP (6 dígitos)</label>
+                <input type="text" id="renovacionOtpInput" class="form-control form-control-lg text-center" maxlength="6" placeholder="000000" inputmode="numeric" autocomplete="one-time-code">
+                <div id="renovacionOtpError" class="invalid-feedback"></div>
+                <div class="mt-3 d-flex flex-wrap gap-2">
+                    <button type="button" class="btn btn-primary" id="renovacionValidarBtn" onclick="validarOtpRenovacion()"><i class="bi bi-check-lg me-1"></i>Validar y firmar</button>
+                    <button type="button" class="btn btn-outline-success" id="renovacionWhatsAppBtn" onclick="enviarRenovacionPorWhatsApp()" style="display:none;"><i class="bi bi-whatsapp me-1"></i>Enviar código por WhatsApp</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Vista previa pagaré (igual que Habeas Data) -->
+<div class="modal fade" id="modalVerPagare" tabindex="-1">
+    <div class="modal-dialog modal-xl modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="bi bi-file-earmark-pdf me-2"></i>Pagaré — Vista previa</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+            </div>
+            <div class="modal-body p-0">
+                <iframe id="iframePagarePdf" style="width:100%; height:75vh; border:0;" title="Vista previa pagaré"></iframe>
+            </div>
+            <div class="modal-footer">
+                <a id="btnDescargarPagare" href="#" class="btn btn-primary" target="_blank"><i class="bi bi-download me-1"></i>Descargar PDF</a>
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+            </div>
+        </div>
     </div>
 </div>
 
@@ -379,6 +539,241 @@ function downloadImage() {
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
+}
+
+// Base URL para descargar/ver Habeas Data (se reemplaza tipo e id en JS)
+var habeasDataDescargaBase = "{% url 'descargar_habeas_data' tipo='cliente' objeto_id=0 %}";
+function buildHabeasDataUrl(tipo, objetoId, inline) {
+    var path = habeasDataDescargaBase.replace('/cliente/0/', '/' + tipo + '/' + objetoId + '/');
+    return path + (inline ? '?inline=1' : '');
+}
+function abrirModalVerHabeasData(tipo, objetoId) {
+    var urlPreview = buildHabeasDataUrl(tipo, objetoId, true);
+    var urlDescarga = buildHabeasDataUrl(tipo, objetoId, false);
+    document.getElementById('iframeHabeasDataPdf').src = urlPreview;
+    var btnDesc = document.getElementById('btnDescargarHabeasData');
+    btnDesc.href = urlDescarga;
+    btnDesc.target = '_blank';
+    new bootstrap.Modal(document.getElementById('modalVerHabeasData')).show();
+}
+document.getElementById('modalVerHabeasData').addEventListener('hidden.bs.modal', function () {
+    document.getElementById('iframeHabeasDataPdf').src = 'about:blank';
+});
+
+function abrirModalVerPagare(creditoId) {
+    var base = "{% url 'descargar_pagare' credito_id=0 %}".replace('/0/', '/' + creditoId + '/');
+    document.getElementById('iframePagarePdf').src = base + '?inline=1';
+    document.getElementById('btnDescargarPagare').href = base;
+    document.getElementById('btnDescargarPagare').target = '_blank';
+    new bootstrap.Modal(document.getElementById('modalVerPagare')).show();
+}
+document.getElementById('modalVerPagare').addEventListener('hidden.bs.modal', function () {
+    document.getElementById('iframePagarePdf').src = 'about:blank';
+});
+
+var renovacionContext = { creditoId: null, otp: null, celular: null };
+function abrirModalVerRenovacion(clienteId) {
+    var base = "{% url 'descargar_renovacion' cliente_id=0 %}".replace('/0/', '/' + clienteId + '/');
+    document.getElementById('iframeRenovacionPdf').src = base + '?inline=1';
+    document.getElementById('btnDescargarRenovacion').href = base;
+    document.getElementById('btnDescargarRenovacion').target = '_blank';
+    new bootstrap.Modal(document.getElementById('modalVerRenovacion')).show();
+}
+document.getElementById('modalVerRenovacion').addEventListener('hidden.bs.modal', function () {
+    document.getElementById('iframeRenovacionPdf').src = 'about:blank';
+});
+function solicitarRenovacion(creditoId) {
+    var btn = event.target.closest('button');
+    if (btn) btn.disabled = true;
+    fetch('{% url "solicitar_firma_renovacion" %}', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken'), 'Accept': 'application/json' },
+        body: JSON.stringify({ credito_id: creditoId })
+    }).then(function(r) { return r.json(); }).then(function(data) {
+        if (data.success) {
+            renovacionContext = { creditoId: creditoId, otp: data.otp || '', celular: data.celular || '' };
+            document.getElementById('renovacionModalMessage').textContent = data.message || 'Indique al cliente que ingrese el código.';
+            document.getElementById('renovacionOtpInput').value = '';
+            document.getElementById('renovacionOtpInput').classList.remove('is-invalid');
+            document.getElementById('renovacionOtpError').textContent = '';
+            document.getElementById('renovacionWhatsAppBtn').style.display = renovacionContext.celular ? 'inline-block' : 'none';
+            new bootstrap.Modal(document.getElementById('modalRenovacionOTP')).show();
+        } else {
+            alert(data.message || 'No se pudo enviar el código.');
+        }
+    }).catch(function() { alert('Error de conexión.'); }).finally(function() { if (btn) btn.disabled = false; });
+}
+function validarOtpRenovacion() {
+    var otp = document.getElementById('renovacionOtpInput').value.trim();
+    if (otp.length !== 6) {
+        document.getElementById('renovacionOtpError').textContent = 'Ingrese los 6 dígitos.';
+        document.getElementById('renovacionOtpInput').classList.add('is-invalid');
+        return;
+    }
+    document.getElementById('renovacionValidarBtn').disabled = true;
+    fetch('{% url "validar_otp_renovacion" %}', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken'), 'Accept': 'application/json' },
+        body: JSON.stringify({ credito_id: renovacionContext.creditoId, otp: otp })
+    }).then(function(r) { return r.json(); }).then(function(data) {
+        if (data.success) {
+            bootstrap.Modal.getInstance(document.getElementById('modalRenovacionOTP')).hide();
+            alert(data.message);
+            window.location.reload();
+        } else {
+            document.getElementById('renovacionOtpError').textContent = data.message || 'Código incorrecto o expirado.';
+            document.getElementById('renovacionOtpInput').classList.add('is-invalid');
+            document.getElementById('renovacionValidarBtn').disabled = false;
+        }
+    }).catch(function() {
+        document.getElementById('renovacionOtpError').textContent = 'Error de conexión.';
+        document.getElementById('renovacionOtpInput').classList.add('is-invalid');
+        document.getElementById('renovacionValidarBtn').disabled = false;
+    });
+}
+function enviarRenovacionPorWhatsApp() {
+    var ctx = renovacionContext;
+    if (!ctx.celular || !ctx.otp) return;
+    var num = (ctx.celular + '').replace(/\D/g, '');
+    if (num.length < 10) num = '57' + num; else if (num.indexOf('57') !== 0) num = '57' + num;
+    var text = encodeURIComponent('Su código para el documento de renovación es: ' + ctx.otp + '. Válido 15 min.');
+    window.open('https://wa.me/' + num + '?text=' + text, '_blank');
+}
+function regenerarPdfPagare(creditoId) {
+    if (!confirm('¿Regenerar el PDF del pagaré con el nuevo formato (páginas independientes + anexo de cédulas)? Se reemplazará el archivo actual.')) return;
+    fetch('{% url "regenerar_pagare" %}', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken'), 'Accept': 'application/json' },
+        body: JSON.stringify({ credito_id: creditoId })
+    }).then(function(r) { return r.json(); }).then(function(data) {
+        if (data.success) {
+            alert(data.message);
+            window.location.reload();
+        } else {
+            alert(data.message || 'No se pudo regenerar.');
+        }
+    }).catch(function() { alert('Error de conexión.'); });
+}
+function regenerarPdfHabeasData(tipo, objetoId) {
+    var btn = event.target.closest('button');
+    if (btn) btn.disabled = true;
+    fetch('{% url "regenerar_habeas_data" %}', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': getCookie('csrftoken'),
+            'Accept': 'application/json'
+        },
+        body: JSON.stringify({ tipo: tipo, id: objetoId })
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+        if (data.success) {
+            alert(data.message);
+            window.location.reload();
+        } else {
+            alert(data.message || 'No se pudo regenerar el PDF.');
+        }
+    })
+    .catch(function() { alert('Error de conexión.'); })
+    .finally(function() { if (btn) btn.disabled = false; });
+}
+
+function getCookie(name) {
+    var cookieValue = null;
+    if (document.cookie && document.cookie !== '') {
+        var cookies = document.cookie.split(';');
+        for (var i = 0; i < cookies.length; i++) {
+            var cookie = cookies[i].trim();
+            if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                break;
+            }
+        }
+    }
+    return cookieValue;
+}
+
+var habeasDataContext = { tipo: null, objetoId: null, otp: null, celular: null };
+
+function solicitarHabeasData(tipo, objetoId, nombreTitular) {
+    var btn = event.target.closest('button');
+    if (btn) btn.disabled = true;
+    fetch('{% url "solicitar_habeas_data" %}', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': getCookie('csrftoken'),
+            'Accept': 'application/json'
+        },
+        body: JSON.stringify({ tipo: tipo, id: objetoId })
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+        if (data.success) {
+            habeasDataContext = { tipo: tipo, objetoId: objetoId, otp: data.otp || '', celular: data.celular || '' };
+            document.getElementById('habeasModalMessage').textContent = data.message || 'Se envió un código al correo del titular. Indique que ingrese el código de 6 dígitos.';
+            document.getElementById('habeasOtpInput').value = '';
+            document.getElementById('habeasOtpError').textContent = '';
+            document.getElementById('habeasOtpInput').classList.remove('is-invalid');
+            var waBtn = document.getElementById('habeasWhatsAppBtn');
+            waBtn.style.display = habeasDataContext.celular ? 'inline-block' : 'none';
+            new bootstrap.Modal(document.getElementById('habeasDataModal')).show();
+        } else {
+            alert(data.message || 'No se pudo enviar el código.');
+        }
+    })
+    .catch(function() { alert('Error de conexión.'); })
+    .finally(function() { if (btn) btn.disabled = false; });
+}
+
+function validarOtpHabeasData() {
+    var otp = document.getElementById('habeasOtpInput').value.trim();
+    var errEl = document.getElementById('habeasOtpError');
+    var inputEl = document.getElementById('habeasOtpInput');
+    if (!otp || otp.length !== 6) {
+        inputEl.classList.add('is-invalid');
+        errEl.textContent = 'Ingrese los 6 dígitos del código.';
+        return;
+    }
+    var ctx = habeasDataContext;
+    if (!ctx.tipo || !ctx.objetoId) return;
+    document.getElementById('habeasValidarBtn').disabled = true;
+    fetch('{% url "validar_otp_habeas_data" %}', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': getCookie('csrftoken'),
+            'Accept': 'application/json'
+        },
+        body: JSON.stringify({ tipo: ctx.tipo, id: ctx.objetoId, otp: otp })
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+        if (data.success) {
+            bootstrap.Modal.getInstance(document.getElementById('habeasDataModal')).hide();
+            window.location.reload();
+        } else {
+            inputEl.classList.add('is-invalid');
+            errEl.textContent = data.message || 'Código inválido o expirado.';
+            document.getElementById('habeasValidarBtn').disabled = false;
+        }
+    })
+    .catch(function() {
+        errEl.textContent = 'Error de conexión.';
+        inputEl.classList.add('is-invalid');
+        document.getElementById('habeasValidarBtn').disabled = false;
+    });
+}
+
+function enviarOtpPorWhatsApp() {
+    var ctx = habeasDataContext;
+    if (!ctx.celular || !ctx.otp) return;
+    var num = ctx.celular.replace(/\D/g, '');
+    if (num.length < 10) num = '57' + num;
+    else if (!num.startsWith('57')) num = '57' + num;
+    var text = encodeURIComponent('Su código de verificación Habeas Data es: ' + ctx.otp + '. Válido 15 min.');
+    window.open('https://wa.me/' + num + '?text=' + text, '_blank');
 }
 </script>
 {% endblock %}

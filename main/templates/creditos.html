@@ -56,23 +56,32 @@
 
 <div class="card">
     <div class="card-header">
-        <div class="row align-items-center">
-            <div class="col">
+        <div class="row align-items-center g-2">
+            <div class="col-md-4">
                 <h5 class="mb-0">
                     <i class="bi bi-list-ul"></i> Lista de créditos
                 </h5>
             </div>
-            <div class="col-auto">
-                <div class="input-group">
-                    <select class="form-select" id="estadoFilter">
-                        <option value="">Todos los estados</option>
-                        <option value="SOLICITADO">Solicitado</option>
-                        <option value="APROBADO">Aprobado</option>
-                        <option value="DESEMBOLSADO">Desembolsado</option>
-                        <option value="PAGADO">Pagado</option>
-                        <option value="VENCIDO">Vencido</option>
-                    </select>
-                </div>
+            <div class="col-md-5">
+                <form method="get" action="{% url 'creditos' %}" class="d-flex gap-2" id="formBuscarCredito">
+                    <input type="search" name="q" class="form-control" placeholder="Buscar por cliente, cédula o ID de crédito..." value="{{ q|default:'' }}" id="inputBuscarCredito" autocomplete="off">
+                    <button type="submit" class="btn btn-primary flex-shrink-0">
+                        <i class="bi bi-search"></i> Buscar
+                    </button>
+                    {% if q %}
+                    <a href="{% url 'creditos' %}" class="btn btn-outline-secondary flex-shrink-0" title="Limpiar búsqueda">Limpiar</a>
+                    {% endif %}
+                </form>
+            </div>
+            <div class="col-md-3 text-md-end">
+                <select class="form-select form-select-sm d-inline-block w-auto" id="estadoFilter">
+                    <option value="">Todos los estados</option>
+                    <option value="SOLICITADO">Solicitado</option>
+                    <option value="APROBADO">Aprobado</option>
+                    <option value="DESEMBOLSADO">Desembolsado</option>
+                    <option value="PAGADO">Pagado</option>
+                    <option value="VENCIDO">Vencido</option>
+                </select>
             </div>
         </div>
     </div>
@@ -175,18 +184,104 @@
                                         </a>
                                     </div>
                                 {% elif credito.estado == 'APROBADO' %}
-                                    <a href="{% url 'desembolsar_credito' credito.id %}" 
-                                       class="btn btn-info btn-sm d-flex align-items-center justify-content-center"
-                                       onclick="return confirm('¿Confirmar desembolso de ${{ credito.monto|floatformat:0 }} a {{ credito.cliente.nombre }}?')">
-                                        <i class="fas fa-hand-holding-usd me-2"></i>
-                                        <span>Desembolsar</span>
-                                    </a>
+                                    {% if credito.credito_retanqueado_id %}
+                                        {# Retanqueo: doc. retanqueo OTP, luego desembolsar #}
+                                        {% if credito.tiene_documento_retanqueo_firmado %}
+                                            <div class="d-flex flex-wrap gap-1">
+                                                <a href="{% url 'descargar_retanqueo' credito.id %}" target="_blank" class="btn btn-outline-secondary btn-sm" title="Ver/descargar doc. retanqueo"><i class="bi bi-file-pdf me-1"></i>Ver doc. retanqueo</a>
+                                                <a href="{% url 'desembolsar_credito' credito.id %}" class="btn btn-info btn-sm d-flex align-items-center justify-content-center"
+                                                   onclick="return confirm('¿Confirmar desembolso de ${{ credito.monto|floatformat:0 }} a {{ credito.cliente.nombre }}? (Crédito por retanqueo)')">
+                                                    <i class="fas fa-hand-holding-usd me-2"></i>Desembolsar
+                                                </a>
+                                            </div>
+                                        {% else %}
+                                            <button type="button" class="btn btn-warning btn-sm d-flex align-items-center justify-content-center" onclick="abrirModalFirmarDocRetanqueo({{ credito.id }})">
+                                                <i class="bi bi-pen me-2"></i>Firmar doc. retanqueo
+                                            </button>
+                                            <button type="button" class="btn btn-info btn-sm d-flex align-items-center justify-content-center" disabled title="Firme el documento de retanqueo (OTP) antes de desembolsar">
+                                                <i class="fas fa-hand-holding-usd me-2"></i>Desembolsar
+                                            </button>
+                                        {% endif %}
+                                    {% elif credito.es_renovacion %}
+                                        {# Renovación: doc. renovación OTP, no pagaré #}
+                                        {% if credito.cliente.tiene_documento_renovacion %}
+                                            <div class="d-flex flex-wrap gap-1">
+                                                <a href="{% url 'descargar_renovacion' credito.cliente.id %}" target="_blank" class="btn btn-outline-secondary btn-sm" title="Ver/descargar doc. renovación"><i class="bi bi-file-pdf me-1"></i>Ver doc. renovación</a>
+                                                <a href="{% url 'desembolsar_credito' credito.id %}" class="btn btn-info btn-sm d-flex align-items-center justify-content-center"
+                                                   onclick="return confirm('¿Confirmar desembolso de ${{ credito.monto|floatformat:0 }} a {{ credito.cliente.nombre }}?')">
+                                                    <i class="fas fa-hand-holding-usd me-2"></i>Desembolsar
+                                                </a>
+                                            </div>
+                                        {% else %}
+                                            <button type="button" class="btn btn-warning btn-sm d-flex align-items-center justify-content-center" onclick="abrirModalFirmarDocRenovacion({{ credito.id }})">
+                                                <i class="bi bi-pen me-2"></i>Firmar doc. renovación
+                                            </button>
+                                            <button type="button" class="btn btn-info btn-sm d-flex align-items-center justify-content-center" disabled title="Firme el documento de renovación antes de desembolsar">
+                                                <i class="fas fa-hand-holding-usd me-2"></i>Desembolsar
+                                            </button>
+                                        {% endif %}
+                                    {% else %}
+                                        {# Crédito normal: pagaré una sola vez (primera vez) #}
+                                        {% if credito.tiene_pagare_firmado %}
+                                            <div class="d-flex flex-wrap gap-1">
+                                                <button type="button" class="btn btn-outline-secondary btn-sm" onclick="abrirModalVerPagare({{ credito.id }})" title="Ver vista previa y descargar el pagaré">
+                                                    <i class="fas fa-file-contract me-1"></i>
+                                                    <span class="d-none d-lg-inline">Ver / Descargar pagaré</span>
+                                                </button>
+                                                <button type="button" class="btn btn-outline-secondary btn-sm" onclick="regenerarPdfPagare({{ credito.id }})" title="Regenerar PDF">
+                                                    <i class="fas fa-sync-alt me-1"></i>
+                                                    <span class="d-none d-lg-inline">Regenerar PDF</span>
+                                                </button>
+                                            </div>
+                                            <a href="{% url 'desembolsar_credito' credito.id %}" 
+                                               class="btn btn-info btn-sm d-flex align-items-center justify-content-center"
+                                               onclick="return confirm('¿Confirmar desembolso de ${{ credito.monto|floatformat:0 }} a {{ credito.cliente.nombre }}?')">
+                                                <i class="fas fa-hand-holding-usd me-2"></i>
+                                                <span>Desembolsar</span>
+                                            </a>
+                                        {% else %}
+                                            <button type="button" class="btn btn-warning btn-sm d-flex align-items-center justify-content-center" onclick="abrirModalFirmarPagare({{ credito.id }})">
+                                                <i class="fas fa-file-signature me-2"></i>
+                                                <span>Firmar pagaré</span>
+                                            </button>
+                                            <button type="button" class="btn btn-info btn-sm d-flex align-items-center justify-content-center" disabled title="Firme el pagaré antes de desembolsar">
+                                                <i class="fas fa-hand-holding-usd me-2"></i>
+                                                <span>Desembolsar</span>
+                                            </button>
+                                        {% endif %}
+                                    {% endif %}
                                 {% elif credito.estado == 'DESEMBOLSADO' %}
-                                    <a href="{% url 'nuevo_pago' %}?credito={{ credito.id }}" 
-                                       class="btn btn-success btn-sm d-flex align-items-center justify-content-center">
-                                        <i class="fas fa-money-bill-wave me-2"></i>
-                                        <span>Registrar Pago</span>
-                                    </a>
+                                    <div class="d-flex flex-wrap gap-1">
+                                        <a href="{% url 'nuevo_pago' %}?credito={{ credito.id }}" 
+                                           class="btn btn-success btn-sm d-flex align-items-center justify-content-center">
+                                            <i class="fas fa-money-bill-wave me-2"></i>
+                                            <span>Registrar Pago</span>
+                                        </a>
+                                        {% if credito.puede_retanquear %}
+                                        <a href="{% url 'retanqueo_credito' credito.id %}" 
+                                           class="btn btn-outline-info btn-sm d-flex align-items-center justify-content-center"
+                                           title="Liquidar este crédito y crear uno nuevo">
+                                            <i class="bi bi-arrow-repeat me-1"></i>
+                                            <span class="d-none d-lg-inline">Retanquear</span>
+                                        </a>
+                                        {% endif %}
+                                    </div>
+                                {% elif credito.estado == 'VENCIDO' %}
+                                    <div class="d-flex flex-wrap gap-1">
+                                        <a href="{% url 'nuevo_pago' %}?credito={{ credito.id }}" 
+                                           class="btn btn-success btn-sm d-flex align-items-center justify-content-center">
+                                            <i class="fas fa-money-bill-wave me-2"></i>
+                                            <span>Registrar Pago</span>
+                                        </a>
+                                        {% if credito.puede_retanquear %}
+                                        <a href="{% url 'retanqueo_credito' credito.id %}" 
+                                           class="btn btn-outline-info btn-sm d-flex align-items-center justify-content-center"
+                                           title="Liquidar este crédito y crear uno nuevo">
+                                            <i class="bi bi-arrow-repeat me-1"></i>
+                                            <span class="d-none d-lg-inline">Retanquear</span>
+                                        </a>
+                                        {% endif %}
+                                    </div>
                                 {% elif credito.estado == 'PAGADO' %}
                                     <button class="btn btn-outline-secondary btn-sm d-flex align-items-center justify-content-center" disabled>
                                         <i class="fas fa-check-circle me-2"></i>
@@ -225,14 +320,341 @@
         {% endif %}
     </div>
 </div>
+
+<!-- Modal Firmar pagaré (OTP cliente + codeudor) -->
+<div class="modal fade" id="modalFirmarPagare" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="fas fa-file-signature me-2"></i>Firmar pagaré</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p id="pagareModalMensaje" class="small text-muted mb-3"></p>
+                <div id="pagareSeccionCliente" class="border rounded p-3 mb-3">
+                    <h6 class="mb-2">Cliente (deudor)</h6>
+                    <label class="form-label small">Código OTP</label>
+                    <div class="d-flex gap-2 mb-2">
+                        <input type="text" id="pagareOtpCliente" class="form-control" maxlength="6" placeholder="000000" inputmode="numeric">
+                        <button type="button" class="btn btn-primary btn-sm" onclick="validarOtpPagare('cliente')">Validar</button>
+                        <button type="button" class="btn btn-outline-success btn-sm" id="btnPagareWaCliente" style="display:none;" onclick="enviarPagarePorWhatsApp('cliente')"><i class="fab fa-whatsapp"></i></button>
+                    </div>
+                    <span id="pagareStatusCliente" class="small"></span>
+                </div>
+                <div id="pagareSeccionCodeudor" class="border rounded p-3 mb-3" style="display:none;">
+                    <h6 class="mb-2">Codeudor</h6>
+                    <label class="form-label small">Código OTP</label>
+                    <div class="d-flex gap-2 mb-2">
+                        <input type="text" id="pagareOtpCodeudor" class="form-control" maxlength="6" placeholder="000000" inputmode="numeric">
+                        <button type="button" class="btn btn-primary btn-sm" onclick="validarOtpPagare('codeudor')">Validar</button>
+                        <button type="button" class="btn btn-outline-success btn-sm" id="btnPagareWaCodeudor" style="display:none;" onclick="enviarPagarePorWhatsApp('codeudor')"><i class="fab fa-whatsapp"></i></button>
+                    </div>
+                    <span id="pagareStatusCodeudor" class="small"></span>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal documento de renovación (OTP) - para créditos es_renovacion -->
+<div class="modal fade" id="modalRenovacionOTP" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="bi bi-pen me-2"></i>Documento de renovación</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+            </div>
+            <div class="modal-body">
+                <p id="renovacionModalMessage" class="mb-3 small"></p>
+                <label for="renovacionOtpInput" class="form-label">Código OTP (6 dígitos)</label>
+                <input type="text" id="renovacionOtpInput" class="form-control form-control-lg text-center" maxlength="6" placeholder="000000" inputmode="numeric" autocomplete="one-time-code">
+                <div id="renovacionOtpError" class="invalid-feedback"></div>
+                <div class="mt-3 d-flex flex-wrap gap-2">
+                    <button type="button" class="btn btn-primary" id="renovacionValidarBtn" onclick="validarOtpRenovacionLista()"><i class="bi bi-check-lg me-1"></i>Validar y firmar</button>
+                    <button type="button" class="btn btn-outline-success" id="renovacionWhatsAppBtn" onclick="enviarRenovacionPorWhatsAppLista()" style="display:none;"><i class="bi bi-whatsapp me-1"></i>Enviar por WhatsApp</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal documento de retanqueo (OTP) - para créditos por retanqueo -->
+<div class="modal fade" id="modalRetanqueoOTP" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="bi bi-pen me-2"></i>Documento de conformidad de retanqueo</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+            </div>
+            <div class="modal-body">
+                <p id="retanqueoModalMessage" class="mb-3 small"></p>
+                <label for="retanqueoOtpInput" class="form-label">Código OTP (6 dígitos)</label>
+                <input type="text" id="retanqueoOtpInput" class="form-control form-control-lg text-center" maxlength="6" placeholder="000000" inputmode="numeric" autocomplete="one-time-code">
+                <div id="retanqueoOtpError" class="invalid-feedback"></div>
+                <div class="mt-3 d-flex flex-wrap gap-2">
+                    <button type="button" class="btn btn-primary" id="retanqueoValidarBtn" onclick="validarOtpRetanqueoLista()"><i class="bi bi-check-lg me-1"></i>Validar y firmar</button>
+                    <button type="button" class="btn btn-outline-success" id="retanqueoWhatsAppBtn" onclick="enviarRetanqueoPorWhatsAppLista()" style="display:none;"><i class="bi bi-whatsapp me-1"></i>Enviar por WhatsApp</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Ver pagaré (vista previa + descargar) — mismo patrón que Habeas Data -->
+<div class="modal fade" id="modalVerPagare" tabindex="-1">
+    <div class="modal-dialog modal-xl modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="fas fa-file-contract me-2"></i>Pagaré — Vista previa</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+            </div>
+            <div class="modal-body p-0">
+                <iframe id="iframePagarePdf" style="width:100%; height:75vh; border:0;" title="Vista previa pagaré"></iframe>
+            </div>
+            <div class="modal-footer">
+                <a id="btnDescargarPagare" href="#" class="btn btn-primary" target="_blank"><i class="fas fa-download me-1"></i>Descargar PDF</a>
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+            </div>
+        </div>
+    </div>
+</div>
 {% endblock %}
 
 {% block extra_js %}
 <script>
+// --- Pagaré: CSRF y helpers ---
+function getCookie(name) {
+    var v = null;
+    if (document.cookie && document.cookie !== '') {
+        var parts = document.cookie.split(';');
+        for (var i = 0; i < parts.length; i++) {
+            var p = parts[i].trim();
+            if (p.indexOf(name + '=') === 0) {
+                v = decodeURIComponent(p.substring(name.length + 1));
+                break;
+            }
+        }
+    }
+    return v;
+}
+var pagareContext = { creditoId: null, cliente: {}, codeudor: null };
+var renovacionContext = { creditoId: null, otp: '', celular: '' };
+var retanqueoContext = { creditoId: null, otp: '', celular: '' };
+
+function abrirModalFirmarDocRetanqueo(creditoId) {
+    retanqueoContext.creditoId = creditoId;
+    document.getElementById('retanqueoModalMessage').textContent = 'Solicitando código OTP...';
+    document.getElementById('retanqueoOtpInput').value = '';
+    document.getElementById('retanqueoOtpInput').classList.remove('is-invalid');
+    document.getElementById('retanqueoOtpError').textContent = '';
+    fetch('{% url "solicitar_firma_retanqueo" %}', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken'), 'Accept': 'application/json' },
+        body: JSON.stringify({ credito_id: creditoId })
+    }).then(function(r) { return r.json(); }).then(function(data) {
+        if (data.success) {
+            retanqueoContext.otp = data.otp || '';
+            retanqueoContext.celular = data.celular || '';
+            document.getElementById('retanqueoModalMessage').textContent = data.message || 'Indique al cliente que ingrese el código.';
+            document.getElementById('retanqueoWhatsAppBtn').style.display = retanqueoContext.celular ? 'inline-block' : 'none';
+            new bootstrap.Modal(document.getElementById('modalRetanqueoOTP')).show();
+        } else {
+            alert(data.message || 'No se pudo enviar el código.');
+        }
+    }).catch(function() { alert('Error de conexión.'); });
+}
+function validarOtpRetanqueoLista() {
+    var otp = document.getElementById('retanqueoOtpInput').value.trim();
+    if (otp.length !== 6) {
+        document.getElementById('retanqueoOtpError').textContent = 'Ingrese los 6 dígitos.';
+        document.getElementById('retanqueoOtpInput').classList.add('is-invalid');
+        return;
+    }
+    document.getElementById('retanqueoValidarBtn').disabled = true;
+    fetch('{% url "validar_otp_retanqueo" %}', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken'), 'Accept': 'application/json' },
+        body: JSON.stringify({ credito_id: retanqueoContext.creditoId, otp: otp })
+    }).then(function(r) { return r.json(); }).then(function(data) {
+        if (data.success) {
+            bootstrap.Modal.getInstance(document.getElementById('modalRetanqueoOTP')).hide();
+            alert(data.message);
+            window.location.reload();
+        } else {
+            document.getElementById('retanqueoOtpError').textContent = data.message || 'Código incorrecto o expirado.';
+            document.getElementById('retanqueoOtpInput').classList.add('is-invalid');
+            document.getElementById('retanqueoValidarBtn').disabled = false;
+        }
+    }).catch(function() {
+        document.getElementById('retanqueoOtpError').textContent = 'Error de conexión.';
+        document.getElementById('retanqueoOtpInput').classList.add('is-invalid');
+        document.getElementById('retanqueoValidarBtn').disabled = false;
+    });
+}
+function enviarRetanqueoPorWhatsAppLista() {
+    if (!retanqueoContext.celular || !retanqueoContext.otp) return;
+    var num = (retanqueoContext.celular + '').replace(/\D/g, '');
+    if (num.length === 10) num = '57' + num;
+    var url = 'https://wa.me/' + num + '?text=' + encodeURIComponent('Su código para firmar el documento de retanqueo es: ' + retanqueoContext.otp);
+    window.open(url, '_blank');
+}
+
+function abrirModalFirmarDocRenovacion(creditoId) {
+    renovacionContext.creditoId = creditoId;
+    document.getElementById('renovacionModalMessage').textContent = 'Solicitando código OTP...';
+    document.getElementById('renovacionOtpInput').value = '';
+    document.getElementById('renovacionOtpInput').classList.remove('is-invalid');
+    document.getElementById('renovacionOtpError').textContent = '';
+    fetch('{% url "solicitar_firma_renovacion" %}', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken'), 'Accept': 'application/json' },
+        body: JSON.stringify({ credito_id: creditoId })
+    }).then(function(r) { return r.json(); }).then(function(data) {
+        if (data.success) {
+            renovacionContext.otp = data.otp || '';
+            renovacionContext.celular = data.celular || '';
+            document.getElementById('renovacionModalMessage').textContent = data.message || 'Indique al cliente que ingrese el código.';
+            document.getElementById('renovacionWhatsAppBtn').style.display = renovacionContext.celular ? 'inline-block' : 'none';
+            new bootstrap.Modal(document.getElementById('modalRenovacionOTP')).show();
+        } else {
+            alert(data.message || 'No se pudo enviar el código.');
+        }
+    }).catch(function() { alert('Error de conexión.'); });
+}
+function validarOtpRenovacionLista() {
+    var otp = document.getElementById('renovacionOtpInput').value.trim();
+    if (otp.length !== 6) {
+        document.getElementById('renovacionOtpError').textContent = 'Ingrese los 6 dígitos.';
+        document.getElementById('renovacionOtpInput').classList.add('is-invalid');
+        return;
+    }
+    document.getElementById('renovacionValidarBtn').disabled = true;
+    fetch('{% url "validar_otp_renovacion" %}', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken'), 'Accept': 'application/json' },
+        body: JSON.stringify({ credito_id: renovacionContext.creditoId, otp: otp })
+    }).then(function(r) { return r.json(); }).then(function(data) {
+        if (data.success) {
+            bootstrap.Modal.getInstance(document.getElementById('modalRenovacionOTP')).hide();
+            alert(data.message);
+            window.location.reload();
+        } else {
+            document.getElementById('renovacionOtpError').textContent = data.message || 'Código incorrecto o expirado.';
+            document.getElementById('renovacionOtpInput').classList.add('is-invalid');
+            document.getElementById('renovacionValidarBtn').disabled = false;
+        }
+    }).catch(function() {
+        document.getElementById('renovacionOtpError').textContent = 'Error de conexión.';
+        document.getElementById('renovacionOtpInput').classList.add('is-invalid');
+        document.getElementById('renovacionValidarBtn').disabled = false;
+    });
+}
+function enviarRenovacionPorWhatsAppLista() {
+    if (!renovacionContext.celular || !renovacionContext.otp) return;
+    var num = (renovacionContext.celular + '').replace(/\D/g, '');
+    if (num.length === 10) num = '57' + num;
+    window.open('https://wa.me/' + num + '?text=' + encodeURIComponent('Su código para el documento de renovación es: ' + renovacionContext.otp), '_blank');
+}
+
+function abrirModalFirmarPagare(creditoId) {
+    pagareContext = { creditoId: creditoId, cliente: {}, codeudor: null };
+    document.getElementById('pagareModalMensaje').textContent = 'Solicitando códigos OTP...';
+    document.getElementById('pagareSeccionCodeudor').style.display = 'none';
+    document.getElementById('pagareOtpCliente').value = '';
+    document.getElementById('pagareOtpCodeudor').value = '';
+    document.getElementById('pagareStatusCliente').textContent = '';
+    document.getElementById('pagareStatusCodeudor').textContent = '';
+    fetch('{% url "solicitar_firma_pagare" %}', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken'), 'Accept': 'application/json' },
+        body: JSON.stringify({ credito_id: creditoId })
+    }).then(function(r) { return r.json(); }).then(function(data) {
+        if (!data.success) {
+            document.getElementById('pagareModalMensaje').textContent = data.message || 'Error al solicitar códigos.';
+            return;
+        }
+        pagareContext.cliente = data.cliente || {};
+        pagareContext.codeudor = data.codeudor || null;
+        document.getElementById('pagareModalMensaje').textContent = data.message || 'Indique a cada firmante que ingrese su código.';
+        document.getElementById('btnPagareWaCliente').style.display = pagareContext.cliente.celular ? 'inline-block' : 'none';
+        if (pagareContext.codeudor) {
+            document.getElementById('pagareSeccionCodeudor').style.display = 'block';
+            document.getElementById('btnPagareWaCodeudor').style.display = (pagareContext.codeudor.celular ? 'inline-block' : 'none');
+        }
+        new bootstrap.Modal(document.getElementById('modalFirmarPagare')).show();
+    }).catch(function() {
+        document.getElementById('pagareModalMensaje').textContent = 'Error de conexión.';
+    });
+}
+function validarOtpPagare(tipo) {
+    var inputId = tipo === 'cliente' ? 'pagareOtpCliente' : 'pagareOtpCodeudor';
+    var statusId = tipo === 'cliente' ? 'pagareStatusCliente' : 'pagareStatusCodeudor';
+    var otp = document.getElementById(inputId).value.trim();
+    if (otp.length !== 6) {
+        document.getElementById(statusId).textContent = 'Ingrese 6 dígitos.';
+        document.getElementById(statusId).className = 'small text-danger';
+        return;
+    }
+    fetch('{% url "validar_otp_pagare" %}', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken'), 'Accept': 'application/json' },
+        body: JSON.stringify({ credito_id: pagareContext.creditoId, tipo_firmante: tipo, otp: otp })
+    }).then(function(r) { return r.json(); }).then(function(data) {
+        if (data.success) {
+            document.getElementById(statusId).textContent = 'Firma registrada.';
+            document.getElementById(statusId).className = 'small text-success';
+            if (data.pagare_completo) {
+                bootstrap.Modal.getInstance(document.getElementById('modalFirmarPagare')).hide();
+                alert('Pagaré firmado correctamente. Se envió el documento por correo.');
+                window.location.reload();
+            }
+        } else {
+            document.getElementById(statusId).textContent = data.message || 'Código incorrecto o expirado.';
+            document.getElementById(statusId).className = 'small text-danger';
+        }
+    }).catch(function() {
+        document.getElementById(statusId).textContent = 'Error de conexión.';
+        document.getElementById(statusId).className = 'small text-danger';
+    });
+}
+function enviarPagarePorWhatsApp(tipo) {
+    var ctx = tipo === 'cliente' ? pagareContext.cliente : pagareContext.codeudor;
+    if (!ctx || !ctx.celular || !ctx.otp) return;
+    var num = (ctx.celular + '').replace(/\D/g, '');
+    if (num.length < 10) num = '57' + num; else if (num.indexOf('57') !== 0) num = '57' + num;
+    var text = encodeURIComponent('Su código para firmar el pagaré es: ' + ctx.otp + '. Válido 15 min.');
+    window.open('https://wa.me/' + num + '?text=' + text, '_blank');
+}
+function abrirModalVerPagare(creditoId) {
+    var base = '{% url "descargar_pagare" credito_id=0 %}'.replace('/0/', '/' + creditoId + '/');
+    document.getElementById('iframePagarePdf').src = base + '?inline=1';
+    document.getElementById('btnDescargarPagare').href = base;
+    document.getElementById('btnDescargarPagare').target = '_blank';
+    new bootstrap.Modal(document.getElementById('modalVerPagare')).show();
+}
+document.getElementById('modalVerPagare').addEventListener('hidden.bs.modal', function() {
+    document.getElementById('iframePagarePdf').src = 'about:blank';
+});
+function regenerarPdfPagare(creditoId) {
+    if (!confirm('¿Regenerar el PDF del pagaré con el nuevo formato (páginas independientes + anexo de cédulas)? Se reemplazará el archivo actual.')) return;
+    fetch('{% url "regenerar_pagare" %}', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken'), 'Accept': 'application/json' },
+        body: JSON.stringify({ credito_id: creditoId })
+    }).then(function(r) { return r.json(); }).then(function(data) {
+        if (data.success) {
+            alert(data.message);
+            window.location.reload();
+        } else {
+            alert(data.message || 'No se pudo regenerar.');
+        }
+    }).catch(function() { alert('Error de conexión.'); });
+}
+
 // Función para mostrar detalles del crédito en modal
 function mostrarDetallesCredito(id, cliente, monto, estado, tasa, plazo, fecha, cobrador) {
     const modalHtml = `
-        <div class="modal fade" id="detallesCreditoModal" tabindex="-1" aria-hidden="true">
+        <div class="modal fade" id="detallesCreditoModal" tabindex="-1" aria-hidden="true" data-credito-id="${id}">
             <div class="modal-dialog modal-lg">
                 <div class="modal-content">
                     <div class="modal-header bg-primary text-white">
@@ -329,6 +751,33 @@ function mostrarDetallesCredito(id, cliente, monto, estado, tasa, plazo, fecha, 
                                 </div>
                             </div>
                         </div>
+                        <hr class="my-3">
+                        <h6 class="text-primary mb-2"><i class="fas fa-list-ul me-2"></i>Abonos realizados</h6>
+                        <div id="abonosCreditoModalContainer">
+                            <div id="abonosCreditoModalLoading" class="text-center py-3 text-muted">
+                                <span class="spinner-border spinner-border-sm me-2"></span>Cargando abonos...
+                            </div>
+                            <div id="abonosCreditoModalTableWrap" style="display:none;">
+                                <div class="table-responsive">
+                                    <table class="table table-sm table-hover mb-0" id="tablaAbonosCredito">
+                                        <thead class="table-light">
+                                            <tr>
+                                                <th>Fecha</th>
+                                                <th>Valor</th>
+                                                <th>Cuota</th>
+                                                <th>Cobrado por</th>
+                                                <th>Observaciones</th>
+                                                <th></th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="tablaAbonosCreditoBody"></tbody>
+                                    </table>
+                                </div>
+                                <p class="small mb-0 mt-2" id="abonosCreditoResumen"></p>
+                            </div>
+                            <div id="abonosCreditoModalEmpty" style="display:none;" class="text-muted small py-2">Aún no hay abonos registrados.</div>
+                            <div id="abonosCreditoModalError" style="display:none;" class="text-danger small py-2"></div>
+                        </div>
                     </div>
                     <div class="modal-footer">
                         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
@@ -353,11 +802,65 @@ function mostrarDetallesCredito(id, cliente, monto, estado, tasa, plazo, fecha, 
     document.body.insertAdjacentHTML('beforeend', modalHtml);
     
     // Mostrar modal
-    const modal = new bootstrap.Modal(document.getElementById('detallesCreditoModal'));
+    const modalEl = document.getElementById('detallesCreditoModal');
+    const modal = new bootstrap.Modal(modalEl);
     modal.show();
-    
+
+    // Cargar abonos cuando el modal esté visible
+    modalEl.addEventListener('shown.bs.modal', function once() {
+        modalEl.removeEventListener('shown.bs.modal', once);
+        const creditoId = this.getAttribute('data-credito-id');
+        if (!creditoId) return;
+        const url = '{% url "obtener_pagos_credito" 0 %}'.replace('/0/', '/' + creditoId + '/');
+        const loading = document.getElementById('abonosCreditoModalLoading');
+        const tableWrap = document.getElementById('abonosCreditoModalTableWrap');
+        const tbody = document.getElementById('tablaAbonosCreditoBody');
+        const resumen = document.getElementById('abonosCreditoResumen');
+        const empty = document.getElementById('abonosCreditoModalEmpty');
+        const err = document.getElementById('abonosCreditoModalError');
+        loading.style.display = 'block';
+        tableWrap.style.display = 'none';
+        empty.style.display = 'none';
+        err.style.display = 'none';
+        fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                loading.style.display = 'none';
+                if (!data.success) {
+                    err.textContent = data.error || 'Error al cargar abonos';
+                    err.style.display = 'block';
+                    return;
+                }
+                var pagos = data.pagos || [];
+                if (pagos.length === 0) {
+                    empty.style.display = 'block';
+                    return;
+                }
+                tbody.innerHTML = '';
+                function esc(s) {
+                    if (s == null || s === '') return '';
+                    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+                }
+                pagos.forEach(function(p) {
+                    var tr = document.createElement('tr');
+                    var cobrado = esc(p.cobrado_por) || '-';
+                    var obs = (p.observaciones && p.observaciones.length > 80) ? esc(p.observaciones.substring(0, 80)) + '…' : (esc(p.observaciones) || '-');
+                    var reciboUrl = '{% url "generar_recibo_pdf" 0 %}'.replace('/0/', '/' + p.id + '/');
+                    tr.innerHTML = '<td>' + esc(p.fecha_pago) + '</td><td class="text-success fw-semibold">$' + Number(p.monto).toLocaleString('es-CO') + '</td><td>' + (p.numero_cuota != null ? esc(String(p.numero_cuota)) : '-') + '</td><td>' + cobrado + '</td><td class="small text-muted">' + obs + '</td><td><a href="' + reciboUrl + '" target="_blank" class="btn btn-sm btn-outline-secondary" title="Descargar recibo"><i class="fas fa-file-pdf"></i></a></td>';
+                    tbody.appendChild(tr);
+                });
+                resumen.innerHTML = 'Total pagado: <strong>$' + Number(data.total_pagado).toLocaleString('es-CO') + '</strong> &nbsp;|&nbsp; Saldo pendiente: <strong>$' + Number(data.saldo_pendiente).toLocaleString('es-CO') + '</strong>';
+                tableWrap.style.display = 'block';
+            })
+            .catch(function() {
+                loading.style.display = 'none';
+                err.textContent = 'Error de conexión al cargar abonos.';
+                err.style.display = 'block';
+            });
+    });
+
     // Remover modal del DOM cuando se cierre
-    document.getElementById('detallesCreditoModal').addEventListener('hidden.bs.modal', function() {
+    modalEl.addEventListener('hidden.bs.modal', function() {
         this.remove();
     });
 }
@@ -656,16 +1159,29 @@ function mostrarModalAprobacion(credito) {
     modal.show();
 }
 
+// URL base para aprobar crédito (generada por Django para respetar prefijos de la app)
+var URL_APROBAR_CREDITO = "{% url 'aprobar_credito' 0 %}".replace('/0/', '/');
+
 // Función para descargar PDF
 function descargarPDF(creditoId) {
-    window.open(`/generar-pdf-cronograma/${creditoId}/`, '_blank');
+    var urlCronograma = "{% url 'generar_pdf_cronograma' 0 %}".replace('/0/', '/' + creditoId + '/');
+    window.open(urlCronograma, '_blank');
 }
 
-// Función para confirmar aprobación
+// Función para confirmar aprobación (envío por POST con CSRF para que la acción se ejecute correctamente)
 function confirmarAprobacion(creditoId) {
-    if (confirm('¿Está seguro que desea aprobar este crédito? Esta acción no se puede deshacer.')) {
-        window.location.href = `/aprobar-credito/${creditoId}/`;
-    }
+    if (!confirm('¿Está seguro que desea aprobar este crédito? Esta acción no se puede deshacer.')) return;
+    var form = document.createElement('form');
+    form.method = 'POST';
+    form.action = URL_APROBAR_CREDITO + creditoId + '/';
+    form.style.display = 'none';
+    var csrfInput = document.createElement('input');
+    csrfInput.type = 'hidden';
+    csrfInput.name = 'csrfmiddlewaretoken';
+    csrfInput.value = getCookie('csrftoken') || '';
+    form.appendChild(csrfInput);
+    document.body.appendChild(form);
+    form.submit();
 }
 
 // Función para mostrar errores

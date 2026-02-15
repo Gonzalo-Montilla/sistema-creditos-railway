@@ -65,13 +65,14 @@ class CodeudorForm(forms.ModelForm):
 
     class Meta:
         model = Codeudor
-        fields = ['nombres', 'apellidos', 'cedula', 'celular', 'direccion', 'barrio', 
+        fields = ['nombres', 'apellidos', 'cedula', 'celular', 'email', 'direccion', 'barrio',
                  'foto_rostro', 'foto_cedula_frontal', 'foto_cedula_trasera']
         widgets = {
             'nombres': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Nombres del codeudor'}),
             'apellidos': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Apellidos del codeudor'}),
             'cedula': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Cédula del codeudor (5-10 dígitos)'}),
             'celular': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Celular del codeudor'}),
+            'email': forms.EmailInput(attrs={'class': 'form-control', 'placeholder': 'Correo (opcional, para envío Habeas Data)'}),
             'direccion': forms.Textarea(attrs={'class': 'form-control', 'rows': 3, 'placeholder': 'Dirección completa'}),
             'barrio': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Barrio'}),
             'foto_rostro': forms.FileInput(attrs={'class': 'form-control', 'accept': 'image/*'}),
@@ -121,8 +122,9 @@ class CreditoForm(forms.ModelForm):
     
     class Meta:
         model = Credito
-        fields = ['cliente', 'monto', 'tasa_interes', 'tipo_plazo', 'cantidad_cuotas', 'cobrador', 'estado']
+        fields = ['cliente', 'monto', 'tasa_interes', 'tipo_plazo', 'cantidad_cuotas', 'cobrador', 'estado', 'es_renovacion']
         widgets = {
+            'es_renovacion': forms.CheckboxInput(attrs={'class': 'form-check-input', 'title': 'Marcar si es crédito por renovación (no requiere pagaré, sí documento de renovación)'}),
             'monto': forms.NumberInput(attrs={
                 'class': 'form-control', 
                 'step': '0.01', 
@@ -247,11 +249,17 @@ class PagoForm(forms.ModelForm):
         # Si estamos editando, llenar la cédula del cliente
         if self.instance and self.instance.pk and hasattr(self.instance, 'credito') and self.instance.credito:
             self.fields['cedula_cliente'].initial = self.instance.credito.cliente.cedula
-            # Mostrar créditos del cliente actual
-            self.fields['credito'].queryset = Credito.objects.filter(
+            # Mostrar solo créditos del cliente que pueden recibir pagos (con saldo pendiente)
+            candidatos = Credito.objects.filter(
                 cliente=self.instance.credito.cliente,
                 estado__in=['APROBADO', 'DESEMBOLSADO']
             ).exclude(estado='PAGADO')
+            ids_con_saldo = [c.id for c in candidatos if c.puede_recibir_pagos()]
+            # Incluir el crédito actual por si acaso (para poder guardar el pago editado)
+            credito_actual_id = self.instance.credito_id
+            if credito_actual_id not in ids_con_saldo:
+                ids_con_saldo.append(credito_actual_id)
+            self.fields['credito'].queryset = Credito.objects.filter(id__in=ids_con_saldo)
             self.fields['credito'].widget.attrs.pop('disabled', None)
     
     def clean_cedula_cliente(self):
@@ -285,12 +293,14 @@ class PagoForm(forms.ModelForm):
                 'monto': 'El monto debe ser mayor a cero.'
             })
         
-        # Validaciones específicas para pesos colombianos
-        # Permitir desde $50 para casos excepcionales (pagos parciales, etc.)
+        # Validaciones específicas para pesos colombianos.
+        # Permitir montos menores a $50 solo si es un pago de cierre (monto >= saldo pendiente del crédito).
         if monto < 50:
-            raise ValidationError({
-                'monto': f'El monto ${monto:,.0f} parece muy bajo para un pago en pesos colombianos.'
-            })
+            saldo = credito.saldo_pendiente() if credito else 0
+            if not credito or monto < float(saldo):
+                raise ValidationError({
+                    'monto': f'El monto ${monto:,.2f} es muy bajo para un pago normal. Si es el cierre del crédito (saldo ${saldo:,.2f}), use ese valor.'
+                })
         
         if monto > 50000000:  # 50 millones COP
             raise ValidationError({

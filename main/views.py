@@ -9,6 +9,11 @@ from django.http import JsonResponse, HttpResponse
 from django.template.loader import get_template
 from .models import Cliente, Credito, Pago, Codeudor, CronogramaPago, Cobrador, Ruta, TareaCobro
 from .forms import ClienteForm, CreditoForm, PagoForm, CodeudorForm
+from .habeas_data import solicitar_otp_habeas_data, validar_otp_y_firmar, regenerar_pdf_habeas_data
+from .pagare import solicitar_otp_pagare, validar_otp_pagare, regenerar_pdf_pagare
+from .renovacion import solicitar_otp_renovacion, validar_otp_renovacion
+from .retanqueo import ejecutar_retanqueo, revertir_retanqueo
+from .retanqueo_documento import solicitar_otp_retanqueo, validar_otp_retanqueo
 
 # Para generar PDFs
 from reportlab.lib import colors
@@ -18,6 +23,8 @@ from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import inch
 from datetime import datetime, timedelta, date
 from io import BytesIO
+import json
+import re
 
 def login_view(request):
     if request.user.is_authenticated:
@@ -131,10 +138,23 @@ def clientes(request):
 @login_required
 def creditos(request):
     from django.core.paginator import Paginator
+    from django.db.models import Q
     
-    creditos_list = Credito.objects.all().order_by('-fecha_solicitud')
+    creditos_list = Credito.objects.select_related('cliente', 'cobrador').order_by('-fecha_solicitud')
     
-    # Calcular estadísticas (usar la lista completa)
+    # Búsqueda por cliente (nombre, apellidos, cédula) o por ID de crédito
+    q = request.GET.get('q', '').strip()
+    if q:
+        filtro = (
+            Q(cliente__nombres__icontains=q) |
+            Q(cliente__apellidos__icontains=q) |
+            Q(cliente__cedula__icontains=q)
+        )
+        if q.isdigit():
+            filtro = filtro | Q(id=int(q))
+        creditos_list = creditos_list.filter(filtro)
+    
+    # Calcular estadísticas (sobre la lista filtrada)
     total_creditos = creditos_list.count()
     creditos_aprobados = creditos_list.filter(estado='APROBADO').count()
     creditos_pendientes = creditos_list.filter(estado='SOLICITADO').count()
@@ -155,6 +175,7 @@ def creditos(request):
         'creditos_vencidos': creditos_vencidos,
         'creditos_desembolsados': creditos_desembolsados,
         'creditos_pagados': creditos_pagados,
+        'q': q,
     }
     return render(request, 'creditos.html', context)
 
@@ -281,7 +302,10 @@ def nuevo_credito(request):
             if not cliente:
                 messages.error(request, 'Error: No se pudo identificar el cliente.')
                 return render(request, 'nuevo_credito.html', {'form': form})
-            
+            ok, msg = _cliente_y_codeudor_tienen_habeas_data(cliente)
+            if not ok:
+                messages.error(request, msg)
+                return render(request, 'nuevo_credito.html', {'form': form, 'cliente_prellenado': cliente})
             # Crear el crédito pero no guardar aún
             credito = form.save(commit=False)
             credito.cliente = cliente  # Asegurar que el cliente esté asignado
@@ -341,15 +365,17 @@ def nuevo_pago(request):
     if request.method == 'POST':
         form = PagoForm(request.POST)
         
-        # Actualizar queryset del crédito basado en la cédula proporcionada
+        # Actualizar queryset del crédito: solo los que pueden recibir pagos (con saldo pendiente)
         cedula_cliente = request.POST.get('cedula_cliente')
         if cedula_cliente:
             try:
                 cliente = Cliente.objects.get(cedula=cedula_cliente, activo=True)
-                form.fields['credito'].queryset = Credito.objects.filter(
+                candidatos = Credito.objects.filter(
                     cliente=cliente,
                     estado__in=['APROBADO', 'DESEMBOLSADO']
                 ).exclude(estado='PAGADO')
+                ids_con_saldo = [c.id for c in candidatos if c.puede_recibir_pagos()]
+                form.fields['credito'].queryset = Credito.objects.filter(id__in=ids_con_saldo)
             except Cliente.DoesNotExist:
                 pass
         
@@ -418,23 +444,41 @@ def nuevo_pago(request):
     })
 
 # Vistas para cambio de estado de créditos
+def _cliente_y_codeudor_tienen_habeas_data(cliente):
+    """Verifica que cliente y codeudor (si existe) tengan Habeas Data firmado."""
+    if not cliente.tiene_habeas_data_firmado():
+        return False, 'El cliente debe tener la autorización Habeas Data firmada antes de continuar.'
+    try:
+        codeudor = cliente.codeudor
+        if not codeudor.tiene_habeas_data_firmado():
+            return False, 'El codeudor debe tener la autorización Habeas Data firmada antes de continuar.'
+    except Codeudor.DoesNotExist:
+        pass
+    return True, None
+
+
 @login_required
 def aprobar_credito(request, credito_id):
+    """Acepta GET (enlace directo) o POST (formulario desde el modal)."""
+    if request.method not in ('GET', 'POST'):
+        return redirect('creditos')
     credito = get_object_or_404(Credito, id=credito_id)
     
     if credito.estado != 'SOLICITADO':
         messages.error(request, f'El crédito #{credito.id} no está en estado SOLICITADO')
         return redirect('creditos')
     
-    # Aquí podrías agregar lógica de validación créditicia
-    # Por ejemplo: verificar ingresos, historial crediticio, etc.
+    ok, msg = _cliente_y_codeudor_tienen_habeas_data(credito.cliente)
+    if not ok:
+        messages.error(request, msg)
+        return redirect('creditos')
     
     credito.estado = 'APROBADO'
     credito.fecha_aprobacion = timezone.now()
     credito.save()
     
     messages.success(
-        request, 
+        request,
         f'¡Crédito #{credito.id} de {credito.cliente.nombre_completo} por ${credito.monto} APROBADO exitosamente!'
     )
     return redirect('creditos')
@@ -446,6 +490,15 @@ def rechazar_credito(request, credito_id):
     if credito.estado != 'SOLICITADO':
         messages.error(request, f'El crédito #{credito.id} no está en estado SOLICITADO')
         return redirect('creditos')
+
+    # Si es un crédito creado por retanqueo, revertir: quitar el pago del crédito anterior y dejarlo vigente
+    if credito.credito_retanqueado_id:
+        ok_revertir, msg_revertir = revertir_retanqueo(credito.id)
+        if ok_revertir and msg_revertir:
+            messages.info(request, msg_revertir)
+        elif not ok_revertir:
+            messages.error(request, msg_revertir)
+            return redirect('creditos')
     
     credito.estado = 'RECHAZADO'
     credito.save()
@@ -464,6 +517,19 @@ def desembolsar_credito(request, credito_id):
         messages.error(request, f'El crédito #{credito.id} no está en estado APROBADO')
         return redirect('creditos')
     
+    ok, msg = _cliente_y_codeudor_tienen_habeas_data(credito.cliente)
+    if not ok:
+        messages.error(request, msg)
+        return redirect('creditos')
+    if not credito.puede_desembolsar_segun_firma():
+        if credito.credito_retanqueado_id:
+            messages.error(request, 'El documento de retanqueo debe estar firmado por el cliente (OTP) antes de desembolsar.')
+        elif credito.es_renovacion:
+            messages.error(request, 'El documento de renovación debe estar firmado por el cliente antes de desembolsar.')
+        else:
+            messages.error(request, 'El pagaré debe estar firmado por el cliente (y codeudor si aplica) antes de desembolsar.')
+        return redirect('creditos')
+
     # Actualizar estado y fecha de desembolso
     credito.estado = 'DESEMBOLSADO'
     credito.fecha_desembolso = timezone.now()
@@ -504,13 +570,372 @@ def detalle_cliente(request, cliente_id):
         codeudor = None
     
     creditos = cliente.credito_set.all().order_by('-fecha_solicitud')
+    creditos_con_pagare = [c for c in creditos if c.tiene_pagare_firmado()]
+    creditos_para_renovacion = [c for c in creditos if c.estado in ('SOLICITADO', 'APROBADO')]
     
     context = {
         'cliente': cliente,
         'codeudor': codeudor,
         'creditos': creditos,
+        'creditos_con_pagare': creditos_con_pagare,
+        'creditos_para_renovacion': creditos_para_renovacion,
     }
     return render(request, 'detalle_cliente.html', context)
+
+
+# ---------- Habeas Data (Ley 1581/2012) ----------
+def _get_json_or_post(request, key, default=None):
+    """Obtiene un valor de request.POST o del body JSON si Content-Type es application/json."""
+    if request.content_type and 'application/json' in request.content_type:
+        try:
+            data = json.loads(request.body)
+            return data.get(key, default)
+        except Exception:
+            return default
+    return request.POST.get(key, default)
+
+
+@login_required
+def solicitar_habeas_data(request):
+    """Genera OTP, envía correo si hay email; retorna JSON con otp (para contingencia WhatsApp), celular, message."""
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'message': 'Método no permitido'}, status=405)
+    tipo = _get_json_or_post(request, 'tipo')
+    try:
+        objeto_id = int(_get_json_or_post(request, 'id') or 0)
+    except (TypeError, ValueError):
+        return JsonResponse({'success': False, 'message': 'ID inválido'}, status=400)
+    if tipo not in ('cliente', 'codeudor'):
+        return JsonResponse({'success': False, 'message': 'Tipo inválido'}, status=400)
+    if tipo == 'cliente':
+        obj = Cliente.objects.filter(id=objeto_id).first()
+    else:
+        obj = Codeudor.objects.filter(id=objeto_id).first()
+    if not obj:
+        return JsonResponse({'success': False, 'message': 'No encontrado'}, status=404)
+    if tipo == 'cliente' and obj.tiene_habeas_data_firmado():
+        return JsonResponse({'success': False, 'message': 'El cliente ya tiene autorización Habeas Data firmada.'}, status=400)
+    if tipo == 'codeudor' and obj.tiene_habeas_data_firmado():
+        return JsonResponse({'success': False, 'message': 'El codeudor ya tiene autorización Habeas Data firmada.'}, status=400)
+    otp_plain, email_enviado, celular, email_destino = solicitar_otp_habeas_data(tipo, objeto_id)
+    if not otp_plain:
+        return JsonResponse({'success': False, 'message': 'Error al generar código'}, status=500)
+    mensaje = f'Código generado. Válido por 15 minutos.'
+    if email_destino and email_enviado:
+        mensaje = f'Se envió un correo a {email_destino} con el código. Indique al titular que revise su bandeja e ingrese el código.'
+    elif not email_destino and celular:
+        mensaje = 'No hay correo registrado. Use "Enviar código por WhatsApp" para que el titular reciba el código.'
+    return JsonResponse({
+        'success': True,
+        'otp': otp_plain,
+        'celular': celular,
+        'message': mensaje,
+    })
+
+
+@login_required
+def validar_otp_habeas_data(request):
+    """Valida OTP, genera PDF, guarda en Cliente/Codeudor, envía correo con PDF. Retorna JSON."""
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'message': 'Método no permitido'}, status=405)
+    tipo = _get_json_or_post(request, 'tipo')
+    try:
+        objeto_id = int(_get_json_or_post(request, 'id') or 0)
+    except (TypeError, ValueError):
+        return JsonResponse({'success': False, 'message': 'ID inválido'}, status=400)
+    otp = (_get_json_or_post(request, 'otp') or '').strip()
+    if not otp or len(otp) != 6:
+        return JsonResponse({'success': False, 'message': 'Ingrese el código de 6 dígitos'}, status=400)
+    ok, error = validar_otp_y_firmar(tipo, objeto_id, otp)
+    if not ok:
+        return JsonResponse({'success': False, 'message': error}, status=400)
+    return JsonResponse({'success': True, 'message': 'Autorización Habeas Data registrada correctamente.'})
+
+
+@login_required
+def regenerar_habeas_data(request):
+    """Regenera el PDF de Habeas Data con el formato actual (código único, disclaimer). POST JSON: tipo, id."""
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'message': 'Método no permitido'}, status=405)
+    tipo = _get_json_or_post(request, 'tipo')
+    try:
+        objeto_id = int(_get_json_or_post(request, 'id') or 0)
+    except (TypeError, ValueError):
+        return JsonResponse({'success': False, 'message': 'ID inválido'}, status=400)
+    if tipo not in ('cliente', 'codeudor'):
+        return JsonResponse({'success': False, 'message': 'Tipo inválido'}, status=400)
+    ok, error = regenerar_pdf_habeas_data(tipo, objeto_id)
+    if not ok:
+        return JsonResponse({'success': False, 'message': error}, status=400)
+    return JsonResponse({'success': True, 'message': 'PDF regenerado con el nuevo formato. Ya puede verlo o descargarlo.'})
+
+
+@login_required
+def descargar_habeas_data(request, tipo, objeto_id):
+    """Sirve el PDF de autorización Habeas Data del cliente o codeudor. ?inline=1 para vista previa en modal."""
+    if tipo == 'cliente':
+        obj = get_object_or_404(Cliente, id=objeto_id)
+    else:
+        obj = get_object_or_404(Codeudor, id=objeto_id)
+    if not obj.documento_habeas_data:
+        return HttpResponse('No hay documento de autorización Habeas Data.', status=404)
+    try:
+        with obj.documento_habeas_data.open('rb') as f:
+            content = f.read()
+    except Exception:
+        return HttpResponse('Error al leer el documento.', status=500)
+    response = HttpResponse(content, content_type='application/pdf')
+    filename = f'autorizacion_habeas_data_{tipo}_{objeto_id}.pdf'
+    if request.GET.get('inline') == '1':
+        response['Content-Disposition'] = f'inline; filename="{filename}"'
+        # Permitir vista previa en iframe del mismo sitio (modal)
+        response['X-Frame-Options'] = 'SAMEORIGIN'
+    else:
+        response['Content-Disposition'] = f'attachment; filename="{filename}"'
+    return response
+
+
+# ---------- Pagaré electrónico ----------
+@login_required
+def solicitar_firma_pagare(request):
+    """Genera OTP para cliente y codeudor del crédito. POST JSON: credito_id."""
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'message': 'Método no permitido'}, status=405)
+    try:
+        credito_id = int(_get_json_or_post(request, 'credito_id') or _get_json_or_post(request, 'id') or 0)
+    except (TypeError, ValueError):
+        return JsonResponse({'success': False, 'message': 'ID de crédito inválido'}, status=400)
+    result = solicitar_otp_pagare(credito_id)
+    if not result.get('success'):
+        return JsonResponse({'success': False, 'message': result.get('message', 'Error')}, status=400)
+    return JsonResponse(result)
+
+
+@login_required
+def validar_otp_pagare_view(request):
+    """Valida OTP del cliente o codeudor. POST JSON: credito_id, tipo_firmante, otp."""
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'message': 'Método no permitido'}, status=405)
+    try:
+        credito_id = int(_get_json_or_post(request, 'credito_id') or _get_json_or_post(request, 'id') or 0)
+    except (TypeError, ValueError):
+        return JsonResponse({'success': False, 'message': 'ID de crédito inválido'}, status=400)
+    tipo_firmante = _get_json_or_post(request, 'tipo_firmante')
+    if tipo_firmante not in ('cliente', 'codeudor'):
+        return JsonResponse({'success': False, 'message': 'Tipo de firmante inválido'}, status=400)
+    otp = (_get_json_or_post(request, 'otp') or '').strip()
+    if not otp or len(otp) != 6:
+        return JsonResponse({'success': False, 'message': 'Ingrese el código de 6 dígitos'}, status=400)
+    ok, error = validar_otp_pagare(credito_id, tipo_firmante, otp)
+    if not ok:
+        return JsonResponse({'success': False, 'message': error}, status=400)
+    return JsonResponse({'success': True, 'message': 'Firma registrada.', 'pagare_completo': _credito_tiene_pagare_completo(credito_id)})
+
+
+def _credito_tiene_pagare_completo(credito_id):
+    c = Credito.objects.filter(id=credito_id).first()
+    return c.tiene_pagare_firmado() if c else False
+
+
+@login_required
+def regenerar_pagare(request):
+    """Regenera el PDF del pagaré con el formato actual (páginas independientes + anexo). POST JSON: credito_id."""
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'message': 'Método no permitido'}, status=405)
+    try:
+        credito_id = int(_get_json_or_post(request, 'credito_id') or _get_json_or_post(request, 'id') or 0)
+    except (TypeError, ValueError):
+        return JsonResponse({'success': False, 'message': 'ID de crédito inválido'}, status=400)
+    ok, error = regenerar_pdf_pagare(credito_id)
+    if not ok:
+        return JsonResponse({'success': False, 'message': error}, status=400)
+    return JsonResponse({'success': True, 'message': 'PDF del pagaré regenerado con el nuevo formato (páginas independientes y anexo de cédulas). Ya puede verlo o descargarlo.'})
+
+
+@login_required
+def descargar_pagare(request, credito_id):
+    """Sirve el PDF del pagaré del crédito. ?inline=1 para vista previa en modal."""
+    credito = get_object_or_404(Credito, id=credito_id)
+    if not credito.documento_pagare:
+        return HttpResponse('No hay documento de pagaré para este crédito.', status=404)
+    try:
+        with credito.documento_pagare.open('rb') as f:
+            content = f.read()
+    except Exception:
+        return HttpResponse('Error al leer el documento.', status=500)
+    response = HttpResponse(content, content_type='application/pdf')
+    filename = f'pagare_credito_{credito_id}.pdf'
+    if request.GET.get('inline') == '1':
+        response['Content-Disposition'] = f'inline; filename="{filename}"'
+        response['X-Frame-Options'] = 'SAMEORIGIN'
+    else:
+        response['Content-Disposition'] = f'attachment; filename="{filename}"'
+    return response
+
+
+# ---------- Renovación de crédito ----------
+@login_required
+def solicitar_firma_renovacion(request):
+    """Genera OTP para documento de renovación. POST JSON: credito_id."""
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'message': 'Método no permitido'}, status=405)
+    try:
+        credito_id = int(_get_json_or_post(request, 'credito_id') or _get_json_or_post(request, 'id') or 0)
+    except (TypeError, ValueError):
+        return JsonResponse({'success': False, 'message': 'ID de crédito inválido'}, status=400)
+    result = solicitar_otp_renovacion(credito_id)
+    if not result.get('success'):
+        return JsonResponse({'success': False, 'message': result.get('message', 'Error')}, status=400)
+    return JsonResponse(result)
+
+
+@login_required
+def validar_otp_renovacion_view(request):
+    """Valida OTP de renovación. POST JSON: credito_id, otp."""
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'message': 'Método no permitido'}, status=405)
+    try:
+        credito_id = int(_get_json_or_post(request, 'credito_id') or _get_json_or_post(request, 'id') or 0)
+    except (TypeError, ValueError):
+        return JsonResponse({'success': False, 'message': 'ID de crédito inválido'}, status=400)
+    otp = (_get_json_or_post(request, 'otp') or '').strip()
+    if not otp or len(otp) != 6:
+        return JsonResponse({'success': False, 'message': 'Ingrese el código de 6 dígitos'}, status=400)
+    ok, error = validar_otp_renovacion(credito_id, otp)
+    if not ok:
+        return JsonResponse({'success': False, 'message': error}, status=400)
+    return JsonResponse({'success': True, 'message': 'Documento de renovación firmado correctamente.'})
+
+
+@login_required
+def descargar_renovacion(request, cliente_id):
+    """Sirve el último PDF de renovación del cliente. ?inline=1 para vista previa."""
+    cliente = get_object_or_404(Cliente, id=cliente_id)
+    if not cliente.documento_renovacion:
+        return HttpResponse('No hay documento de renovación para este cliente.', status=404)
+    try:
+        with cliente.documento_renovacion.open('rb') as f:
+            content = f.read()
+    except Exception:
+        return HttpResponse('Error al leer el documento.', status=500)
+    response = HttpResponse(content, content_type='application/pdf')
+    filename = f'renovacion_cliente_{cliente_id}.pdf'
+    if request.GET.get('inline') == '1':
+        response['Content-Disposition'] = f'inline; filename="{filename}"'
+        response['X-Frame-Options'] = 'SAMEORIGIN'
+    else:
+        response['Content-Disposition'] = f'attachment; filename="{filename}"'
+    return response
+
+
+# ---------- Documento de conformidad de retanqueo (OTP) ----------
+@login_required
+def solicitar_firma_retanqueo(request):
+    """Genera OTP para documento de retanqueo. POST JSON: credito_id."""
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'message': 'Método no permitido'}, status=405)
+    try:
+        credito_id = int(_get_json_or_post(request, 'credito_id') or _get_json_or_post(request, 'id') or 0)
+    except (TypeError, ValueError):
+        return JsonResponse({'success': False, 'message': 'ID de crédito inválido'}, status=400)
+    try:
+        result = solicitar_otp_retanqueo(credito_id)
+    except Exception as e:
+        return JsonResponse({'success': False, 'message': f'Error al solicitar código: {str(e)}'}, status=500)
+    if not result.get('success'):
+        return JsonResponse({'success': False, 'message': result.get('message', 'Error')}, status=400)
+    return JsonResponse(result)
+
+
+@login_required
+def validar_otp_retanqueo_view(request):
+    """Valida OTP del documento de retanqueo. POST JSON: credito_id, otp."""
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'message': 'Método no permitido'}, status=405)
+    try:
+        credito_id = int(_get_json_or_post(request, 'credito_id') or _get_json_or_post(request, 'id') or 0)
+    except (TypeError, ValueError):
+        return JsonResponse({'success': False, 'message': 'ID de crédito inválido'}, status=400)
+    otp = (_get_json_or_post(request, 'otp') or '').strip()
+    if not otp or len(otp) != 6:
+        return JsonResponse({'success': False, 'message': 'Ingrese el código de 6 dígitos'}, status=400)
+    try:
+        ok, error = validar_otp_retanqueo(credito_id, otp)
+    except Exception as e:
+        return JsonResponse({'success': False, 'message': f'Error al validar: {str(e)}'}, status=500)
+    if not ok:
+        return JsonResponse({'success': False, 'message': error}, status=400)
+    return JsonResponse({'success': True, 'message': 'Documento de retanqueo firmado correctamente.'})
+
+
+@login_required
+def descargar_retanqueo(request, credito_id):
+    """Sirve el PDF del documento de retanqueo del crédito. ?inline=1 para vista previa."""
+    credito = get_object_or_404(Credito, id=credito_id)
+    if not credito.documento_retanqueo:
+        return HttpResponse('No hay documento de retanqueo para este crédito.', status=404)
+    try:
+        with credito.documento_retanqueo.open('rb') as f:
+            content = f.read()
+    except Exception:
+        return HttpResponse('Error al leer el documento.', status=500)
+    response = HttpResponse(content, content_type='application/pdf')
+    filename = f'retanqueo_credito_{credito_id}.pdf'
+    if request.GET.get('inline') == '1':
+        response['Content-Disposition'] = f'inline; filename="{filename}"'
+        response['X-Frame-Options'] = 'SAMEORIGIN'
+    else:
+        response['Content-Disposition'] = f'attachment; filename="{filename}"'
+    return response
+
+
+@login_required
+def retanqueo_credito(request, credito_id):
+    """
+    Retanqueo: liquidar crédito anterior y crear nuevo.
+    GET: formulario con saldo a liquidar y monto de la nueva solicitud.
+    POST: ejecutar retanqueo y redirigir al nuevo crédito o a créditos.
+    """
+    credito = get_object_or_404(Credito, id=credito_id)
+    if not credito.puede_retanquear():
+        messages.error(
+            request,
+            'Este crédito no puede retanquearse. Debe estar desembolsado o vencido y con saldo pendiente.'
+        )
+        return redirect('creditos')
+
+    saldo_a_liquidar = credito.saldo_a_liquidar()
+
+    if request.method == 'POST':
+        monto_str = request.POST.get('monto_nueva_solicitud', '').strip()
+        try:
+            monto_nueva = float(monto_str.replace(',', '.'))
+        except (ValueError, TypeError):
+            messages.error(request, 'Ingrese un monto válido para la nueva solicitud.')
+            return render(request, 'retanqueo_credito.html', {
+                'credito': credito,
+                'saldo_a_liquidar': saldo_a_liquidar,
+                'saldo_a_liquidar_js': float(saldo_a_liquidar),
+                'monto_nueva_solicitud': monto_str,
+            })
+        success, nuevo_credito, message = ejecutar_retanqueo(credito.id, monto_nueva)
+        if success:
+            messages.success(request, message)
+            return redirect('creditos')
+        messages.error(request, message)
+        return render(request, 'retanqueo_credito.html', {
+            'credito': credito,
+            'saldo_a_liquidar': saldo_a_liquidar,
+            'saldo_a_liquidar_js': float(saldo_a_liquidar),
+            'monto_nueva_solicitud': monto_str,
+        })
+
+    return render(request, 'retanqueo_credito.html', {
+        'credito': credito,
+        'saldo_a_liquidar': saldo_a_liquidar,
+        'saldo_a_liquidar_js': float(saldo_a_liquidar),
+    })
+
 
 @login_required
 def nuevo_codeudor(request, cliente_id):
@@ -775,6 +1200,39 @@ def obtener_datos_credito(request, credito_id):
             'success': False,
             'error': str(e)
         })
+
+
+@login_required
+def obtener_pagos_credito(request, credito_id):
+    """Devuelve los abonos (pagos) del crédito para mostrar en detalle del crédito."""
+    credito = get_object_or_404(Credito, id=credito_id)
+    pagos = credito.pago_set.order_by('-fecha_pago')
+    lista = []
+    for p in pagos:
+        cobrado_por = None
+        if p.observaciones:
+            # "Cobro en campo por Juan Pérez" o "Cobro por María García" o "💰 Cobro por ..."
+            m = re.search(r'(?:Cobro\s+(?:en\s+campo\s+)?por|por)\s+([^\n]+?)(?:\n|$)', p.observaciones.strip(), re.IGNORECASE)
+            if m:
+                cobrado_por = m.group(1).strip()
+        lista.append({
+            'id': p.id,
+            'fecha_pago': p.fecha_pago.strftime('%d/%m/%Y %H:%M'),
+            'monto': float(p.monto),
+            'numero_cuota': p.numero_cuota,
+            'observaciones': (p.observaciones or '').strip() or None,
+            'cobrado_por': cobrado_por,
+        })
+    total_pagado = credito.total_pagado()
+    saldo_pendiente = credito.saldo_pendiente()
+    return JsonResponse({
+        'success': True,
+        'pagos': lista,
+        'total_pagado': float(total_pagado),
+        'saldo_pendiente': float(saldo_pendiente),
+        'monto_total_credito': float(credito.monto_total or credito.monto),
+    })
+
 
 # Vista para generar PDF del cronograma
 @login_required
@@ -1162,7 +1620,7 @@ def generar_recibo_pdf(request, pago_id):
 # Vista AJAX para buscar créditos de un cliente en formulario de pago
 @login_required
 def buscar_creditos_cliente(request):
-    """Vista AJAX para buscar créditos de un cliente por cédula"""
+    """Vista AJAX para buscar créditos de un cliente por cédula. Solo devuelve créditos con saldo pendiente > 0."""
     cedula = request.GET.get('cedula', '').strip()
     
     if not cedula:
@@ -1174,16 +1632,32 @@ def buscar_creditos_cliente(request):
     try:
         cliente = Cliente.objects.get(cedula=cedula, activo=True)
         
-        # Buscar créditos del cliente que puedan recibir pagos
-        creditos = Credito.objects.filter(
+        # Traer créditos en estado vigente (no PAGADO ni RECHAZADO)
+        candidatos = Credito.objects.filter(
             cliente=cliente,
             estado__in=['APROBADO', 'DESEMBOLSADO']
-        ).exclude(estado='PAGADO')
+        )
         
-        if not creditos.exists():
+        # Solo incluir créditos con saldo pendiente "real" (> 1 peso).
+        # Saldos por redondeo (ej. $0,02) se consideran pagados: se marcan PAGADO y no se muestran.
+        from decimal import Decimal
+        umbral_cerrado = Decimal('1')  # menos de 1 peso = considerado cerrado por redondeo
+        creditos = []
+        for credito in candidatos:
+            if credito.estado == 'PAGADO':
+                continue
+            saldo = credito.saldo_pendiente()
+            if saldo <= 0 or saldo < umbral_cerrado:
+                if credito.estado != 'PAGADO':
+                    credito.estado = 'PAGADO'
+                    credito.save(update_fields=['estado'])
+                continue
+            creditos.append(credito)
+        
+        if not creditos:
             return JsonResponse({
                 'success': False,
-                'error': f'El cliente {cliente.nombre_completo} no tiene créditos disponibles para recibir pagos'
+                'error': f'El cliente {cliente.nombre_completo} no tiene créditos con saldo pendiente para registrar pagos'
             })
         
         # Preparar URL de la foto (si existe)
@@ -1194,7 +1668,7 @@ def buscar_creditos_cliente(request):
             except ValueError:
                 foto_url = None
         
-        # Preparar lista de créditos
+        # Preparar lista de créditos (solo los que pueden recibir pagos)
         creditos_data = []
         for credito in creditos:
             creditos_data.append({

@@ -1,0 +1,96 @@
+{% extends 'base.html' %}
+
+{% block title %}Retanqueo - Crédito #{{ credito.id }}{% endblock %}
+
+{% block breadcrumb %}
+<nav class="breadcrumb-nav" aria-label="Navegación">
+    <a href="{% url 'dashboard' %}">Inicio</a><span class="separator">/</span>
+    <a href="{% url 'creditos' %}">Créditos</a><span class="separator">/</span>
+    <span>Retanqueo #{{ credito.id }}</span>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1 class="page-title mb-0">
+        <i class="bi bi-arrow-repeat"></i> Retanqueo de crédito #{{ credito.id|stringformat:"04d" }}
+    </h1>
+    <a href="{% url 'creditos' %}" class="btn btn-outline-secondary">
+        <i class="bi bi-arrow-left"></i> Volver a créditos
+    </a>
+</div>
+
+<div class="card mb-4">
+    <div class="card-header">
+        <h5 class="mb-0">Crédito actual a liquidar</h5>
+    </div>
+    <div class="card-body">
+        <p class="mb-1"><strong>Cliente:</strong> {{ credito.cliente.nombre_completo }}</p>
+        <p class="mb-1"><strong>Monto original:</strong> ${{ credito.monto|floatformat:0 }}</p>
+        <p class="mb-1"><strong>Saldo a liquidar (capital + intereses a la fecha):</strong>
+            <span class="text-primary fs-5">${{ saldo_a_liquidar|floatformat:0 }}</span>
+        </p>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <h5 class="mb-0">Nuevo crédito (retanqueo)</h5>
+    </div>
+    <div class="card-body">
+        <p class="text-muted small mb-3">
+            Se liquidará el crédito anterior con el saldo mostrado y se creará un nuevo crédito.
+            El monto de la nueva solicitud debe ser al menos el saldo a liquidar.
+            Lo que sobre (nueva solicitud − saldo) será el monto a desembolsar al cliente.
+        </p>
+        <form method="post" id="formRetanqueo">
+            {% csrf_token %}
+            <div class="row">
+                <div class="col-md-6">
+                    <label for="monto_nueva_solicitud" class="form-label">Monto de la nueva solicitud ($) *</label>
+                    <input type="number" name="monto_nueva_solicitud" id="monto_nueva_solicitud"
+                           class="form-control" step="0.01" min="{{ saldo_a_liquidar }}"
+                           value="{{ monto_nueva_solicitud|default:saldo_a_liquidar|floatformat:0 }}" required>
+                </div>
+                <div class="col-md-6 d-flex align-items-end pb-2">
+                    <div>
+                        <span class="text-muted">Se aplicará al crédito anterior:</span>
+                        <strong class="d-block">$<span id="aplicadoAnterior">{{ saldo_a_liquidar|floatformat:0 }}</span></strong>
+                        <span class="text-muted">Monto a desembolsar al cliente:</span>
+                        <strong class="d-block text-success">$<span id="desembolsarCliente">0</span></strong>
+                    </div>
+                </div>
+            </div>
+            <div class="mt-4">
+                <button type="submit" class="btn btn-primary">
+                    <i class="bi bi-check-lg"></i> Confirmar retanqueo
+                </button>
+                <a href="{% url 'creditos' %}" class="btn btn-secondary ms-2">Cancelar</a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+(function() {
+    var saldo = {{ saldo_a_liquidar_js }};
+    var input = document.getElementById('monto_nueva_solicitud');
+    var aplicado = document.getElementById('aplicadoAnterior');
+    var desembolsar = document.getElementById('desembolsarCliente');
+
+    function formatNum(n) {
+        return Math.round(n).toLocaleString('es-CO');
+    }
+
+    function update() {
+        var val = parseFloat(input.value) || 0;
+        aplicado.textContent = formatNum(saldo);
+        desembolsar.textContent = val >= saldo ? formatNum(val - saldo) : '0';
+    }
+
+    input.addEventListener('input', update);
+    input.addEventListener('change', update);
+    update();
+})();
+</script>
+{% endblock %}

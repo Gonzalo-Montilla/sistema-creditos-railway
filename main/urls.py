@@ -17,7 +17,18 @@ urlpatterns = [
     path('reactivar-cliente/<int:cliente_id>/', views.reactivar_cliente, name='reactivar_cliente'),
     path('detalle-cliente/<int:cliente_id>/', views.detalle_cliente, name='detalle_cliente'),
     path('buscar-cliente/', views.buscar_cliente, name='buscar_cliente'),
-    
+    path('habeas-data/solicitar/', views.solicitar_habeas_data, name='solicitar_habeas_data'),
+    path('habeas-data/validar/', views.validar_otp_habeas_data, name='validar_otp_habeas_data'),
+    path('habeas-data/descargar/<str:tipo>/<int:objeto_id>/', views.descargar_habeas_data, name='descargar_habeas_data'),
+    path('habeas-data/regenerar/', views.regenerar_habeas_data, name='regenerar_habeas_data'),
+    path('renovacion/solicitar/', views.solicitar_firma_renovacion, name='solicitar_firma_renovacion'),
+    path('renovacion/validar/', views.validar_otp_renovacion_view, name='validar_otp_renovacion'),
+    path('renovacion/descargar/<int:cliente_id>/', views.descargar_renovacion, name='descargar_renovacion'),
+    path('retanqueo/credito/<int:credito_id>/', views.retanqueo_credito, name='retanqueo_credito'),
+    path('retanqueo-documento/solicitar/', views.solicitar_firma_retanqueo, name='solicitar_firma_retanqueo'),
+    path('retanqueo-documento/validar/', views.validar_otp_retanqueo_view, name='validar_otp_retanqueo'),
+    path('retanqueo-documento/descargar/<int:credito_id>/', views.descargar_retanqueo, name='descargar_retanqueo'),
+
     # Codeudores
     path('nuevo-codeudor/<int:cliente_id>/', views.nuevo_codeudor, name='nuevo_codeudor'),
     path('editar-codeudor/<int:codeudor_id>/', views.editar_codeudor, name='editar_codeudor'),
@@ -30,8 +41,13 @@ urlpatterns = [
     path('aprobar-credito/<int:credito_id>/', views.aprobar_credito, name='aprobar_credito'),
     path('rechazar-credito/<int:credito_id>/', views.rechazar_credito, name='rechazar_credito'),
     path('desembolsar-credito/<int:credito_id>/', views.desembolsar_credito, name='desembolsar_credito'),
+    path('pagare/solicitar/', views.solicitar_firma_pagare, name='solicitar_firma_pagare'),
+    path('pagare/validar/', views.validar_otp_pagare_view, name='validar_otp_pagare'),
+    path('pagare/descargar/<int:credito_id>/', views.descargar_pagare, name='descargar_pagare'),
+    path('pagare/regenerar/', views.regenerar_pagare, name='regenerar_pagare'),
     path('buscar-cliente-credito/', views.buscar_cliente_credito, name='buscar_cliente_credito'),
     path('obtener-datos-credito/<int:credito_id>/', views.obtener_datos_credito, name='obtener_datos_credito'),
+    path('obtener-pagos-credito/<int:credito_id>/', views.obtener_pagos_credito, name='obtener_pagos_credito'),
     path('generar-pdf-cronograma/<int:credito_id>/', views.generar_pdf_cronograma, name='generar_pdf_cronograma'),
     
     # Pagos

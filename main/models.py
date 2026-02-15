@@ -1,3 +1,4 @@
+from decimal import Decimal
 from django.db import models
 from django.contrib.auth.models import User
 from django.core.validators import RegexValidator
@@ -79,6 +80,46 @@ class Cliente(models.Model):
     fecha_registro = models.DateTimeField(auto_now_add=True)
     activo = models.BooleanField(default=True)
     
+    # Habeas Data (Ley 1581 de 2012) - autorización de tratamiento de datos
+    documento_habeas_data = models.FileField(
+        upload_to='habeas_data/clientes/',
+        verbose_name='Autorización Habeas Data (PDF)',
+        blank=True,
+        null=True
+    )
+    fecha_autorizacion_habeas_data = models.DateTimeField(
+        verbose_name='Fecha autorización Habeas Data',
+        null=True,
+        blank=True
+    )
+    codigo_habeas_data = models.CharField(
+        max_length=20,
+        verbose_name='Código único documento Habeas Data',
+        blank=True,
+        null=True,
+        help_text='Ej: HD-2025-C000123 (para verificación del documento)'
+    )
+
+    # Documento de renovación de crédito (último firmado por OTP)
+    documento_renovacion = models.FileField(
+        upload_to='renovaciones/',
+        verbose_name='Documento de renovación (PDF)',
+        blank=True,
+        null=True,
+    )
+    fecha_firma_renovacion = models.DateTimeField(
+        verbose_name='Fecha firma documento de renovación',
+        null=True,
+        blank=True,
+    )
+    codigo_renovacion = models.CharField(
+        max_length=20,
+        verbose_name='Código único documento renovación',
+        blank=True,
+        null=True,
+        help_text='Ej: REN-2025-000123',
+    )
+    
     # Campos de compatibilidad (para no romper el código existente)
     @property
     def nombre(self):
@@ -91,6 +132,14 @@ class Cliente(models.Model):
     @property
     def telefono(self):
         return self.celular
+
+    def tiene_habeas_data_firmado(self):
+        """True si el cliente tiene autorización Habeas Data firmada (OTP validado)."""
+        return bool(self.fecha_autorizacion_habeas_data and self.documento_habeas_data)
+
+    def tiene_documento_renovacion(self):
+        """True si el cliente tiene al menos un documento de renovación firmado (se muestra el último)."""
+        return bool(self.fecha_firma_renovacion and self.documento_renovacion)
 
     def __str__(self):
         return f"{self.nombres} {self.apellidos} - {self.cedula}"
@@ -120,10 +169,32 @@ class Codeudor(models.Model):
     direccion = models.TextField(verbose_name="Dirección completa")
     barrio = models.CharField(max_length=100, verbose_name="Barrio")
     
+    email = models.EmailField(verbose_name="Correo electrónico", blank=True, null=True)
+    
     # Documentos y fotos
     foto_rostro = models.ImageField(upload_to='codeudores/rostros/', verbose_name="Foto del rostro", blank=True, null=True)
     foto_cedula_frontal = models.ImageField(upload_to='codeudores/cedulas/', verbose_name="Cédula - Frente", blank=True, null=True)
     foto_cedula_trasera = models.ImageField(upload_to='codeudores/cedulas/', verbose_name="Cédula - Atrás", blank=True, null=True)
+    
+    # Habeas Data (Ley 1581 de 2012)
+    documento_habeas_data = models.FileField(
+        upload_to='habeas_data/codeudores/',
+        verbose_name='Autorización Habeas Data (PDF)',
+        blank=True,
+        null=True
+    )
+    fecha_autorizacion_habeas_data = models.DateTimeField(
+        verbose_name='Fecha autorización Habeas Data',
+        null=True,
+        blank=True
+    )
+    codigo_habeas_data = models.CharField(
+        max_length=20,
+        verbose_name='Código único documento Habeas Data',
+        blank=True,
+        null=True,
+        help_text='Ej: HD-2025-D000045 (para verificación del documento)'
+    )
     
     # Metadatos
     fecha_registro = models.DateTimeField(auto_now_add=True)
@@ -133,8 +204,29 @@ class Codeudor(models.Model):
     def nombre_completo(self):
         return f"{self.nombres} {self.apellidos}"
     
+    def tiene_habeas_data_firmado(self):
+        """True si el codeudor tiene autorización Habeas Data firmada."""
+        return bool(self.fecha_autorizacion_habeas_data and self.documento_habeas_data)
+
     def __str__(self):
         return f"Codeudor: {self.nombres} {self.apellidos} - {self.cedula}"
+
+
+class HabeasDataOTP(models.Model):
+    """OTP pendiente para firma digital de autorización Habeas Data (Ley 1581/2012)."""
+    TIPO_CHOICES = [('cliente', 'Cliente'), ('codeudor', 'Codeudor')]
+    tipo = models.CharField(max_length=10, choices=TIPO_CHOICES)
+    objeto_id = models.PositiveIntegerField(help_text='ID del Cliente o Codeudor')
+    otp_hash = models.CharField(max_length=64)  # SHA-256 del OTP
+    expires_at = models.DateTimeField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=['tipo', 'objeto_id']),
+            models.Index(fields=['expires_at']),
+        ]
+
 
 class Credito(models.Model):
     ESTADOS = [
@@ -174,6 +266,36 @@ class Credito(models.Model):
     fecha_solicitud = models.DateTimeField(auto_now_add=True)
     fecha_aprobacion = models.DateTimeField(null=True, blank=True)
     fecha_desembolso = models.DateTimeField(null=True, blank=True, verbose_name="Fecha de desembolso")
+
+    # Pagaré electrónico (firma OTP antes del desembolso)
+    documento_pagare = models.FileField(
+        upload_to='pagares/',
+        verbose_name='Pagaré firmado (PDF)',
+        blank=True,
+        null=True,
+    )
+    fecha_firma_pagare = models.DateTimeField(
+        verbose_name='Fecha firma del pagaré',
+        null=True,
+        blank=True,
+    )
+    codigo_pagare = models.CharField(
+        max_length=20,
+        verbose_name='Código único documento pagaré',
+        blank=True,
+        null=True,
+        help_text='Ej: PG-2025-000001',
+    )
+    pagare_firmado_cliente = models.DateTimeField(
+        verbose_name='Fecha OTP validado - Cliente',
+        null=True,
+        blank=True,
+    )
+    pagare_firmado_codeudor = models.DateTimeField(
+        verbose_name='Fecha OTP validado - Codeudor',
+        null=True,
+        blank=True,
+    )
     
     # Gestión de mora y cartera
     fecha_vencimiento = models.DateField(null=True, blank=True, verbose_name="Fecha de vencimiento calculada")
@@ -187,7 +309,54 @@ class Credito(models.Model):
                                    ])
     interes_moratorio = models.DecimalField(max_digits=12, decimal_places=2, default=0, verbose_name="Interés moratorio acumulado")
     tasa_mora = models.DecimalField(max_digits=5, decimal_places=2, default=2.0, verbose_name="Tasa de mora diaria (%)")
-    
+
+    # Retanqueo: trazabilidad cuando este crédito reemplaza a otro
+    credito_retanqueado = models.ForeignKey(
+        'self',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='credito_nuevo_por_retanqueo',
+        verbose_name='Crédito anterior (retanqueo)',
+    )
+    monto_aplicado_credito_anterior = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        verbose_name='Monto aplicado al crédito anterior en retanqueo',
+    )
+    es_renovacion = models.BooleanField(
+        default=False,
+        verbose_name='Crédito por renovación (no requiere pagaré, sí doc. renovación)',
+    )
+    # Documento de retanqueo firmado con OTP (solo para créditos creados por retanqueo)
+    documento_retanqueo = models.FileField(
+        upload_to='retanqueos/',
+        verbose_name='Documento de retanqueo firmado (PDF)',
+        blank=True,
+        null=True,
+    )
+    fecha_firma_retanqueo = models.DateTimeField(
+        verbose_name='Fecha firma documento retanqueo',
+        null=True,
+        blank=True,
+    )
+    codigo_retanqueo = models.CharField(
+        max_length=32,
+        verbose_name='Código documento retanqueo',
+        blank=True,
+        null=True,
+    )
+
+    def tiene_documento_retanqueo_firmado(self):
+        """True si es crédito por retanqueo y el cliente ya firmó el documento con OTP."""
+        return bool(
+            self.credito_retanqueado_id
+            and self.documento_retanqueo
+            and self.fecha_firma_retanqueo
+        )
+
     def sugerir_cobrador(self):
         """Sugiere un cobrador basado en el barrio del cliente"""
         if self.cliente.barrio:
@@ -297,6 +466,29 @@ class Credito(models.Model):
                 monto_cuota=self.valor_cuota
             )
     
+    def tiene_pagare_firmado(self):
+        """True si el pagaré está firmado (cliente y codeudor si existe) y el PDF está guardado."""
+        if not (self.documento_pagare and self.fecha_firma_pagare):
+            return False
+        try:
+            if self.cliente.codeudor and not self.pagare_firmado_codeudor:
+                return False
+        except Codeudor.DoesNotExist:
+            pass
+        return True
+
+    def requiere_pagare_para_desembolso(self):
+        """True si este crédito exige firma de pagaré (primer crédito normal). Retanqueo y renovación no."""
+        return not self.credito_retanqueado_id and not self.es_renovacion
+
+    def puede_desembolsar_segun_firma(self):
+        """True si ya cumplió la firma exigida: pagaré (normal), doc. renovación (renovación), doc. retanqueo (retanqueo)."""
+        if self.credito_retanqueado_id:
+            return self.tiene_documento_retanqueo_firmado()
+        if self.es_renovacion:
+            return self.cliente.tiene_documento_renovacion()
+        return self.tiene_pagare_firmado()
+
     def __str__(self):
         return f"Crédito {self.id} - {self.cliente.nombre_completo} - ${self.monto}"
     
@@ -317,7 +509,28 @@ class Credito(models.Model):
             return max(0, saldo)  # No permitir saldos negativos
         except Exception:
             return self.monto_total if self.monto_total else self.monto
-    
+
+    def saldo_a_liquidar(self):
+        """
+        Saldo a liquidar para retanqueo: capital pendiente + intereses normales a la fecha.
+        Coincide con lo que el cliente debe al día (saldo pendiente del crédito).
+        """
+        return self.saldo_pendiente()
+
+    def puede_retanquear(self):
+        """
+        True si el crédito está desembolsado, tiene saldo pendiente y el cliente
+        ha pagado al menos el 25% del crédito (monto total a pagar).
+        """
+        if self.estado not in ('DESEMBOLSADO', 'VENCIDO') or self.saldo_pendiente() <= 0:
+            return False
+        monto_total_credito = self.monto_total if self.monto_total else self.monto
+        if not monto_total_credito or monto_total_credito <= 0:
+            return False
+        total_pagado = self.total_pagado()
+        umbral_25 = monto_total_credito * Decimal('0.25')
+        return total_pagado >= umbral_25
+
     def puede_recibir_pagos(self):
         """Verifica si el crédito puede recibir más pagos"""
         try:
@@ -409,6 +622,39 @@ class Credito(models.Model):
             'MORA_CRITICA': 'dark'
         }
         return colores.get(self.estado_mora, 'secondary')
+
+
+class PagareOTP(models.Model):
+    """OTP pendiente para firma del pagaré (deudor y codeudor por crédito)."""
+    TIPO_FIRMANTE = [('cliente', 'Cliente'), ('codeudor', 'Codeudor')]
+    credito = models.ForeignKey(Credito, on_delete=models.CASCADE, related_name='pagare_otps')
+    tipo_firmante = models.CharField(max_length=10, choices=TIPO_FIRMANTE)
+    otp_hash = models.CharField(max_length=64)
+    expires_at = models.DateTimeField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=['credito', 'tipo_firmante']),
+            models.Index(fields=['expires_at']),
+        ]
+
+
+class RenovacionOTP(models.Model):
+    """OTP pendiente para firma del documento de renovación (términos del crédito indicado)."""
+    credito = models.ForeignKey('Credito', on_delete=models.CASCADE, related_name='renovacion_otps')
+    otp_hash = models.CharField(max_length=64)
+    expires_at = models.DateTimeField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+
+class RetanqueoOTP(models.Model):
+    """OTP pendiente para firma del documento de retanqueo."""
+    credito = models.ForeignKey('Credito', on_delete=models.CASCADE, related_name='retanqueo_otps')
+    otp_hash = models.CharField(max_length=64)
+    expires_at = models.DateTimeField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
 
 class CronogramaPago(models.Model):
     """Cronograma de pagos planificado para cada crédito"""
