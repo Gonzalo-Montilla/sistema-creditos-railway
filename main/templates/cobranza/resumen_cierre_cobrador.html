@@ -3,9 +3,11 @@
 {% block title %}Resumen cierre – {{ cobrador.nombre_completo }}{% endblock %}
 
 {% block content %}
-<div class="d-flex justify-content-between align-items-center mb-4">
-    <h2 class="mb-0"><i class="bi bi-person-badge"></i> Resumen de cobro – {{ cobrador.nombre_completo }}</h2>
-    <a href="{% url 'cierre_cobro_diario' %}?fecha={{ fecha|date:'Y-m-d' }}" class="btn btn-outline-primary"><i class="bi bi-arrow-left"></i> Cierre diario</a>
+<div class="page-header">
+    <h2 class="page-title mb-0"><i class="bi bi-person-badge"></i> Resumen de cobro – {{ cobrador.nombre_completo }}</h2>
+    <div class="btn-group-actions">
+        <a href="{% url 'cierre_cobro_diario' %}?fecha={{ fecha|date:'Y-m-d' }}" class="btn btn-outline-primary"><i class="bi bi-arrow-left"></i> Cierre diario</a>
+    </div>
 </div>
 
 <p class="text-muted mb-3">Fecha: <strong>{{ fecha|date:"d/m/Y" }}</strong></p>
@@ -52,7 +54,7 @@
     </div>
     <div class="card-body p-0">
         {% if pagos %}
-        <div class="table-responsive">
+        <div class="table-responsive d-none d-md-block">
             <table class="table table-sm table-hover mb-0">
                 <thead class="table-light">
                     <tr>
@@ -73,6 +75,20 @@
                     {% endfor %}
                 </tbody>
             </table>
+        </div>
+        <div class="mobile-card-list d-md-none p-3">
+            {% for p in pagos %}
+            <div class="mobile-card-item">
+                <div class="d-flex justify-content-between align-items-center mb-1">
+                    <strong>{{ p.credito.cliente.nombre_completo }}</strong>
+                    <span class="badge bg-light text-dark">{{ p.fecha_pago|time:"H:i" }}</span>
+                </div>
+                <div class="small text-muted mb-1">Crédito #{{ p.credito.id }}</div>
+                <div class="small">Monto: <strong>${{ p.monto|floatformat:0 }}</strong></div>
+            </div>
+            {% empty %}
+            <div class="text-muted text-center py-3">No hay pagos registrados para este cobrador en esta fecha.</div>
+            {% endfor %}
         </div>
         {% else %}
         <p class="text-muted p-4 mb-0">No hay pagos registrados para este cobrador en esta fecha.</p>
@@ -103,7 +119,7 @@
                     <input type="text" name="observaciones" class="form-control" placeholder="Opcional" value="{% if cierre %}{{ cierre.observaciones }}{% endif %}">
                 </div>
                 <div class="col-12">
-                    <button type="submit" class="btn btn-success">
+                    <button type="submit" class="btn btn-success w-100">
                         <i class="bi bi-check-circle"></i> {% if cierre %}Actualizar cierre{% else %}Cerrar cobro{% endif %}
                     </button>
                 </div>

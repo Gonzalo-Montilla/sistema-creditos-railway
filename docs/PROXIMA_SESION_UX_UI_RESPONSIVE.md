@@ -59,3 +59,21 @@ Plan de trabajo para la siguiente sesión. Tres pilares sin romper lo ya constru
 ---
 
 *Documento creado para retomar en la próxima sesión.*
+
+---
+
+## Pendiente confirmado para próxima sesión (UX)
+
+Se deja priorizado implementar un **paquete Quick Wins UX** sin tocar lógica de negocio:
+
+1. Agenda del cobrador (móvil): botones más cómodos, jerarquía clara de acciones.
+2. Cierre diario (móvil): cards con toda la información de desktop.
+3. Feedback de carga en acciones críticas (login, cobrar, cerrar).
+4. Validaciones visuales de monto (formato y errores antes de enviar).
+5. Estados vacíos con mensajes accionables + CTA.
+6. Consistencia visual en formularios, badges y microcopy.
+
+### Criterio de trabajo
+- Solo cambios en templates/CSS/JS de interfaz.
+- Sin alterar reglas de negocio ni flujos de datos.
+- Validar al final con `python manage.py check`.

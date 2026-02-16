@@ -7,11 +7,6 @@
 <style>
     /* Estilos optimizados para móvil */
     @media (max-width: 768px) {
-        .container {
-            padding-left: 8px;
-            padding-right: 8px;
-        }
-        
         .card {
             margin-bottom: 8px;
             border-radius: 8px;
@@ -84,6 +79,16 @@
             right: 15px;
             width: 50px;
             height: 50px;
+        }
+
+        .agenda-header .btn {
+            width: 100%;
+        }
+
+        .filtros-agenda .form-select,
+        .filtros-agenda .btn {
+            width: 100%;
+            max-width: none !important;
         }
     }
     
@@ -191,9 +196,9 @@
 
 {% block content %}
 {% csrf_token %}
-<div class="container mt-3">
+<div class="container-fluid px-2 px-md-3 mt-3">
     <!-- Header con información del cobrador -->
-    <div class="card mb-3">
+    <div class="card mb-3 agenda-header">
         <div class="card-body py-3">
             {% if es_hoy %}
             <div class="alert alert-light border mb-2 py-2 small">
@@ -202,13 +207,13 @@
             </div>
             {% endif %}
             <div class="row align-items-center">
-                <div class="col-8">
+                <div class="col-8 col-md-8">
                     <h5 class="mb-1">{{ cobrador.nombre_completo }}</h5>
                     <small class="text-muted">
                         <i class="fas fa-calendar"></i> {{ fecha|date:"d/m/Y" }}
                     </small>
                 </div>
-                <div class="col-4 text-right">
+                <div class="col-4 col-md-4 text-end">
                     <div class="progress-circle">
                         <div class="text-center">
                             <div class="h5 mb-0 text-primary">{{ porcentaje_completado|floatformat:0 }}%</div>
@@ -261,7 +266,7 @@
                         <a href="?fecha={{ fecha_anterior }}" class="btn btn-outline-secondary">
                             <i class="fas fa-chevron-left"></i> Anterior
                         </a>
-                        <button type="button" class="btn btn-primary flex-grow-1" data-toggle="modal" data-target="#fechaModal" id="btnFechaActual">
+                        <button type="button" class="btn btn-primary flex-grow-1" data-bs-toggle="modal" data-bs-target="#fechaModal" id="btnFechaActual">
                             <i class="fas fa-calendar-alt me-1"></i> {{ fecha|date:"d/m/Y" }}
                         </button>
                         <a href="?fecha={{ fecha_siguiente }}" class="btn btn-outline-secondary">
@@ -277,7 +282,7 @@
     <!-- Filtros por estado y prioridad -->
     <div class="row mb-2">
         <div class="col-12">
-            <div class="d-flex flex-wrap align-items-center gap-2">
+            <div class="d-flex flex-wrap align-items-center gap-2 filtros-agenda">
                 <span class="small text-muted">Filtrar:</span>
                 <select id="filtroEstado" class="form-select form-select-sm" style="max-width: 160px;">
                     <option value="">Todos los estados</option>
@@ -345,7 +350,7 @@
                         {% endif %}
                     </div>
                     
-                    <div class="col-4 text-right">
+                    <div class="col-4 text-end">
                         <div class="mb-2">
                             <span class="badge bg-{{ tarea.color_estado }}{% if tarea.color_estado == 'warning' %} text-dark{% endif %}">
                                 {{ tarea.get_estado_display }}
@@ -375,14 +380,14 @@
                             
                             <!-- Botones móviles - horizontales -->
                             <div class="btn-group btn-group-sm d-md-none w-100" role="group">
-                                <button class="btn btn-success btn-sm" onclick="console.log('Botón móvil cobrar clickeado'); marcarCobrado({{ tarea.id }})" title="Cobrar">
-                                    <i class="fas fa-dollar-sign"></i>
+                                <button class="btn btn-success btn-sm" onclick="marcarCobrado({{ tarea.id }})" title="Cobrar">
+                                    <i class="fas fa-dollar-sign"></i> Cobrar
                                 </button>
                                 <button class="btn btn-warning btn-sm" onclick="cambiarEstado({{ tarea.id }}, 'NO_ENCONTRADO')" title="No encontrado">
-                                    <i class="fas fa-user-times"></i>
+                                    <i class="fas fa-user-times"></i> No
                                 </button>
                                 <button class="btn btn-info btn-sm" onclick="reprogramar({{ tarea.id }})" title="Reprogramar">
-                                    <i class="fas fa-clock"></i>
+                                    <i class="fas fa-clock"></i> Reprog.
                                 </button>
                             </div>
                         {% endif %}
@@ -420,13 +425,13 @@
         <div class="modal-content">
             <div class="modal-header">
                 <h5 class="modal-title">Seleccionar Fecha</h5>
-                <button type="button" class="close" data-dismiss="modal">&times;</button>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
             </div>
             <div class="modal-body">
                 <input type="date" class="form-control" id="fechaInput" value="{{ fecha|date:'Y-m-d' }}">
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
                 <button type="button" class="btn btn-primary" onclick="cambiarFecha()">Cambiar</button>
             </div>
         </div>

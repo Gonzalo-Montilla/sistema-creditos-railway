@@ -94,12 +94,30 @@ def dashboard(request):
     pagos_hoy_count = pagos_hoy.count()
     pagos_hoy_monto = pagos_hoy.aggregate(t=Sum('monto'))['t'] or 0
     
+    # Cuotas gestionables hoy (alineado con la lógica de agenda/tareas)
+    # - Estados de cuota pendientes/parciales
+    # - Crédito activo para cobro
+    # - Cobrador activo y con al menos una ruta
+    cuotas_gestionables_hoy_qs = CronogramaPago.objects.filter(
+        fecha_vencimiento=hoy,
+        estado__in=['PENDIENTE', 'PARCIAL'],
+        credito__estado__in=['DESEMBOLSADO', 'VENCIDO'],
+        credito__cobrador__activo=True,
+        credito__cobrador__rutas__isnull=False,
+    ).select_related('credito', 'credito__cliente').distinct()
+
     cuotas_vencen_hoy = list(
-        CronogramaPago.objects.filter(
-            fecha_vencimiento=hoy,
-            estado='PENDIENTE',
-        ).select_related('credito', 'credito__cliente').order_by('credito__cliente__nombres', 'numero_cuota')[:50]
+        cuotas_gestionables_hoy_qs.order_by('credito__cliente__nombres', 'numero_cuota')[:50]
     )
+
+    # Control operativo: cuántas cuotas de hoy aún no tienen tarea creada
+    cuotas_con_tarea_hoy = TareaCobro.objects.filter(
+        fecha_asignacion=hoy
+    ).values_list('cuota_id', flat=True)
+    cuotas_sin_tarea_hoy = cuotas_gestionables_hoy_qs.exclude(
+        id__in=cuotas_con_tarea_hoy
+    ).count()
+    tareas_hoy_count = TareaCobro.objects.filter(fecha_asignacion=hoy).count()
     
     context = {
         'total_clientes': total_clientes,
@@ -114,6 +132,8 @@ def dashboard(request):
         'pagos_hoy_count': pagos_hoy_count,
         'pagos_hoy_monto': pagos_hoy_monto,
         'cuotas_vencen_hoy': cuotas_vencen_hoy,
+        'cuotas_sin_tarea_hoy': cuotas_sin_tarea_hoy,
+        'tareas_hoy_count': tareas_hoy_count,
     }
     
     return render(request, 'dashboard.html', context)
