@@ -56,9 +56,10 @@
         }
         
         .btn-action {
-            min-width: 70px;
-            font-size: 10px;
-            padding: 4px 8px;
+            min-width: 74px;
+            font-size: 0.78rem;
+            padding: 0.45rem 0.55rem;
+            min-height: 40px;
         }
         
         .progress-circle {
@@ -90,6 +91,32 @@
             width: 100%;
             max-width: none !important;
         }
+
+        .mobile-actions {
+            display: flex;
+            flex-direction: column;
+            gap: 0.4rem;
+            width: 100%;
+        }
+
+        .mobile-actions .btn {
+            min-height: 44px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            border-radius: 8px;
+        }
+
+        .mobile-actions-secondary {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 0.4rem;
+        }
+
+        .btn-phone-mobile {
+            min-height: 40px;
+            min-width: 40px;
+            padding: 0.45rem 0.6rem;
+        }
     }
     
     /* Extra small devices */
@@ -109,8 +136,8 @@
         }
         
         .btn-group-vertical .btn {
-            font-size: 9px;
-            padding: 3px 6px;
+            font-size: 0.75rem;
+            padding: 0.35rem 0.5rem;
             margin-bottom: 2px;
         }
         
@@ -298,7 +325,9 @@
                     <option value="MEDIA">Media</option>
                     <option value="BAJA">Baja</option>
                 </select>
-                <button type="button" class="btn btn-outline-secondary btn-sm" id="btnLimpiarFiltros">Ver todas</button>
+                <button type="button" class="btn btn-outline-secondary btn-sm" id="btnLimpiarFiltros">
+                    <i class="fas fa-filter-circle-xmark me-1"></i> Limpiar filtros
+                </button>
             </div>
         </div>
     </div>
@@ -306,7 +335,7 @@
     <!-- Lista de tareas -->
     {% if tareas %}
         {% for tarea in tareas %}
-        <div class="task-card card {{ tarea.estado|lower }}" data-tarea-id="{{ tarea.id }}" data-estado="{{ tarea.estado }}" data-prioridad="{{ tarea.prioridad|default:'' }}">
+        <div class="task-card card {{ tarea.estado|lower }}" data-tarea-id="{{ tarea.id }}" data-estado="{{ tarea.estado }}" data-prioridad="{{ tarea.prioridad|default:'' }}" data-monto="{{ tarea.monto_a_cobrar }}">
             <div class="card-body py-3">
                 <div class="row">
                     <div class="col-8">
@@ -378,24 +407,26 @@
                                 </button>
                             </div>
                             
-                            <!-- Botones móviles - horizontales -->
-                            <div class="btn-group btn-group-sm d-md-none w-100" role="group">
-                                <button class="btn btn-success btn-sm" onclick="marcarCobrado({{ tarea.id }})" title="Cobrar">
-                                    <i class="fas fa-dollar-sign"></i> Cobrar
+                            <!-- Botones móviles: acción primaria + secundarias -->
+                            <div class="mobile-actions d-md-none">
+                                <button class="btn btn-success btn-sm" onclick="marcarCobrado({{ tarea.id }})" title="Cobrar ahora">
+                                    <i class="fas fa-dollar-sign me-1"></i> Cobrar ahora
                                 </button>
-                                <button class="btn btn-warning btn-sm" onclick="cambiarEstado({{ tarea.id }}, 'NO_ENCONTRADO')" title="No encontrado">
-                                    <i class="fas fa-user-times"></i> No
-                                </button>
-                                <button class="btn btn-info btn-sm" onclick="reprogramar({{ tarea.id }})" title="Reprogramar">
-                                    <i class="fas fa-clock"></i> Reprog.
-                                </button>
+                                <div class="mobile-actions-secondary">
+                                    <button class="btn btn-warning btn-sm" onclick="cambiarEstado({{ tarea.id }}, 'NO_ENCONTRADO')" title="Marcar no encontrado">
+                                        <i class="fas fa-user-times me-1"></i> No encontrado
+                                    </button>
+                                    <button class="btn btn-info btn-sm" onclick="reprogramar({{ tarea.id }})" title="Reprogramar visita">
+                                        <i class="fas fa-clock me-1"></i> Reprogramar
+                                    </button>
+                                </div>
                             </div>
                         {% endif %}
                         
                         {% if tarea.cuota.credito.cliente.telefono %}
                             <div class="mt-2">
                                 <a href="tel:{{ tarea.cuota.credito.cliente.telefono }}" 
-                                   class="btn btn-outline-primary btn-sm btn-action">
+                                   class="btn btn-outline-primary btn-sm btn-action btn-phone-mobile" title="Llamar al cliente">
                                     <i class="fas fa-phone"></i>
                                 </a>
                             </div>
@@ -406,10 +437,20 @@
         </div>
         {% endfor %}
     {% else %}
-        <div class="text-center py-5">
+        <div class="text-center py-5 px-3">
             <i class="fas fa-calendar-times fa-3x text-muted mb-3"></i>
-            <h5 class="text-muted">No hay tareas para este día</h5>
-            <p class="text-muted">Las tareas se generan automáticamente cada día.</p>
+            <h5 class="text-muted mb-2">No hay tareas para este día</h5>
+            <p class="text-muted mb-3">
+                Puede ser un día sin cuotas asignadas o que aún no se hayan generado tareas para esta fecha.
+            </p>
+            <div class="d-grid gap-2 d-md-flex justify-content-center">
+                <a href="?fecha={% now 'Y-m-d' %}" class="btn btn-primary btn-sm">
+                    <i class="fas fa-calendar-day me-1"></i> Ir a hoy
+                </a>
+                <button type="button" class="btn btn-outline-secondary btn-sm" onclick="location.reload()">
+                    <i class="fas fa-rotate me-1"></i> Actualizar agenda
+                </button>
+            </div>
         </div>
     {% endif %}
 </div>
@@ -491,6 +532,7 @@
                                     <input type="number" class="form-control" id="montoRecibido" 
                                            name="monto_recibido" step="0.01" required>
                                 </div>
+                                <div class="invalid-feedback" id="montoRecibidoError"></div>
                                 <small class="form-text text-muted">Monto efectivamente cobrado</small>
                             </div>
                         </div>
@@ -645,10 +687,22 @@ function marcarCobrado(tareaId) {
         // Extraer datos del cliente y tarea desde la tarjeta
         const clienteNombre = taskCard.querySelector('.client-info strong')?.textContent || 'Cliente no encontrado';
         const clienteTelefono = taskCard.querySelector('.client-info small')?.textContent || 'Teléfono no disponible';
+        const montoDesdeData = parseFloat(taskCard.dataset.monto || '');
         const montoElement = taskCard.querySelector('.amount-highlight');
-        const montoSugerido = montoElement ? 
-            parseFloat(montoElement.textContent.replace('$', '').replace(',', '').replace('.', '').trim()) / 100 : 
-            100000;
+        let montoSugerido = 100000;
+        if (!isNaN(montoDesdeData) && montoDesdeData > 0) {
+            montoSugerido = montoDesdeData;
+        } else if (montoElement) {
+            // Fallback: parsea texto con separadores de miles/decimales sin escalar por 100.
+            const texto = (montoElement.textContent || '').replace('$', '').trim();
+            const normalizado = texto.includes(',') && !texto.includes('.')
+                ? texto.replace(/\./g, '').replace(',', '.')
+                : texto.replace(/,/g, '');
+            const parsed = parseFloat(normalizado);
+            if (!isNaN(parsed) && parsed > 0) {
+                montoSugerido = parsed;
+            }
+        }
         
         // Obtener número de cuota desde la tarjeta si está disponible
         const cuotaElement = taskCard.querySelector('.cuota-info') || taskCard.querySelector('[data-cuota]');
@@ -763,12 +817,25 @@ function reprogramar(tareaId) {
 }
 
 function procesarCobroCompleto() {
+    const montoInput = document.getElementById('montoRecibido');
+    const montoError = document.getElementById('montoRecibidoError');
+    if (montoInput) {
+        montoInput.classList.remove('is-invalid');
+    }
+    if (montoError) {
+        montoError.textContent = '';
+    }
+
     // Validar datos antes del envío
-    const montoIngresado = parseFloat(document.getElementById('montoRecibido').value);
+    const montoIngresado = parseFloat(montoInput.value);
     const montoSugerido = parseFloat(document.getElementById('montoSugerido').value);
     
     if (isNaN(montoIngresado) || montoIngresado <= 0) {
-        alert('Por favor, ingrese un monto válido');
+        if (montoInput && montoError) {
+            montoInput.classList.add('is-invalid');
+            montoError.textContent = 'Ingrese un monto válido mayor a cero.';
+            montoInput.focus();
+        }
         return;
     }
     

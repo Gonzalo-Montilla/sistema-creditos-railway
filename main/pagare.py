@@ -51,6 +51,12 @@ def solicitar_otp_pagare(credito_id):
     credito = Credito.objects.filter(id=credito_id).first()
     if not credito or credito.estado != 'APROBADO':
         return {'success': False, 'message': 'Crédito no encontrado o no está aprobado.'}
+    if not credito.requiere_pagare_para_desembolso():
+        if credito.credito_retanqueado_id:
+            return {'success': False, 'message': 'Este crédito es por retanqueo y no requiere pagaré. Debe firmar documento de retanqueo.'}
+        if credito.es_renovacion:
+            return {'success': False, 'message': 'Este crédito es de renovación y no requiere pagaré. Debe firmar documento de renovación.'}
+        return {'success': False, 'message': 'Este crédito no requiere pagaré.'}
 
     if credito.tiene_pagare_firmado():
         return {'success': False, 'message': 'El pagaré de este crédito ya está firmado.'}
@@ -297,6 +303,7 @@ def generar_pdf_pagare(credito, codigo=None):
     """
     from reportlab.lib import colors
     from reportlab.lib.pagesizes import letter
+    from reportlab.lib.enums import TA_JUSTIFY
     from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
     from reportlab.lib.units import inch
     from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image, PageBreak
@@ -313,6 +320,7 @@ def generar_pdf_pagare(credito, codigo=None):
     styles = getSampleStyleSheet()
     normal = styles['Normal']
     small = ParagraphStyle('Small', parent=normal, fontSize=8, spaceAfter=3)
+    small_justified = ParagraphStyle('SmallJustified', parent=small, alignment=TA_JUSTIFY)
     small_bold = ParagraphStyle('SmallBold', parent=small, fontName='Helvetica-Bold')
     titulo = ParagraphStyle('Titulo', parent=styles['Heading1'], fontSize=12, spaceAfter=6, alignment=1)
 
@@ -402,7 +410,7 @@ def generar_pdf_pagare(credito, codigo=None):
         '7. Autorizo a %s o a quien represente sus derechos a reportar a CIFIN u otras centrales de información comercial mi endeudamiento. '
         'Acompaño el documento (pagaré) en referencia debidamente firmado y declaro haber recibido copia de la presente carta de instrucciones.'
     ) % (acreedor_nombre, acreedor_nombre)
-    flow.append(Paragraph(texto_autorizacion.replace('. ', '.<br/>'), small))
+    flow.append(Paragraph(texto_autorizacion.replace('. ', '.<br/>'), small_justified))
     flow.append(Spacer(1, 0.15 * inch))
     flow.append(Paragraph('Atentamente,', small_bold))
     flow.append(Spacer(1, 0.08 * inch))
@@ -429,7 +437,7 @@ def generar_pdf_pagare(credito, codigo=None):
         'Los Acreedores están autorizados para debitar de cualquier suma a mi (nuestro) favor el importe total o parcial de este título-valor, por vía de compensación. Renuncio (renunciamos) en forma expresa, a favor de(l) (los) Acreedores, a los derechos de nombrar secuestre de bienes en caso de cobro judicial y de solicitar que los bienes embargados se dividan en lotes para la subasta pública. Para todos los efectos legales, reconozco (reconocemos) que la obligación contraída tiene carácter de indivisible. Hago (hacemos) constar que la solidaridad y la indivisibilidad subsisten en caso de prórroga o de cualquier modificación de lo estipulado, aunque se pacta con uno solo de los deudores. Queda excusado el protesto de este pagaré. '
         'Se emite este pagaré el día %s y se entrega con la intención de hacerlo negociable.' % fecha_suscripcion
     )
-    flow.append(Paragraph(texto_pagare, small))
+    flow.append(Paragraph(texto_pagare, small_justified))
     flow.append(Spacer(1, 0.15 * inch))
     flow.append(Paragraph('Atentamente,', small_bold))
     flow.append(Spacer(1, 0.08 * inch))

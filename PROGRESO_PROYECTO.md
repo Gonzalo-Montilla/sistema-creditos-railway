@@ -215,5 +215,35 @@ Sistema-Creditos/
 
 ---
 
-*Documento generado automáticamente el 23/09/2025*
-*Sistema de Gestión y Cobro de Créditos - Versión de Producción*
+## 🗓️ AJUSTES GUARDADOS - 13/02/2026
+
+### ✅ Correcciones funcionales aplicadas
+- Se validó y dejó operativo el flujo de documentos por tipo de operación:
+  - Crédito nuevo: firma pagaré.
+  - Renovación: firma documento de renovación.
+  - Retanqueo: firma documento de retanqueo.
+- Se confirmó bloqueo backend para evitar solicitud de pagaré cuando el crédito es renovación o retanqueo.
+- Se dejó explícito el tipo de operación en creación de crédito (selector), reduciendo errores por marcar/no marcar checkbox.
+
+### ✅ Mejoras de interfaz
+- Se agregó badge visible de tipo de operación en listado de créditos:
+  - Nuevo / Renovación / Retanqueo.
+
+### ✅ Estandarización de documentos PDF
+- Se ajustó el formato de textos legales a estilo justificado para mejorar presentación y legibilidad en:
+  - Habeas Data.
+  - Pagaré.
+  - Documento de renovación.
+  - Documento de retanqueo.
+
+### 🔜 Siguiente sesión sugerida
+- Hacer una validación rápida de punta a punta con casos reales:
+  1) Cliente nuevo.
+  2) Cliente renovación.
+  3) Cliente retanqueo.
+- Verificar visualmente PDFs generados en cada caso.
+
+---
+
+*Documento actualizado el 13/02/2026*
+*Sistema de Gestión y Cobro de Créditos - Registro de continuidad*

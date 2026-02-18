@@ -176,6 +176,7 @@ def generar_pdf_habeas_data(tipo, obj, codigo=None, fecha_firma=None):
     """
     from reportlab.lib import colors
     from reportlab.lib.pagesizes import letter
+    from reportlab.lib.enums import TA_JUSTIFY
     from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
     from reportlab.lib.units import inch
     from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image
@@ -201,6 +202,7 @@ def generar_pdf_habeas_data(tipo, obj, codigo=None, fecha_firma=None):
         alignment=1,
     )
     normal = styles['Normal']
+    normal_justified = ParagraphStyle('NormalJustified', parent=normal, alignment=TA_JUSTIFY)
     normal_small = ParagraphStyle('Small', parent=normal, fontSize=9, spaceAfter=4)
     normal_small_center = ParagraphStyle('SmallCenter', parent=normal_small, alignment=1)
     code_style = ParagraphStyle(
@@ -240,7 +242,7 @@ def generar_pdf_habeas_data(tipo, obj, codigo=None, fecha_firma=None):
         'y gestión de cobranza). El titular ha sido informado sobre sus derechos a conocer, actualizar, rectificar y suprimir sus datos, '
         'revocar la autorización y presentar quejas ante la Superintendencia de Industria y Comercio.'
     )
-    flow.append(Paragraph(texto_ley, normal))
+    flow.append(Paragraph(texto_ley, normal_justified))
     flow.append(Spacer(1, 0.3 * inch))
 
     # Datos del titular + foto al lado (bien alineados)
@@ -308,7 +310,7 @@ def generar_pdf_habeas_data(tipo, obj, codigo=None, fecha_firma=None):
     flow.append(Spacer(1, 0.25 * inch))
     flow.append(Paragraph(
         'Este documento queda en custodia del responsable del tratamiento como constancia de la autorización otorgada.',
-        normal_small,
+        ParagraphStyle('CustodiaJustificada', parent=normal_small, alignment=TA_JUSTIFY),
     ))
 
     try:

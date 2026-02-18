@@ -13,9 +13,9 @@
     <h1 class="page-title mb-0"><i class="bi bi-people me-2"></i>Clientes</h1>
     <div class="btn-group-actions">
         {% if ver_inactivos %}
-            <a href="{% url 'clientes' %}" class="btn btn-outline-success btn-sm">Ver activos</a>
+            <a href="{% url 'clientes' %}?{% if q %}q={{ q|urlencode }}&{% endif %}per_page={{ per_page }}" class="btn btn-outline-success btn-sm">Ver activos</a>
         {% else %}
-            <a href="{% url 'clientes' %}?ver_inactivos=1" class="btn btn-outline-secondary btn-sm">Ver inactivos</a>
+            <a href="{% url 'clientes' %}?ver_inactivos=1{% if q %}&q={{ q|urlencode }}{% endif %}&per_page={{ per_page }}" class="btn btn-outline-secondary btn-sm">Ver inactivos</a>
         {% endif %}
         <a href="{% url 'nuevo_cliente' %}" class="btn btn-primary">
             <i class="bi bi-plus-circle"></i> Nuevo cliente
@@ -35,6 +35,7 @@
             <div class="col-auto">
                 <form method="get" action="{% url 'clientes' %}" class="d-flex flex-wrap gap-2 align-items-end" id="form-busqueda">
                     {% if ver_inactivos %}<input type="hidden" name="ver_inactivos" value="1">{% endif %}
+                    <input type="hidden" name="per_page" value="{{ per_page }}">
                     <div class="input-group">
                         <input type="text" name="q" class="form-control" placeholder="Cédula, nombre, apellido o barrio..." 
                                value="{{ q }}" id="buscar-cedula" autocomplete="off">
@@ -43,12 +44,28 @@
                         </button>
                     </div>
                     {% if q or ver_inactivos %}
-                    <a href="{% if ver_inactivos %}{% url 'clientes' %}?ver_inactivos=1{% else %}{% url 'clientes' %}{% endif %}" class="btn btn-outline-secondary">
+                    <a href="{% if ver_inactivos %}{% url 'clientes' %}?ver_inactivos=1&per_page={{ per_page }}{% else %}{% url 'clientes' %}?per_page={{ per_page }}{% endif %}" class="btn btn-outline-secondary">
                         <i class="bi bi-x-circle"></i> Limpiar
                     </a>
                     {% endif %}
                 </form>
                 <small class="text-muted d-block mt-1">Busca en todos los clientes.</small>
+            </div>
+        </div>
+        <div class="row align-items-center g-2 mt-2 pt-2 border-top">
+            <div class="col-auto ms-auto">
+                <form method="get" action="{% url 'clientes' %}" class="d-flex align-items-center gap-2">
+                    {% if ver_inactivos %}<input type="hidden" name="ver_inactivos" value="1">{% endif %}
+                    {% if q %}<input type="hidden" name="q" value="{{ q }}">{% endif %}
+                    <label class="form-label mb-0 small text-muted">Mostrar</label>
+                    <select name="per_page" class="form-select form-select-sm" style="width:auto;" onchange="this.form.submit()">
+                        <option value="10" {% if per_page == 10 %}selected{% endif %}>10</option>
+                        <option value="15" {% if per_page == 15 %}selected{% endif %}>15</option>
+                        <option value="25" {% if per_page == 25 %}selected{% endif %}>25</option>
+                        <option value="50" {% if per_page == 50 %}selected{% endif %}>50</option>
+                    </select>
+                    <span class="small text-muted">por página</span>
+                </form>
             </div>
         </div>
     </div>

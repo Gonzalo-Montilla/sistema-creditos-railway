@@ -128,6 +128,7 @@ def generar_pdf_retanqueo(credito, codigo=None):
     """
     from reportlab.lib import colors
     from reportlab.lib.pagesizes import letter
+    from reportlab.lib.enums import TA_JUSTIFY
     from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
     from reportlab.lib.units import inch
     from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
@@ -144,6 +145,7 @@ def generar_pdf_retanqueo(credito, codigo=None):
     styles = getSampleStyleSheet()
     normal = styles['Normal']
     small = ParagraphStyle('Small', parent=normal, fontSize=9, spaceAfter=4)
+    small_justified = ParagraphStyle('SmallJustified', parent=small, alignment=TA_JUSTIFY)
     small_bold = ParagraphStyle('SmallBold', parent=small, fontName='Helvetica-Bold')
     titulo = ParagraphStyle('Titulo', parent=styles['Heading1'], fontSize=12, spaceAfter=6, alignment=1)
 
@@ -187,7 +189,7 @@ def generar_pdf_retanqueo(credito, codigo=None):
         'incluyendo monto del nuevo crédito, plazo, valor de la cuota, tasa de interés y el monto aplicado al crédito anterior. '
         'Manifiesto que he sido informado(a) de los términos y que el retanqueo se realiza bajo estas condiciones.'
     )
-    flow.append(Paragraph(texto_aceptacion, small))
+    flow.append(Paragraph(texto_aceptacion, small_justified))
     flow.append(Spacer(1, 0.15 * inch))
 
     flow.append(Paragraph('Firma digital', small_bold))

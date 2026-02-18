@@ -36,6 +36,8 @@
             --finance-shadow-md: 0 10px 28px rgba(15, 23, 42, 0.12);
             --finance-radius-md: 12px;
             --finance-radius-lg: 16px;
+            --sidebar-expanded-width: 280px;
+            --sidebar-collapsed-width: 86px;
         }
 
         body {
@@ -102,10 +104,17 @@
         
         /* Desktop - sidebar siempre visible */
         @media (min-width: 768px) {
+            .app-shell-row {
+                --sidebar-width: var(--sidebar-expanded-width);
+            }
+
             .sidebar {
                 position: static;
                 left: 0;
-                transition: none;
+                width: var(--sidebar-width);
+                flex: 0 0 var(--sidebar-width);
+                max-width: var(--sidebar-width);
+                transition: width 0.22s ease, flex-basis 0.22s ease, max-width 0.22s ease;
             }
             
             .mobile-navbar {
@@ -114,6 +123,65 @@
             
             .main-content {
                 margin-left: 0;
+                flex: 0 0 calc(100% - var(--sidebar-width));
+                max-width: calc(100% - var(--sidebar-width));
+                transition: max-width 0.22s ease, flex-basis 0.22s ease;
+            }
+
+            .sidebar-collapse-btn {
+                width: 34px;
+                height: 34px;
+                padding: 0;
+                border-radius: 8px;
+                border: 1px solid rgba(255, 255, 255, 0.28);
+                color: #fff;
+                background: rgba(255, 255, 255, 0.08);
+            }
+
+            .sidebar-collapse-btn:hover {
+                background: rgba(255, 255, 255, 0.16);
+                transform: none;
+                box-shadow: none;
+            }
+
+            body.sidebar-collapsed .app-shell-row {
+                --sidebar-width: var(--sidebar-collapsed-width);
+            }
+
+            body.sidebar-collapsed .sidebar .sidebar-section-label {
+                display: none;
+            }
+
+            body.sidebar-collapsed .sidebar .brand-subtitle {
+                display: none;
+            }
+
+            body.sidebar-collapsed .sidebar .brand-crediflow {
+                display: none;
+            }
+
+            body.sidebar-collapsed .sidebar .nav-link {
+                justify-content: center;
+                text-align: center;
+                padding: 0.72rem 0.5rem;
+                font-size: 0;
+            }
+
+            body.sidebar-collapsed .sidebar .nav-link i {
+                margin-right: 0 !important;
+                font-size: 1.15rem;
+            }
+
+            body.sidebar-collapsed .sidebar hr {
+                margin: 0.65rem 0.45rem !important;
+            }
+
+            body.sidebar-collapsed .sidebar .position-sticky {
+                padding-top: 0.75rem !important;
+            }
+
+            body.sidebar-collapsed .sidebar .text-center.mb-4 {
+                margin-bottom: 0.65rem !important;
             }
         }
         
@@ -680,6 +748,11 @@
             <!-- Sidebar -->
             <nav class="col-md-3 col-lg-2 d-md-block sidebar collapse">
                 <div class="position-sticky pt-3">
+                    <div class="d-none d-md-flex justify-content-end px-2 mb-2">
+                        <button type="button" class="sidebar-collapse-btn" id="desktopSidebarToggle" aria-label="Colapsar menú lateral" title="Colapsar menú lateral">
+                            <i class="bi bi-layout-sidebar-inset"></i>
+                        </button>
+                    </div>
                     <div class="text-center mb-4">
                         <i class="bi bi-credit-card-2-back text-white mb-2" style="font-size: 2rem;"></i>
                         <h1 class="brand-crediflow">CREDIFLOW</h1>
@@ -859,6 +932,40 @@
     
     <!-- JavaScript para sidebar móvil -->
     <script>
+        function isDesktop() {
+            return window.innerWidth >= 768;
+        }
+
+        function applyDesktopSidebarState(collapsed) {
+            const body = document.body;
+            if (!isDesktop()) return;
+            body.classList.toggle('sidebar-collapsed', collapsed);
+        }
+
+        function updateDesktopToggleButton() {
+            const toggleBtn = document.getElementById('desktopSidebarToggle');
+            if (!toggleBtn) return;
+            const collapsed = document.body.classList.contains('sidebar-collapsed');
+            const icon = toggleBtn.querySelector('i');
+            if (icon) {
+                icon.className = collapsed ? 'bi bi-layout-sidebar-inset' : 'bi bi-layout-sidebar';
+            }
+            const label = collapsed ? 'Expandir menú lateral' : 'Colapsar menú lateral';
+            toggleBtn.setAttribute('title', label);
+            toggleBtn.setAttribute('aria-label', label);
+        }
+
+        function setDesktopSidebarCollapsed(collapsed) {
+            if (!isDesktop()) return;
+            applyDesktopSidebarState(collapsed);
+            updateDesktopToggleButton();
+            try {
+                localStorage.setItem('sidebarCollapsed', collapsed ? '1' : '0');
+            } catch (e) {
+                // Ignore localStorage failures.
+            }
+        }
+
         function toggleSidebar() {
             const sidebar = document.querySelector('.sidebar');
             const overlay = document.querySelector('.sidebar-overlay');
@@ -876,9 +983,32 @@
         
         // Cerrar sidebar al hacer clic en un enlace (móvil)
         document.addEventListener('DOMContentLoaded', function() {
+            const body = document.body;
+            const sidebar = document.querySelector('.sidebar');
+            const desktopToggleBtn = document.getElementById('desktopSidebarToggle');
             const sidebarLinks = document.querySelectorAll('.sidebar .nav-link');
             const isMobile = window.innerWidth < 768;
-            
+
+            if (isDesktop()) {
+                try {
+                    const savedState = localStorage.getItem('sidebarCollapsed');
+                    if (savedState === '1') {
+                        applyDesktopSidebarState(true);
+                    }
+                } catch (e) {
+                    // Ignore localStorage failures.
+                }
+            }
+
+            updateDesktopToggleButton();
+
+            if (desktopToggleBtn) {
+                desktopToggleBtn.addEventListener('click', function() {
+                    const collapsed = !body.classList.contains('sidebar-collapsed');
+                    setDesktopSidebarCollapsed(collapsed);
+                });
+            }
+
             if (isMobile) {
                 sidebarLinks.forEach(link => {
                     link.addEventListener('click', function() {
@@ -890,6 +1020,7 @@
         
         // Responsive: ajustar sidebar según tamaño de pantalla
         window.addEventListener('resize', function() {
+            const body = document.body;
             const sidebar = document.querySelector('.sidebar');
             const overlay = document.querySelector('.sidebar-overlay');
             
@@ -897,6 +1028,7 @@
                 sidebar.classList.remove('show');
                 overlay.classList.remove('show');
                 document.body.style.overflow = 'auto';
+                updateDesktopToggleButton();
             }
         });
     </script>

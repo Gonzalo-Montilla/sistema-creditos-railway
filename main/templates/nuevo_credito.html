@@ -173,13 +173,21 @@
                     </div>
                     
                     <div class="row mb-3">
-                        <div class="col-12">
-                            <div class="form-check">
-                                {{ form.es_renovacion }}
-                                <label class="form-check-label" for="{{ form.es_renovacion.id_for_label }}">
-                                    <i class="bi bi-arrow-repeat"></i> Crédito por renovación (no requiere pagaré; el cliente firmará documento de renovación)
-                                </label>
+                        <div class="col-md-8">
+                            <label for="{{ form.tipo_operacion.id_for_label }}" class="form-label">
+                                <i class="bi bi-diagram-3"></i> {{ form.tipo_operacion.label }} *
+                            </label>
+                            {{ form.tipo_operacion }}
+                            <div class="form-text">
+                                <small class="text-muted">
+                                    <strong>Nuevo:</strong> exige pagaré antes de desembolso. 
+                                    <strong>Renovación:</strong> no exige pagaré, exige documento de renovación.
+                                </small>
                             </div>
+                            {% if form.tipo_operacion.errors %}
+                                <div class="text-danger">{{ form.tipo_operacion.errors }}</div>
+                            {% endif %}
+                            {{ form.es_renovacion.as_hidden }}
                         </div>
                     </div>
                     

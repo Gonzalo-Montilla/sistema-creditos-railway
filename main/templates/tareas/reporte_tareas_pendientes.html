@@ -3,11 +3,11 @@
 {% block title %}Tareas pendientes sin gestionar - Cobranza{% endblock %}
 
 {% block content %}
-<div class="d-flex justify-content-between align-items-center mb-4">
+<div class="page-header">
     <h1 class="page-title mb-0">
         <i class="fas fa-clipboard-list text-warning"></i> Tareas pendientes sin gestionar
     </h1>
-    <div>
+    <div class="btn-group-actions">
         <a href="{% url 'panel_supervisor' %}" class="btn btn-outline-primary">
             <i class="fas fa-arrow-left"></i> Panel supervisor
         </a>
@@ -103,7 +103,14 @@
             </table>
         </div>
         {% else %}
-        <p class="text-muted p-4 mb-0">No hay tareas pendientes con asignación anterior a {{ fecha_limite|date:"d/m/Y" }} con los filtros aplicados.</p>
+        <div class="text-center p-4">
+            <p class="text-muted mb-2">No hay tareas pendientes con asignación anterior a {{ fecha_limite|date:"d/m/Y" }} con los filtros aplicados.</p>
+            <small class="text-muted d-block mb-3">Pruebe otro rango de días o revise la operación diaria por cobrador.</small>
+            <div class="d-grid gap-2 d-md-flex justify-content-center">
+                <a href="{% url 'reporte_tareas_pendientes' %}?dias=1" class="btn btn-sm btn-outline-secondary">Ver últimos 1 día</a>
+                <a href="{% url 'panel_supervisor' %}" class="btn btn-sm btn-primary">Ir al panel supervisor</a>
+            </div>
+        </div>
         {% endif %}
     </div>
 </div>

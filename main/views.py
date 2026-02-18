@@ -164,8 +164,10 @@ def clientes(request):
     clientes_con_codeudor = base_queryset.filter(codeudor__isnull=False).count()
     clientes_sin_codeudor = total_clientes - clientes_con_codeudor
     
-    # Paginación: 20 clientes por página
-    paginator = Paginator(base_queryset, 20)
+    # Paginación configurable
+    per_page_str = request.GET.get('per_page', '10').strip()
+    per_page = int(per_page_str) if per_page_str.isdigit() and int(per_page_str) in (10, 15, 25, 50) else 10
+    paginator = Paginator(base_queryset, per_page)
     page_number = request.GET.get('page')
     clientes = paginator.get_page(page_number)
     
@@ -176,6 +178,7 @@ def clientes(request):
         'clientes_sin_codeudor': clientes_sin_codeudor,
         'q': q,
         'ver_inactivos': ver_inactivos,
+        'per_page': per_page,
     }
     
     return render(request, 'clientes.html', context)
@@ -230,8 +233,10 @@ def creditos(request):
     creditos_desembolsados = creditos_list.filter(estado='DESEMBOLSADO').count()
     creditos_pagados = creditos_list.filter(estado='PAGADO').count()
     
-    # Paginación: 15 créditos por página
-    paginator = Paginator(creditos_list, 15)
+    # Paginación configurable
+    per_page_str = request.GET.get('per_page', '10').strip()
+    per_page = int(per_page_str) if per_page_str.isdigit() and int(per_page_str) in (10, 15, 25, 50) else 10
+    paginator = Paginator(creditos_list, per_page)
     page_number = request.GET.get('page')
     creditos = paginator.get_page(page_number)
     
@@ -258,6 +263,7 @@ def creditos(request):
         'filtro_cobrador_id': filtro_cobrador_id,
         'filtro_fecha_desde': fecha_desde,
         'filtro_fecha_hasta': fecha_hasta,
+        'per_page': per_page,
     }
     return render(request, 'creditos.html', context)
 
@@ -297,8 +303,10 @@ def pagos(request):
     # Promedio por pago
     promedio_pago = total_recaudado / total_pagos if total_pagos > 0 else 0
     
-    # Paginación: 25 pagos por página
-    paginator = Paginator(pagos_list, 25)
+    # Paginación configurable
+    per_page_str = request.GET.get('per_page', '10').strip()
+    per_page = int(per_page_str) if per_page_str.isdigit() and int(per_page_str) in (10, 15, 25, 50) else 10
+    paginator = Paginator(pagos_list, per_page)
     page_number = request.GET.get('page')
     pagos = paginator.get_page(page_number)
     
@@ -310,6 +318,7 @@ def pagos(request):
         'promedio_mensual': promedio_mensual,
         'total_recaudado': total_recaudado,
         'promedio_pago': promedio_pago,
+        'per_page': per_page,
     }
     
     return render(request, 'pagos.html', context)
@@ -731,13 +740,18 @@ def detalle_cliente(request, cliente_id):
     
     creditos = cliente.credito_set.all().order_by('-fecha_solicitud')
     creditos_con_pagare = [c for c in creditos if c.tiene_pagare_firmado()]
-    creditos_para_renovacion = [c for c in creditos if c.estado in ('SOLICITADO', 'APROBADO')]
+    creditos_con_renovacion = [c for c in creditos if c.tiene_documento_renovacion_firmado()]
+    creditos_para_renovacion = [
+        c for c in creditos
+        if c.es_renovacion and c.estado in ('SOLICITADO', 'APROBADO') and not c.tiene_documento_renovacion_firmado()
+    ]
     
     context = {
         'cliente': cliente,
         'codeudor': codeudor,
         'creditos': creditos,
         'creditos_con_pagare': creditos_con_pagare,
+        'creditos_con_renovacion': creditos_con_renovacion,
         'creditos_para_renovacion': creditos_para_renovacion,
     }
     return render(request, 'detalle_cliente.html', context)
@@ -968,18 +982,18 @@ def validar_otp_renovacion_view(request):
 
 
 @login_required
-def descargar_renovacion(request, cliente_id):
-    """Sirve el último PDF de renovación del cliente. ?inline=1 para vista previa."""
-    cliente = get_object_or_404(Cliente, id=cliente_id)
-    if not cliente.documento_renovacion:
-        return HttpResponse('No hay documento de renovación para este cliente.', status=404)
+def descargar_renovacion(request, credito_id):
+    """Sirve el PDF de renovación del crédito. ?inline=1 para vista previa."""
+    credito = get_object_or_404(Credito, id=credito_id)
+    if not credito.documento_renovacion:
+        return HttpResponse('No hay documento de renovación para este crédito.', status=404)
     try:
-        with cliente.documento_renovacion.open('rb') as f:
+        with credito.documento_renovacion.open('rb') as f:
             content = f.read()
     except Exception:
         return HttpResponse('Error al leer el documento.', status=500)
     response = HttpResponse(content, content_type='application/pdf')
-    filename = f'renovacion_cliente_{cliente_id}.pdf'
+    filename = f'renovacion_credito_{credito_id}.pdf'
     if request.GET.get('inline') == '1':
         response['Content-Disposition'] = f'inline; filename="{filename}"'
         response['X-Frame-Options'] = 'SAMEORIGIN'
@@ -2505,8 +2519,10 @@ def cartera_vencida(request):
     # Ordenar por días de mora descendente
     creditos_vencidos_list = creditos_vencidos_list.order_by('-dias_mora')
     
-    # Paginación: 20 créditos por página
-    paginator = Paginator(creditos_vencidos_list, 20)
+    # Paginación configurable
+    per_page_str = request.GET.get('per_page', '10').strip()
+    per_page = int(per_page_str) if per_page_str.isdigit() and int(per_page_str) in (10, 15, 25, 50) else 10
+    paginator = Paginator(creditos_vencidos_list, per_page)
     page_number = request.GET.get('page')
     creditos_vencidos = paginator.get_page(page_number)
     
@@ -2521,6 +2537,7 @@ def cartera_vencida(request):
         'cobrador_id': cobrador_id,
         'cliente_id': cliente_id,
         'cliente_filtro': cliente_filtro,
+        'per_page': per_page,
     }
     
     return render(request, 'cartera/cartera_vencida.html', context)
@@ -2599,14 +2616,17 @@ def lista_usuarios(request):
     
     usuarios = User.objects.all().order_by('-date_joined')
     
-    # Paginación
-    paginator = Paginator(usuarios, 15)
+    # Paginación configurable
+    per_page_str = request.GET.get('per_page', '10').strip()
+    per_page = int(per_page_str) if per_page_str.isdigit() and int(per_page_str) in (10, 15, 25, 50) else 10
+    paginator = Paginator(usuarios, per_page)
     page_number = request.GET.get('page')
     usuarios_paginados = paginator.get_page(page_number)
     
     context = {
         'usuarios': usuarios_paginados,
         'total_usuarios': usuarios.count(),
+        'per_page': per_page,
     }
     
     return render(request, 'usuarios/lista_usuarios.html', context)

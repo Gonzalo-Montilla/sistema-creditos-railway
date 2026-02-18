@@ -119,6 +119,20 @@ class CreditoForm(forms.ModelForm):
         widget=forms.HiddenInput(),
         required=False  # Se asignará en el método clean
     )
+    TIPO_OPERACION_CHOICES = [
+        ('NUEVO', 'Cliente nuevo (requiere pagaré)'),
+        ('RENOVACION', 'Renovación (no requiere pagaré, sí documento de renovación)'),
+    ]
+    tipo_operacion = forms.ChoiceField(
+        choices=TIPO_OPERACION_CHOICES,
+        required=True,
+        initial='NUEVO',
+        label='Tipo de operación',
+        widget=forms.Select(attrs={
+            'class': 'form-select',
+            'id': 'tipo_operacion'
+        })
+    )
     
     class Meta:
         model = Credito
@@ -163,6 +177,13 @@ class CreditoForm(forms.ModelForm):
         # Si estamos editando, llenar la cédula del cliente
         if self.instance and self.instance.pk and hasattr(self.instance, 'cliente') and self.instance.cliente:
             self.fields['cedula_cliente'].initial = self.instance.cliente.cedula
+            self.fields['tipo_operacion'].required = False
+            if self.instance.credito_retanqueado_id:
+                self.fields['tipo_operacion'].initial = 'NUEVO'
+            elif self.instance.es_renovacion:
+                self.fields['tipo_operacion'].initial = 'RENOVACION'
+            else:
+                self.fields['tipo_operacion'].initial = 'NUEVO'
     
     def clean_cedula_cliente(self):
         cedula = self.cleaned_data.get('cedula_cliente')
@@ -184,6 +205,9 @@ class CreditoForm(forms.ModelForm):
         monto = cleaned_data.get('monto')
         tasa_interes = cleaned_data.get('tasa_interes')
         cantidad_cuotas = cleaned_data.get('cantidad_cuotas')
+        tipo_operacion = cleaned_data.get('tipo_operacion')
+        if not tipo_operacion and self.instance and self.instance.pk:
+            tipo_operacion = 'RENOVACION' if self.instance.es_renovacion else 'NUEVO'
         
         # Asignar el cliente al campo oculto
         if cedula:
@@ -203,6 +227,9 @@ class CreditoForm(forms.ModelForm):
         
         if cantidad_cuotas and cantidad_cuotas <= 0:
             raise ValidationError({'cantidad_cuotas': 'La cantidad de cuotas debe ser mayor a cero.'})
+
+        # Tipo de operación explícito para evitar errores operativos.
+        cleaned_data['es_renovacion'] = (tipo_operacion == 'RENOVACION')
         
         return cleaned_data
 

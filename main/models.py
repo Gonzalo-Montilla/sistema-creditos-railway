@@ -348,6 +348,24 @@ class Credito(models.Model):
         blank=True,
         null=True,
     )
+    # Documento de renovación firmado con OTP (solo para créditos marcados como renovación)
+    documento_renovacion = models.FileField(
+        upload_to='renovaciones/creditos/',
+        verbose_name='Documento de renovación firmado (PDF)',
+        blank=True,
+        null=True,
+    )
+    fecha_firma_renovacion = models.DateTimeField(
+        verbose_name='Fecha firma documento renovación',
+        null=True,
+        blank=True,
+    )
+    codigo_renovacion = models.CharField(
+        max_length=32,
+        verbose_name='Código documento renovación',
+        blank=True,
+        null=True,
+    )
 
     def tiene_documento_retanqueo_firmado(self):
         """True si es crédito por retanqueo y el cliente ya firmó el documento con OTP."""
@@ -355,6 +373,14 @@ class Credito(models.Model):
             self.credito_retanqueado_id
             and self.documento_retanqueo
             and self.fecha_firma_retanqueo
+        )
+
+    def tiene_documento_renovacion_firmado(self):
+        """True si es crédito de renovación y el cliente ya firmó el documento con OTP."""
+        return bool(
+            self.es_renovacion
+            and self.documento_renovacion
+            and self.fecha_firma_renovacion
         )
 
     def sugerir_cobrador(self):
@@ -486,7 +512,7 @@ class Credito(models.Model):
         if self.credito_retanqueado_id:
             return self.tiene_documento_retanqueo_firmado()
         if self.es_renovacion:
-            return self.cliente.tiene_documento_renovacion()
+            return self.tiene_documento_renovacion_firmado()
         return self.tiene_pagare_firmado()
 
     def __str__(self):

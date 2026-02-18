@@ -2,11 +2,20 @@
 
 {% block title %}Resumen cierre – {{ cobrador.nombre_completo }}{% endblock %}
 
+{% block extra_css %}
+<style>
+    .cierre-helper {
+        font-size: 0.8rem;
+        color: #5b6b83;
+    }
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="page-header">
     <h2 class="page-title mb-0"><i class="bi bi-person-badge"></i> Resumen de cobro – {{ cobrador.nombre_completo }}</h2>
     <div class="btn-group-actions">
-        <a href="{% url 'cierre_cobro_diario' %}?fecha={{ fecha|date:'Y-m-d' }}" class="btn btn-outline-primary"><i class="bi bi-arrow-left"></i> Cierre diario</a>
+        <a href="{% url 'cierre_cobro_diario' %}?fecha={{ fecha|date:'Y-m-d' }}" class="btn btn-outline-primary"><i class="bi bi-arrow-left"></i> Volver a cierre diario</a>
     </div>
 </div>
 
@@ -50,7 +59,7 @@
 <!-- Listado de pagos del día -->
 <div class="card mb-4">
     <div class="card-header">
-        <h5 class="mb-0">Pagos registrados ese día</h5>
+        <h5 class="mb-0">Pagos registrados del día</h5>
     </div>
     <div class="card-body p-0">
         {% if pagos %}
@@ -91,7 +100,13 @@
             {% endfor %}
         </div>
         {% else %}
-        <p class="text-muted p-4 mb-0">No hay pagos registrados para este cobrador en esta fecha.</p>
+        <div class="text-center p-4">
+            <p class="text-muted mb-2">No hay pagos registrados para este cobrador en esta fecha.</p>
+            <small class="text-muted d-block mb-3">Puede revisar otra fecha o volver al resumen general del cierre diario.</small>
+                            <a href="{% url 'cierre_cobro_diario' %}?fecha={{ fecha|date:'Y-m-d' }}" class="btn btn-sm btn-outline-primary">
+                <i class="bi bi-arrow-left"></i> Volver a cierre diario
+            </a>
+        </div>
         {% endif %}
     </div>
 </div>
@@ -105,26 +120,122 @@
         <p class="small text-muted mb-3">
             Indique el monto que el cobrador le entregó. El sistema calculará la diferencia (arqueo) respecto a lo que debía según los pagos registrados.
         </p>
-        <form method="post" action="{% url 'cerrar_cobro_cobrador' %}">
+        <form method="post" action="{% url 'cerrar_cobro_cobrador' %}" id="cierreCobroForm">
             {% csrf_token %}
             <input type="hidden" name="cobrador_id" value="{{ cobrador.id }}">
             <input type="hidden" name="fecha" value="{{ fecha|date:'Y-m-d' }}">
+            <input type="hidden" id="montoEsperadoCierre" value="{{ monto_esperado }}">
             <div class="row g-3">
                 <div class="col-md-4">
                     <label class="form-label">Monto recibido (arqueo)</label>
-                    <input type="text" name="monto_recibido" class="form-control" placeholder="Ej: 500000" value="{% if cierre and cierre.monto_recibido %}{{ cierre.monto_recibido }}{% elif monto_esperado %}{{ monto_esperado }}{% endif %}">
+                    <input type="text" name="monto_recibido" id="montoRecibidoCierre" inputmode="decimal" class="form-control" placeholder="Ej: 500000" value="{% if cierre and cierre.monto_recibido %}{{ cierre.monto_recibido }}{% elif monto_esperado %}{{ monto_esperado }}{% endif %}" required>
+                    <div class="invalid-feedback" id="montoCierreError"></div>
+                    <div class="cierre-helper mt-1" id="cierreDiferenciaPreview"></div>
                 </div>
                 <div class="col-md-8">
                     <label class="form-label">Observaciones</label>
                     <input type="text" name="observaciones" class="form-control" placeholder="Opcional" value="{% if cierre %}{{ cierre.observaciones }}{% endif %}">
                 </div>
                 <div class="col-12">
-                    <button type="submit" class="btn btn-success w-100">
-                        <i class="bi bi-check-circle"></i> {% if cierre %}Actualizar cierre{% else %}Cerrar cobro{% endif %}
+                    <button type="submit" class="btn btn-success w-100" id="btnSubmitCierre">
+                        <span id="btnCierreText"><i class="bi bi-check-circle"></i> {% if cierre %}Actualizar cierre{% else %}Cerrar cobro{% endif %}</span>
+                        <span class="d-none" id="btnCierreLoading"><span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>Guardando cierre...</span>
                     </button>
                 </div>
             </div>
         </form>
     </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    (function () {
+        const form = document.getElementById('cierreCobroForm');
+        const inputMonto = document.getElementById('montoRecibidoCierre');
+        const errorMonto = document.getElementById('montoCierreError');
+        const preview = document.getElementById('cierreDiferenciaPreview');
+        const montoEsperadoRaw = document.getElementById('montoEsperadoCierre');
+        const btn = document.getElementById('btnSubmitCierre');
+        const btnText = document.getElementById('btnCierreText');
+        const btnLoading = document.getElementById('btnCierreLoading');
+        if (!form || !inputMonto || !btn || !btnText || !btnLoading) return;
+
+        const montoEsperado = parseNumber(montoEsperadoRaw ? montoEsperadoRaw.value : '');
+
+        function parseNumber(value) {
+            if (!value) return null;
+            let txt = String(value).trim().replace(/\s+/g, '');
+            if (!txt) return null;
+            if (!/^[0-9.,]+$/.test(txt)) return NaN;
+            if (txt.includes(',') && txt.includes('.')) {
+                txt = txt.replace(/,/g, '');
+            } else if (txt.includes(',') && !txt.includes('.')) {
+                const parts = txt.split(',');
+                if (parts.length === 2 && parts[1].length <= 2) {
+                    txt = parts[0] + '.' + parts[1];
+                } else {
+                    txt = txt.replace(/,/g, '');
+                }
+            }
+            return Number(txt);
+        }
+
+        function formatoCOP(number) {
+            return new Intl.NumberFormat('es-CO', { maximumFractionDigits: 0 }).format(number);
+        }
+
+        function setMontoError(msg) {
+            inputMonto.classList.add('is-invalid');
+            if (errorMonto) errorMonto.textContent = msg;
+        }
+
+        function clearMontoError() {
+            inputMonto.classList.remove('is-invalid');
+            if (errorMonto) errorMonto.textContent = '';
+        }
+
+        function updatePreview() {
+            if (!preview) return;
+            const recibido = parseNumber(inputMonto.value);
+            if (recibido === null || Number.isNaN(recibido) || recibido <= 0 || montoEsperado === null || Number.isNaN(montoEsperado)) {
+                preview.textContent = '';
+                return;
+            }
+            const diff = recibido - montoEsperado;
+            if (diff === 0) {
+                preview.innerHTML = '<span class="text-success">Arqueo exacto: coincide con el sistema.</span>';
+            } else if (diff > 0) {
+                preview.innerHTML = `<span class="text-success">Sobrante estimado: $${formatoCOP(diff)}</span>`;
+            } else {
+                preview.innerHTML = `<span class="text-danger">Faltante estimado: $${formatoCOP(Math.abs(diff))}</span>`;
+            }
+        }
+
+        inputMonto.addEventListener('input', function () {
+            clearMontoError();
+            updatePreview();
+        });
+
+        form.addEventListener('submit', function (e) {
+            clearMontoError();
+            const recibido = parseNumber(inputMonto.value);
+            if (recibido === null || Number.isNaN(recibido)) {
+                e.preventDefault();
+                setMontoError('Ingrese un monto válido. Use solo números, coma o punto.');
+                return;
+            }
+            if (recibido <= 0) {
+                e.preventDefault();
+                setMontoError('El monto recibido debe ser mayor que cero.');
+                return;
+            }
+            btn.disabled = true;
+            btnText.classList.add('d-none');
+            btnLoading.classList.remove('d-none');
+        });
+
+        updatePreview();
+    })();
+</script>
 {% endblock %}

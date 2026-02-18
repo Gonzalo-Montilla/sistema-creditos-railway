@@ -85,14 +85,16 @@
         <p class="mb-0 small text-muted">No hay pagaré(s) firmados.</p>
         {% endfor %}
         <hr class="my-3">
-        <h6 class="card-section-label">Documento de renovación de crédito</h6>
-        <p class="mb-2 small text-muted">Aceptación de condiciones del crédito (siempre se muestra el último documento firmado).</p>
-        {% if cliente.tiene_documento_renovacion %}
-        <p class="mb-1 small text-success"><i class="bi bi-check-circle me-1"></i>Última firma el {{ cliente.fecha_firma_renovacion|date:"d/m/Y H:i" }}</p>
-        <button type="button" class="btn btn-sm btn-outline-primary" onclick="abrirModalVerRenovacion({{ cliente.id }})"><i class="bi bi-eye me-1"></i>Ver / Descargar documento de renovación</button>
-        {% else %}
-        <p class="mb-2 small text-muted">No hay documento de renovación firmado.</p>
-        {% endif %}
+        <h6 class="card-section-label">Documento(s) de renovación por crédito</h6>
+        <p class="mb-2 small text-muted">Cada renovación se firma y guarda por crédito.</p>
+        {% for credito in creditos_con_renovacion %}
+        <div class="mb-2 d-flex flex-wrap align-items-center gap-2">
+            <span class="small">Crédito #{{ credito.id|stringformat:"04d" }} — firmado {{ credito.fecha_firma_renovacion|date:"d/m/Y H:i" }}</span>
+            <button type="button" class="btn btn-sm btn-outline-primary" onclick="abrirModalVerRenovacion({{ credito.id }})"><i class="bi bi-eye me-1"></i>Ver / Descargar documento de renovación</button>
+        </div>
+        {% empty %}
+        <p class="mb-2 small text-muted">No hay documentos de renovación firmados.</p>
+        {% endfor %}
         {% if creditos_para_renovacion %}
         <p class="mt-2 mb-1 small text-muted">Solicitar firma para un crédito en trámite:</p>
         {% for credito in creditos_para_renovacion %}
@@ -572,8 +574,8 @@ document.getElementById('modalVerPagare').addEventListener('hidden.bs.modal', fu
 });
 
 var renovacionContext = { creditoId: null, otp: null, celular: null };
-function abrirModalVerRenovacion(clienteId) {
-    var base = "{% url 'descargar_renovacion' cliente_id=0 %}".replace('/0/', '/' + clienteId + '/');
+function abrirModalVerRenovacion(creditoId) {
+    var base = "{% url 'descargar_renovacion' credito_id=0 %}".replace('/0/', '/' + creditoId + '/');
     document.getElementById('iframeRenovacionPdf').src = base + '?inline=1';
     document.getElementById('btnDescargarRenovacion').href = base;
     document.getElementById('btnDescargarRenovacion').target = '_blank';

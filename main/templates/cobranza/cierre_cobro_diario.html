@@ -2,6 +2,38 @@
 
 {% block title %}Cierre de cobro diario{% endblock %}
 
+{% block extra_css %}
+<style>
+    .cierre-mobile-card {
+        border: 1px solid #dbe5f3;
+        border-radius: 12px;
+        background: #fff;
+        padding: 0.9rem;
+    }
+
+    .cierre-mobile-card .linea {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 0.5rem;
+        font-size: 0.84rem;
+        margin-bottom: 0.35rem;
+    }
+
+    .cierre-mobile-card .linea:last-child {
+        margin-bottom: 0;
+    }
+
+    .cierre-mobile-card .linea strong {
+        color: #0f172a;
+    }
+
+    .cierre-mobile-card .linea .label {
+        color: #5b6b83;
+    }
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="page-header">
     <h2 class="page-title mb-0"><i class="bi bi-cash-coin"></i> Cierre de cobro diario</h2>
@@ -76,23 +108,36 @@
                             {% endif %}
                         </td>
                         <td>
-                            <a href="{% url 'resumen_cierre_cobrador' f.cobrador.id %}?fecha={{ fecha|date:'Y-m-d' }}" class="btn btn-sm btn-outline-primary">Ver detalle</a>
+                            <a href="{% url 'resumen_cierre_cobrador' f.cobrador.id %}?fecha={{ fecha|date:'Y-m-d' }}" class="btn btn-sm btn-outline-primary">
+                                <i class="bi bi-eye"></i> Ver resumen
+                            </a>
                             {% if not f.cerrado and f.cantidad_pagos > 0 %}
-                            <a href="{% url 'resumen_cierre_cobrador' f.cobrador.id %}?fecha={{ fecha|date:'Y-m-d' }}#form-cierre" class="btn btn-sm btn-success">Cerrar cobro</a>
+                            <a href="{% url 'resumen_cierre_cobrador' f.cobrador.id %}?fecha={{ fecha|date:'Y-m-d' }}#form-cierre" class="btn btn-sm btn-success">
+                                <i class="bi bi-check-circle"></i> Cerrar cobro
+                            </a>
                             {% elif f.cerrado %}
-                            <a href="{% url 'resumen_cierre_cobrador' f.cobrador.id %}?fecha={{ fecha|date:'Y-m-d' }}#form-cierre" class="btn btn-sm btn-outline-secondary">Editar cierre</a>
+                            <a href="{% url 'resumen_cierre_cobrador' f.cobrador.id %}?fecha={{ fecha|date:'Y-m-d' }}#form-cierre" class="btn btn-sm btn-outline-secondary">
+                                <i class="bi bi-pencil-square"></i> Editar cierre
+                            </a>
                             {% endif %}
                         </td>
                     </tr>
                     {% empty %}
-                    <tr><td colspan="7" class="text-muted text-center py-4">No hay cobradores activos.</td></tr>
+                    <tr>
+                        <td colspan="7" class="text-center py-4">
+                            <div class="text-muted mb-2">No hay cobradores activos para esta operación.</div>
+                            <a href="{% url 'nuevo_cobrador' %}" class="btn btn-sm btn-primary">
+                                <i class="bi bi-person-plus"></i> Registrar cobrador
+                            </a>
+                        </td>
+                    </tr>
                     {% endfor %}
                 </tbody>
             </table>
         </div>
         <div class="mobile-card-list d-md-none p-3">
             {% for f in filas %}
-            <div class="mobile-card-item">
+            <div class="mobile-card-item cierre-mobile-card">
                 <div class="d-flex justify-content-between align-items-start gap-2 mb-2">
                     <strong>{{ f.cobrador.nombre_completo }}</strong>
                     {% if f.cerrado %}
@@ -101,18 +146,24 @@
                     <span class="badge bg-secondary">Pendiente</span>
                     {% endif %}
                 </div>
-                <div class="small text-muted mb-1">Pagos: {{ f.cantidad_pagos }}</div>
-                <div class="small mb-1">Sistema: <strong>${{ f.monto_esperado|floatformat:0 }}</strong></div>
-                <div class="small mb-1">
-                    Recibido:
+                <div class="linea">
+                    <span class="label">Pagos registrados</span>
+                    <strong>{{ f.cantidad_pagos }}</strong>
+                </div>
+                <div class="linea">
+                    <span class="label">Monto sistema</span>
+                    <strong>${{ f.monto_esperado|floatformat:0 }}</strong>
+                </div>
+                <div class="linea">
+                    <span class="label">Recibido</span>
                     {% if f.cierre and f.cierre.monto_recibido is not None %}
                     <strong>${{ f.cierre.monto_recibido|floatformat:0 }}</strong>
                     {% else %}
                     <span class="text-muted">—</span>
                     {% endif %}
                 </div>
-                <div class="small mb-3">
-                    Diferencia:
+                <div class="linea mb-3">
+                    <span class="label">Diferencia</span>
                     {% if f.cierre and f.cierre.diferencia is not None %}
                     <span class="{% if f.cierre.diferencia < 0 %}text-danger{% elif f.cierre.diferencia > 0 %}text-success{% endif %}">
                         <strong>${{ f.cierre.diferencia|floatformat:0 }}</strong>
@@ -122,16 +173,29 @@
                     {% endif %}
                 </div>
                 <div class="d-grid gap-2">
-                    <a href="{% url 'resumen_cierre_cobrador' f.cobrador.id %}?fecha={{ fecha|date:'Y-m-d' }}" class="btn btn-outline-primary btn-sm">Ver detalle</a>
+                    <a href="{% url 'resumen_cierre_cobrador' f.cobrador.id %}?fecha={{ fecha|date:'Y-m-d' }}" class="btn btn-outline-primary btn-sm">
+                        <i class="bi bi-eye"></i> Ver resumen
+                    </a>
                     {% if not f.cerrado and f.cantidad_pagos > 0 %}
-                    <a href="{% url 'resumen_cierre_cobrador' f.cobrador.id %}?fecha={{ fecha|date:'Y-m-d' }}#form-cierre" class="btn btn-success btn-sm">Cerrar cobro</a>
+                    <a href="{% url 'resumen_cierre_cobrador' f.cobrador.id %}?fecha={{ fecha|date:'Y-m-d' }}#form-cierre" class="btn btn-success btn-sm">
+                        <i class="bi bi-check-circle"></i> Cerrar cobro
+                    </a>
+                    {% elif not f.cerrado and f.cantidad_pagos == 0 %}
+                    <span class="small text-muted text-center">Sin pagos hoy para cerrar</span>
                     {% elif f.cerrado %}
-                    <a href="{% url 'resumen_cierre_cobrador' f.cobrador.id %}?fecha={{ fecha|date:'Y-m-d' }}#form-cierre" class="btn btn-outline-secondary btn-sm">Editar cierre</a>
+                    <a href="{% url 'resumen_cierre_cobrador' f.cobrador.id %}?fecha={{ fecha|date:'Y-m-d' }}#form-cierre" class="btn btn-outline-secondary btn-sm">
+                        <i class="bi bi-pencil-square"></i> Editar cierre
+                    </a>
                     {% endif %}
                 </div>
             </div>
             {% empty %}
-            <div class="text-muted text-center py-3">No hay cobradores activos.</div>
+            <div class="text-center py-3">
+                <div class="text-muted mb-2">No hay cobradores activos para esta fecha.</div>
+                <a href="{% url 'nuevo_cobrador' %}" class="btn btn-sm btn-primary">
+                    <i class="bi bi-person-plus"></i> Registrar cobrador
+                </a>
+            </div>
             {% endfor %}
         </div>
     </div>
@@ -166,7 +230,12 @@
                         <td><small>{{ h.cerrado_por.username|default:"—" }}</small></td>
                     </tr>
                     {% empty %}
-                    <tr><td colspan="6" class="text-muted text-center py-3">Aún no hay cierres registrados.</td></tr>
+                    <tr>
+                        <td colspan="6" class="text-center py-3">
+                            <div class="text-muted mb-1">Aún no hay cierres registrados.</div>
+                            <small class="text-muted">Cuando reciba dinero de los cobradores, aquí verá el historial de arqueo.</small>
+                        </td>
+                    </tr>
                     {% endfor %}
                 </tbody>
             </table>

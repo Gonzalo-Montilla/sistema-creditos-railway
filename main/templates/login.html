@@ -135,6 +135,13 @@
             box-shadow: 0 8px 20px rgba(29, 78, 216, 0.25);
             background: linear-gradient(120deg, #1e40af, #1e3a8a);
         }
+
+        .btn-login:disabled {
+            opacity: 0.75;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
         
         .alert {
             border-radius: 12px;
@@ -180,7 +187,7 @@
         </div>
         {% endif %}
         
-        <form method="post">
+        <form method="post" id="loginForm">
             {% csrf_token %}
             <div class="mb-3">
                 <label class="field-label" for="username"><i class="fas fa-user me-1"></i>Usuario</label>
@@ -197,8 +204,9 @@
                 </div>
             </div>
             
-            <button type="submit" class="btn btn-primary btn-login">
-                <i class="fas fa-sign-in-alt"></i> Iniciar Sesión
+            <button type="submit" class="btn btn-primary btn-login" id="btnLoginSubmit">
+                <span id="btnLoginText"><i class="fas fa-sign-in-alt"></i> Iniciar Sesión</span>
+                <span id="btnLoginLoading" class="d-none"><i class="fas fa-spinner fa-spin"></i> Ingresando...</span>
             </button>
         </form>
         
@@ -222,6 +230,18 @@
                 }
                 toggleBtn.setAttribute('aria-label', isPassword ? 'Ocultar contraseña' : 'Mostrar contraseña');
             });
+
+            const loginForm = document.getElementById('loginForm');
+            const btnSubmit = document.getElementById('btnLoginSubmit');
+            const btnText = document.getElementById('btnLoginText');
+            const btnLoading = document.getElementById('btnLoginLoading');
+            if (loginForm && btnSubmit && btnText && btnLoading) {
+                loginForm.addEventListener('submit', function () {
+                    btnSubmit.disabled = true;
+                    btnText.classList.add('d-none');
+                    btnLoading.classList.remove('d-none');
+                });
+            }
         })();
     </script>
 </body>

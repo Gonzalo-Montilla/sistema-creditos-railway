@@ -62,7 +62,17 @@
                     <i class="bi bi-list-ul"></i> Historial de pagos
                 </h5>
             </div>
-            <div class="col-auto">
+            <div class="col-auto d-flex flex-wrap align-items-center gap-2">
+                <form method="get" action="{% url 'pagos' %}" class="d-flex align-items-center gap-2">
+                    <label class="form-label mb-0 small text-muted">Mostrar</label>
+                    <select name="per_page" class="form-select form-select-sm" style="width:auto;" onchange="this.form.submit()">
+                        <option value="10" {% if per_page == 10 %}selected{% endif %}>10</option>
+                        <option value="15" {% if per_page == 15 %}selected{% endif %}>15</option>
+                        <option value="25" {% if per_page == 25 %}selected{% endif %}>25</option>
+                        <option value="50" {% if per_page == 50 %}selected{% endif %}>50</option>
+                    </select>
+                    <span class="small text-muted">por página</span>
+                </form>
                 <div class="input-group">
                     <input type="date" class="form-control" id="fechaFilter">
                     <input type="text" class="form-control" placeholder="Buscar cliente..." id="searchInput">

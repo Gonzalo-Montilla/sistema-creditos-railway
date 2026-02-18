@@ -45,6 +45,8 @@ def solicitar_otp_renovacion(credito_id):
     credito = Credito.objects.filter(id=credito_id).first()
     if not credito:
         return {'success': False, 'message': 'Crédito no encontrado.'}
+    if not credito.es_renovacion:
+        return {'success': False, 'message': 'Este crédito no es de renovación.'}
     if credito.estado not in ('SOLICITADO', 'APROBADO'):
         return {'success': False, 'message': 'El crédito debe estar en solicitud o aprobado para solicitar documento de renovación.'}
 
@@ -101,20 +103,22 @@ def validar_otp_renovacion(credito_id, otp_ingresado):
         return False, 'Código incorrecto. Verifique e intente de nuevo.'
 
     credito = Credito.objects.get(id=credito_id)
+    if not credito.es_renovacion:
+        return False, 'Este crédito no es de renovación.'
     cliente = credito.cliente
     now = timezone.now()
-    codigo = f"REN-{now.year}-{cliente.id:06d}"
+    codigo = f"REN-{now.year}-{credito.id:06d}"
 
     pdf_file = generar_pdf_renovacion(cliente, credito, codigo=codigo)
     if not pdf_file:
         return False, 'Error al generar el documento.'
 
     from django.core.files.base import ContentFile
-    nombre_archivo = f'renovacion_cliente_{cliente.id}_{now.strftime("%Y%m%d_%H%M")}.pdf'
-    cliente.documento_renovacion.save(nombre_archivo, ContentFile(pdf_file.getvalue()), save=False)
-    cliente.fecha_firma_renovacion = now
-    cliente.codigo_renovacion = codigo
-    cliente.save(update_fields=['documento_renovacion', 'fecha_firma_renovacion', 'codigo_renovacion'])
+    nombre_archivo = f'renovacion_credito_{credito.id}_{now.strftime("%Y%m%d_%H%M")}.pdf'
+    credito.documento_renovacion.save(nombre_archivo, ContentFile(pdf_file.getvalue()), save=False)
+    credito.fecha_firma_renovacion = now
+    credito.codigo_renovacion = codigo
+    credito.save(update_fields=['documento_renovacion', 'fecha_firma_renovacion', 'codigo_renovacion'])
     registro.delete()
     return True, None
 
@@ -126,12 +130,13 @@ def generar_pdf_renovacion(cliente, credito, codigo=None):
     """
     from reportlab.lib import colors
     from reportlab.lib.pagesizes import letter
+    from reportlab.lib.enums import TA_JUSTIFY
     from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
     from reportlab.lib.units import inch
     from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
 
     if codigo is None:
-        codigo = getattr(cliente, 'codigo_renovacion', None) or f"REN-{timezone.now().year}-{cliente.id:06d}"
+        codigo = getattr(credito, 'codigo_renovacion', None) or f"REN-{timezone.now().year}-{credito.id:06d}"
 
     buffer = BytesIO()
     doc = SimpleDocTemplate(
@@ -142,6 +147,7 @@ def generar_pdf_renovacion(cliente, credito, codigo=None):
     styles = getSampleStyleSheet()
     normal = styles['Normal']
     small = ParagraphStyle('Small', parent=normal, fontSize=9, spaceAfter=4)
+    small_justified = ParagraphStyle('SmallJustified', parent=small, alignment=TA_JUSTIFY)
     small_bold = ParagraphStyle('SmallBold', parent=small, fontName='Helvetica-Bold')
     titulo = ParagraphStyle('Titulo', parent=styles['Heading1'], fontSize=12, spaceAfter=6, alignment=1)
 
@@ -182,7 +188,7 @@ def generar_pdf_renovacion(cliente, credito, codigo=None):
         'incluyendo monto, plazo, valor de la cuota, tasa de interés y fechas. '
         'Manifiesto que he sido informado(a) de los términos y que la renovación se realiza bajo estas condiciones.'
     )
-    flow.append(Paragraph(texto_aceptacion, small))
+    flow.append(Paragraph(texto_aceptacion, small_justified))
     flow.append(Spacer(1, 0.15 * inch))
 
     flow.append(Paragraph('Firma digital', small_bold))
