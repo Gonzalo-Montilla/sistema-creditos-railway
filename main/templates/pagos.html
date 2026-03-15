@@ -200,6 +200,24 @@
 
 {% block extra_js %}
 <script>
+function notificarPago(tipo, mensaje) {
+    const clase = tipo === 'error' ? 'danger' : (tipo === 'warning' ? 'warning' : 'success');
+    const icono = tipo === 'error' ? 'exclamation-triangle' : (tipo === 'warning' ? 'exclamation-circle' : 'check-circle');
+    const alerta = document.createElement('div');
+    alerta.className = `alert alert-${clase} shadow-sm`;
+    alerta.style.position = 'fixed';
+    alerta.style.top = '16px';
+    alerta.style.right = '16px';
+    alerta.style.zIndex = '1080';
+    alerta.style.minWidth = '320px';
+    alerta.style.maxWidth = '420px';
+    alerta.innerHTML = `<i class="fas fa-${icono} me-2"></i>${mensaje}`;
+    document.body.appendChild(alerta);
+    setTimeout(() => {
+        if (alerta.parentNode) alerta.remove();
+    }, 3200);
+}
+
 // Filtro por fecha
 document.getElementById('fechaFilter').addEventListener('change', function() {
     const selectedFecha = this.value;
@@ -438,16 +456,21 @@ function compartirRecibo(pagoId, celular) {
     
     if (celular && celular !== '') {
         // Limpiar el número de teléfono
-        const numeroLimpio = celular.replace(/\D/g, '');
-        const urlWhatsApp = `https://wa.me/57${numeroLimpio}?text=${encodeURIComponent(mensaje)}`;
+        let numeroLimpio = celular.replace(/\D/g, '');
+        if (numeroLimpio.length === 10) {
+            numeroLimpio = `57${numeroLimpio}`;
+        } else if (numeroLimpio.length > 10 && !numeroLimpio.startsWith('57')) {
+            numeroLimpio = `57${numeroLimpio}`;
+        }
+        const urlWhatsApp = `https://wa.me/${numeroLimpio}?text=${encodeURIComponent(mensaje)}`;
         window.open(urlWhatsApp, '_blank');
     } else {
         // Si no hay celular, copiar mensaje al portapapeles
         navigator.clipboard.writeText(mensaje).then(function() {
-            alert('Mensaje copiado al portapapeles. Puedes pegarlo en WhatsApp u otra aplicación.');
+            notificarPago('success', 'Mensaje copiado al portapapeles. Ahora puede pegarlo en WhatsApp.');
         }, function(err) {
             console.error('Error al copiar al portapapeles: ', err);
-            alert('No se pudo copiar automáticamente. Mensaje: ' + mensaje);
+            notificarPago('warning', 'No se pudo copiar automáticamente. Copie manualmente el mensaje del recibo.');
         });
     }
 }

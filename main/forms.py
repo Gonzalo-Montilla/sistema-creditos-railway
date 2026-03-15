@@ -279,7 +279,7 @@ class PagoForm(forms.ModelForm):
             # Mostrar solo créditos del cliente que pueden recibir pagos (con saldo pendiente)
             candidatos = Credito.objects.filter(
                 cliente=self.instance.credito.cliente,
-                estado__in=['APROBADO', 'DESEMBOLSADO']
+                estado__in=['APROBADO', 'DESEMBOLSADO', 'VENCIDO']
             ).exclude(estado='PAGADO')
             ids_con_saldo = [c.id for c in candidatos if c.puede_recibir_pagos()]
             # Incluir el crédito actual por si acaso (para poder guardar el pago editado)

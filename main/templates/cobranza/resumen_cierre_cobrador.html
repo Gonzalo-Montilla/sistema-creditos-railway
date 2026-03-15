@@ -203,7 +203,7 @@
                 return;
             }
             const diff = recibido - montoEsperado;
-            if (diff === 0) {
+            if (Math.abs(diff) < 1) {
                 preview.innerHTML = '<span class="text-success">Arqueo exacto: coincide con el sistema.</span>';
             } else if (diff > 0) {
                 preview.innerHTML = `<span class="text-success">Sobrante estimado: $${formatoCOP(diff)}</span>`;

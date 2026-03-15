@@ -8,6 +8,7 @@ urlpatterns = [
     path('force-login/', views.force_login_view, name='force_login'),
     path('logout/', views.logout_view, name='logout'),
     path('dashboard/', views.dashboard, name='dashboard'),
+    path('dashboard-negocio/', views.dashboard_negocio, name='dashboard_negocio'),
     
     # Clientes
     path('clientes/', views.clientes, name='clientes'),

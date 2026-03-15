@@ -642,7 +642,7 @@ function enviarRenovacionPorWhatsApp() {
     window.open('https://wa.me/' + num + '?text=' + text, '_blank');
 }
 function regenerarPdfPagare(creditoId) {
-    if (!confirm('¿Regenerar el PDF del pagaré con el nuevo formato (páginas independientes + anexo de cédulas)? Se reemplazará el archivo actual.')) return;
+    if (!confirm(`Confirme regeneración del pagaré para el crédito #${String(creditoId).padStart(4, '0')}. Se reemplazará el PDF actual.`)) return;
     fetch('{% url "regenerar_pagare" %}', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken'), 'Accept': 'application/json' },

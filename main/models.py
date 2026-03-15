@@ -573,7 +573,7 @@ class Credito(models.Model):
     
     def calcular_mora(self):
         """Calcula y actualiza el estado de mora del crédito"""
-        from datetime import date
+        from datetime import date, timedelta
         
         if not self.fecha_desembolso or self.estado not in ['DESEMBOLSADO']:
             return
@@ -1133,6 +1133,7 @@ class TareaCobro(models.Model):
         """Marca la tarea como cobrada Y registra el pago automáticamente"""
         from django.utils import timezone
         from decimal import Decimal, InvalidOperation
+        from datetime import timedelta
         
         # Convertir monto a Decimal de forma segura
         if isinstance(monto, (str, int, float)):
@@ -1143,18 +1144,20 @@ class TareaCobro(models.Model):
                 else:
                     monto_limpio = str(monto)
                 monto_decimal = Decimal(monto_limpio)
-                print(f"[DEBUG][marcar_como_cobrado] monto convertido a Decimal: {monto_decimal}")
             except (ValueError, InvalidOperation) as e:
-                print(f"[DEBUG][marcar_como_cobrado] Error al convertir monto: {e}")
                 raise ValueError(f"Monto inválido: {monto}")
         elif isinstance(monto, Decimal):
             monto_decimal = monto
-            print(f"[DEBUG][marcar_como_cobrado] monto ya es Decimal: {monto_decimal}")
         else:
             raise ValueError(f"Tipo de monto no soportado: {type(monto)}")
+
+        saldo_cuota = self.cuota.saldo_pendiente()
+        if monto_decimal > saldo_cuota:
+            raise ValueError(
+                f"El monto (${monto_decimal:,.0f}) supera el saldo pendiente de la cuota (${saldo_cuota:,.0f})."
+            )
         
-        # 1. Actualizar la tarea
-        self.estado = 'COBRADO'
+        # 1. Actualizar la tarea (parcial => reprogramar para el siguiente día)
         self.fecha_visita = timezone.now()
         self.monto_cobrado = monto_decimal
         self.observaciones = observaciones
@@ -1163,18 +1166,28 @@ class TareaCobro(models.Model):
         if longitud:
             self.longitud = longitud
         
-        self.save()
-        
         # 2. Actualizar la cuota asociada
         self.cuota.monto_pagado += monto_decimal
+        if self.cuota.monto_pagado > self.cuota.monto_cuota:
+            self.cuota.monto_pagado = self.cuota.monto_cuota
         
         if self.cuota.monto_pagado >= self.cuota.monto_cuota:
             self.cuota.estado = 'PAGADA'
             self.cuota.fecha_pago = timezone.now().date()
+            self.estado = 'COBRADO'
+            self.fecha_reprogramacion = None
         else:
             self.cuota.estado = 'PARCIAL'
+            self.estado = 'REPROGRAMADO'
+            self.fecha_reprogramacion = timezone.now().date() + timedelta(days=1)
+            nota_parcial = (
+                f"Pago parcial de ${monto_decimal:,.0f}. "
+                f"Reprogramado automáticamente para {self.fecha_reprogramacion.strftime('%d/%m/%Y')}."
+            )
+            self.observaciones = f"{(self.observaciones or '').strip()} {nota_parcial}".strip()
         
         self.cuota.save()
+        self.save()
         
         # 3. CREAR EL PAGO AUTOMÁTICAMENTE (¡Esta es la magia!)
         from .models import Pago
@@ -1219,11 +1232,12 @@ class TareaCobro(models.Model):
         Reglas:
         - Incluir TODAS las cuotas que vencen exactamente en 'fecha'.
         - Incluir cuotas que fueron reprogramadas para 'fecha'.
+        - Arrastrar tareas no cobradas del día anterior (pendiente/no encontrado/no estaba).
         - Sin límite de cantidad por cobrador.
         - No arrastrar backlog de días anteriores (solo hoy), salvo reprogramadas.
         """
         from datetime import date
-        from django.db.models import Q
+        from django.db.models import Q, Max
         import logging
 
         logger = logging.getLogger(__name__)
@@ -1253,7 +1267,61 @@ class TareaCobro(models.Model):
                 rutas_nombres = [r.nombre for r in rutas_cobrador]
                 logger.info(f'Procesando cobrador {cobrador.nombre_completo} con rutas: {rutas_nombres}')
 
-            # 1) Reprogramadas para hoy: llevar a estado PENDIENTE y fecha de hoy
+            # 1) Arrastre automatico del dia anterior (pendiente / no encontrado / no estaba)
+            fecha_anterior = fecha - timedelta(days=1)
+            estados_arrastre = ['PENDIENTE', 'NO_ENCONTRADO', 'NO_ESTABA']
+            tareas_ayer = cls.objects.filter(
+                cobrador=cobrador,
+                fecha_asignacion=fecha_anterior,
+                estado__in=estados_arrastre,
+                cuota__estado__in=['PENDIENTE', 'PARCIAL'],
+                cuota__credito__estado__in=['DESEMBOLSADO', 'VENCIDO'],
+            ).select_related('cuota__credito__cliente')
+
+            if verbose and tareas_ayer.exists():
+                logger.info(
+                    f'Arrastre dia anterior para {cobrador.nombre_completo}: '
+                    f'{tareas_ayer.count()} candidatas'
+                )
+
+            orden_actual = (
+                cls.objects.filter(cobrador=cobrador, fecha_asignacion=fecha)
+                .aggregate(max_orden=Max('orden_visita'))['max_orden'] or 0
+            )
+
+            for tarea_ayer in tareas_ayer:
+                existe_hoy = cls.objects.filter(cuota=tarea_ayer.cuota, fecha_asignacion=fecha).exists()
+                if existe_hoy:
+                    continue
+
+                dias_mora = (fecha - tarea_ayer.cuota.fecha_vencimiento).days
+                if dias_mora > 15:
+                    prioridad = 'ALTA'
+                elif dias_mora > 5:
+                    prioridad = 'MEDIA'
+                else:
+                    prioridad = 'BAJA'
+
+                orden_actual += 1
+                cls.objects.create(
+                    cobrador=cobrador,
+                    cuota=tarea_ayer.cuota,
+                    fecha_asignacion=fecha,
+                    prioridad=prioridad,
+                    orden_visita=orden_actual,
+                    estado='PENDIENTE',
+                    observaciones=(
+                        f'Arrastre automático de la gestión del {fecha_anterior.strftime("%d/%m/%Y")}.'
+                    )
+                )
+                tareas_creadas += 1
+                if verbose:
+                    logger.info(
+                        f'Arrastrada: {tarea_ayer.cliente.nombre_completo} - '
+                        f'Cuota #{tarea_ayer.cuota.numero_cuota}'
+                    )
+
+            # 2) Reprogramadas para hoy: llevar a estado PENDIENTE y fecha de hoy
             reprogramadas_hoy = cls.objects.filter(
                 cobrador=cobrador,
                 fecha_reprogramacion=fecha
@@ -1277,7 +1345,7 @@ class TareaCobro(models.Model):
                     if verbose:
                         logger.info(f"Reprogramada para hoy: {tarea.cliente.nombre_completo} - Cuota #{tarea.cuota.numero_cuota}")
 
-            # 2) Cuotas que vencen HOY para créditos del cobrador
+            # 3) Cuotas que vencen HOY para créditos del cobrador
             cuotas_hoy = CronogramaPago.objects.filter(
                 Q(credito__cobrador=cobrador) &
                 Q(fecha_vencimiento=fecha) &
@@ -1293,7 +1361,10 @@ class TareaCobro(models.Model):
             if verbose and cuotas_hoy.exists():
                 logger.info(f'Cuotas que vencen hoy para {cobrador.nombre_completo}: {cuotas_hoy.count()}')
 
-            orden_visita = 1
+            orden_visita = (
+                cls.objects.filter(cobrador=cobrador, fecha_asignacion=fecha)
+                .aggregate(max_orden=Max('orden_visita'))['max_orden'] or 0
+            ) + 1
             tareas_cobrador = 0
 
             for cuota in cuotas_hoy:

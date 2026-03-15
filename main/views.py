@@ -4,6 +4,7 @@ from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from django.db.models import Sum, Count, Q
+from django.db.models.functions import TruncDate
 from django.utils import timezone
 from django.http import JsonResponse, HttpResponse
 from django.template.loader import get_template
@@ -82,12 +83,46 @@ def _aplicar_pago_a_cuota_si_corresponde(pago):
 
     if cuota.monto_pagado >= cuota.monto_cuota:
         cuota.monto_pagado = cuota.monto_cuota
-        cuota.estado = 'PAGADO'
+        cuota.estado = 'PAGADA'
         cuota.fecha_pago = pago.fecha_pago.date()
     else:
         cuota.estado = 'PARCIAL'
 
     cuota.save(update_fields=['monto_pagado', 'estado', 'fecha_pago'])
+
+def _resumen_soporte_pago(pago):
+    """
+    Construye un resumen consistente para PDF/correo:
+    - tipo de pago (parcial o cuota completada)
+    - saldo pendiente de la cuota impactada
+    - próxima cuota sugerida (o la misma si quedó parcial)
+    """
+    cuota = pago.cuota
+    if not cuota and pago.numero_cuota:
+        cuota = CronogramaPago.objects.filter(
+            credito=pago.credito,
+            numero_cuota=pago.numero_cuota
+        ).first()
+
+    saldo_cuota = None
+    tipo_pago = 'Pago aplicado'
+    if cuota:
+        saldo_cuota = cuota.saldo_pendiente()
+        if saldo_cuota > 0:
+            tipo_pago = 'Abono parcial'
+        else:
+            tipo_pago = 'Cuota completada'
+
+    proxima_cuota = pago.credito.cronograma.filter(
+        estado__in=['PENDIENTE', 'PARCIAL']
+    ).order_by('numero_cuota').first()
+
+    return {
+        'cuota': cuota,
+        'saldo_cuota': saldo_cuota,
+        'tipo_pago': tipo_pago,
+        'proxima_cuota': proxima_cuota,
+    }
 
 def login_view(request):
     if request.user.is_authenticated:
@@ -205,6 +240,143 @@ def dashboard(request):
     }
     
     return render(request, 'dashboard.html', context)
+
+@login_required
+def dashboard_negocio(request):
+    """Dashboard ejecutivo con KPIs y gráficos de negocio."""
+    if not _usuario_admin_operativo(request.user):
+        return _forbidden_operacion(request)
+
+    fecha_hasta_str = request.GET.get('fecha_hasta')
+    fecha_desde_str = request.GET.get('fecha_desde')
+    hoy = timezone.now().date()
+    if fecha_hasta_str:
+        try:
+            fecha_hasta = datetime.strptime(fecha_hasta_str, '%Y-%m-%d').date()
+        except ValueError:
+            fecha_hasta = hoy
+    else:
+        fecha_hasta = hoy
+    if fecha_desde_str:
+        try:
+            fecha_desde = datetime.strptime(fecha_desde_str, '%Y-%m-%d').date()
+        except ValueError:
+            fecha_desde = fecha_hasta - timedelta(days=29)
+    else:
+        fecha_desde = fecha_hasta - timedelta(days=29)
+    if fecha_desde > fecha_hasta:
+        fecha_desde, fecha_hasta = fecha_hasta, fecha_desde
+
+    pagos_periodo = Pago.objects.filter(fecha_pago__date__gte=fecha_desde, fecha_pago__date__lte=fecha_hasta)
+    # Desembolsos del periodo por fecha real de desembolso (independiente del estado actual).
+    desembolsos_periodo = Credito.objects.filter(
+        fecha_desembolso__isnull=False,
+        fecha_desembolso__date__gte=fecha_desde,
+        fecha_desembolso__date__lte=fecha_hasta
+    )
+    tareas_periodo = TareaCobro.objects.filter(fecha_asignacion__gte=fecha_desde, fecha_asignacion__lte=fecha_hasta)
+    cierres_periodo = CierreCobroDiario.objects.filter(fecha__gte=fecha_desde, fecha__lte=fecha_hasta)
+
+    total_desembolsado = desembolsos_periodo.aggregate(total=Sum('monto'))['total'] or 0
+    total_recaudado = pagos_periodo.aggregate(total=Sum('monto'))['total'] or 0
+
+    creditos_activos = Credito.objects.filter(estado__in=['APROBADO', 'DESEMBOLSADO', 'VENCIDO'])
+    cartera_activa = sum((c.saldo_pendiente() for c in creditos_activos), Decimal('0'))
+    cartera_vencida = sum((c.saldo_pendiente() for c in creditos_activos.filter(estado='VENCIDO')), Decimal('0'))
+    porcentaje_mora = float((cartera_vencida / cartera_activa * 100) if cartera_activa > 0 else 0)
+
+    total_tareas = tareas_periodo.count()
+    tareas_cobradas = tareas_periodo.filter(estado='COBRADO').count()
+    efectividad_cobranza = (tareas_cobradas / total_tareas * 100) if total_tareas > 0 else 0
+
+    cierres_con_arqueo = cierres_periodo.exclude(monto_recibido__isnull=True)
+    cierres_exactos = 0
+    for c in cierres_con_arqueo:
+        if c.diferencia is not None and abs(c.diferencia) < Decimal('1'):
+            cierres_exactos += 1
+    porcentaje_cierres_exactos = (
+        (cierres_exactos / cierres_con_arqueo.count()) * 100
+        if cierres_con_arqueo.exists() else 0
+    )
+
+    dias = []
+    cursor = fecha_desde
+    while cursor <= fecha_hasta:
+        dias.append(cursor)
+        cursor += timedelta(days=1)
+    etiquetas_dias = [d.strftime('%d/%m') for d in dias]
+
+    pagos_por_dia_qs = pagos_periodo.annotate(dia=TruncDate('fecha_pago')).values('dia').annotate(total=Sum('monto'))
+    pagos_por_dia_map = {item['dia']: float(item['total'] or 0) for item in pagos_por_dia_qs}
+    recaudado_serie = [pagos_por_dia_map.get(d, 0) for d in dias]
+
+    desembolsos_por_dia_qs = desembolsos_periodo.annotate(dia=TruncDate('fecha_desembolso')).values('dia').annotate(total=Sum('monto'))
+    desembolsos_por_dia_map = {item['dia']: float(item['total'] or 0) for item in desembolsos_por_dia_qs}
+    desembolsado_serie = [desembolsos_por_dia_map.get(d, 0) for d in dias]
+
+    cartera_mora_labels = ['Al día', 'Mora temprana', 'Mora alta', 'Mora crítica']
+    cartera_mora_values = [
+        creditos_activos.filter(estado_mora='AL_DIA').count(),
+        creditos_activos.filter(estado_mora='MORA_TEMPRANA').count(),
+        creditos_activos.filter(estado_mora='MORA_ALTA').count(),
+        creditos_activos.filter(estado_mora='MORA_CRITICA').count(),
+    ]
+
+    # Eficacia por cobrador:
+    # - Objetivo: suma de cuotas UNICAS asignadas en el periodo (evita doble conteo por arrastre/reprogramación).
+    # - Real: suma de pagos del periodo en créditos del cobrador.
+    eficacia_cobradores = []
+    for cobrador in Cobrador.objects.filter(activo=True).order_by('nombres', 'apellidos'):
+        cuotas_ids = tareas_periodo.filter(cobrador=cobrador).values_list('cuota_id', flat=True).distinct()
+        monto_objetivo = CronogramaPago.objects.filter(id__in=cuotas_ids).aggregate(total=Sum('monto_cuota'))['total'] or Decimal('0')
+        monto_real = pagos_periodo.filter(credito__cobrador=cobrador).aggregate(total=Sum('monto'))['total'] or Decimal('0')
+        eficacia = float((monto_real / monto_objetivo) * 100) if monto_objetivo > 0 else 0.0
+        if monto_objetivo > 0 or monto_real > 0:
+            eficacia_cobradores.append({
+                'nombre': cobrador.nombre_completo,
+                'objetivo': float(monto_objetivo),
+                'real': float(monto_real),
+                'eficacia': eficacia,
+            })
+    eficacia_cobradores.sort(key=lambda x: x['eficacia'], reverse=True)
+    eficacia_cobradores = eficacia_cobradores[:8]
+    recaudacion_cobrador_labels = [r['nombre'] for r in eficacia_cobradores]
+    recaudacion_cobrador_objetivo = [r['objetivo'] for r in eficacia_cobradores]
+    recaudacion_cobrador_real = [r['real'] for r in eficacia_cobradores]
+    recaudacion_cobrador_eficacia = [round(r['eficacia'], 1) for r in eficacia_cobradores]
+
+    # Embudo operativo como foto actual (snapshot), no por periodo.
+    pipeline_labels = ['Solicitados', 'Aprobados', 'Desembolsados', 'Pagados', 'Vencidos']
+    pipeline_values = [
+        Credito.objects.filter(estado='SOLICITADO').count(),
+        Credito.objects.filter(estado='APROBADO').count(),
+        Credito.objects.filter(estado='DESEMBOLSADO').count(),
+        Credito.objects.filter(estado='PAGADO').count(),
+        Credito.objects.filter(estado='VENCIDO').count(),
+    ]
+
+    context = {
+        'fecha_desde': fecha_desde,
+        'fecha_hasta': fecha_hasta,
+        'kpi_total_desembolsado': total_desembolsado,
+        'kpi_total_recaudado': total_recaudado,
+        'kpi_cartera_activa': cartera_activa,
+        'kpi_porcentaje_mora': porcentaje_mora,
+        'kpi_efectividad_cobranza': efectividad_cobranza,
+        'kpi_cierres_exactos': porcentaje_cierres_exactos,
+        'chart_flujo_labels': json.dumps(etiquetas_dias),
+        'chart_flujo_recaudado': json.dumps(recaudado_serie),
+        'chart_flujo_desembolsado': json.dumps(desembolsado_serie),
+        'chart_mora_labels': json.dumps(cartera_mora_labels),
+        'chart_mora_values': json.dumps(cartera_mora_values),
+        'chart_cobrador_labels': json.dumps(recaudacion_cobrador_labels),
+        'chart_cobrador_objetivo': json.dumps(recaudacion_cobrador_objetivo),
+        'chart_cobrador_real': json.dumps(recaudacion_cobrador_real),
+        'chart_cobrador_eficacia': json.dumps(recaudacion_cobrador_eficacia),
+        'chart_pipeline_labels': json.dumps(pipeline_labels),
+        'chart_pipeline_values': json.dumps(pipeline_values),
+    }
+    return render(request, 'dashboard_negocio.html', context)
 
 @login_required
 def clientes(request):
@@ -551,7 +723,7 @@ def nuevo_pago(request):
                 cliente = Cliente.objects.get(cedula=cedula_cliente, activo=True)
                 candidatos = Credito.objects.filter(
                     cliente=cliente,
-                    estado__in=['APROBADO', 'DESEMBOLSADO']
+                    estado__in=['APROBADO', 'DESEMBOLSADO', 'VENCIDO']
                 ).exclude(estado='PAGADO')
                 ids_con_saldo = [c.id for c in candidatos if c.puede_recibir_pagos()]
                 form.fields['credito'].queryset = Credito.objects.filter(id__in=ids_con_saldo)
@@ -570,14 +742,14 @@ def nuevo_pago(request):
                     f'El monto (${monto_pago:,.0f}) supera el saldo pendiente del crédito. '
                     f'Saldo pendiente: ${monto_total_credito - total_ya_pagado:,.0f}.'
                 )
-            elif numero_cuota:
+            if numero_cuota:
                 cuota_obj = CronogramaPago.objects.filter(
                     credito=credito,
                     numero_cuota=numero_cuota
                 ).first()
                 if not cuota_obj:
                     form.add_error('numero_cuota', f'La cuota #{numero_cuota} no existe para este crédito.')
-                elif cuota_obj.estado == 'PAGADO':
+                elif cuota_obj.estado in ['PAGADA', 'PAGADO']:
                     form.add_error('numero_cuota', f'La cuota #{numero_cuota} ya está pagada.')
                 elif monto_pago > cuota_obj.saldo_pendiente():
                     form.add_error(
@@ -585,7 +757,7 @@ def nuevo_pago(request):
                         f'El monto supera el saldo pendiente de la cuota #{numero_cuota}. '
                         f'Saldo de la cuota: ${cuota_obj.saldo_pendiente():,.0f}.'
                     )
-            else:
+            if not form.errors:
                 pago = form.save()
                 credito = pago.credito
                 _aplicar_pago_a_cuota_si_corresponde(pago)
@@ -619,10 +791,26 @@ def nuevo_pago(request):
                         pdf_buffer = _generar_recibo_pdf_bytes(pago)
                         nombre_pdf = f'recibo_pago_{pago.id:05d}.pdf'
                         asunto = f'Comprobante de pago #{pago.id:05d} - Crédito #{credito.id}'
+                        soporte_pago = _resumen_soporte_pago(pago)
+                        saldo_cuota_txt = (
+                            f"${soporte_pago['saldo_cuota']:,.0f}"
+                            if soporte_pago['saldo_cuota'] is not None else 'N/A'
+                        )
+                        if soporte_pago['proxima_cuota']:
+                            siguiente_txt = (
+                                f"Cuota #{soporte_pago['proxima_cuota'].numero_cuota} "
+                                f"por ${soporte_pago['proxima_cuota'].saldo_pendiente():,.0f}"
+                            )
+                        else:
+                            siguiente_txt = 'Sin cuotas pendientes'
                         cuerpo = (
                             f'Hola {credito.cliente.nombre_completo},\n\n'
                             f'Adjunto encontrará el comprobante de su pago por ${pago.monto:,.0f} '
                             f'(cuota #{pago.numero_cuota}, crédito #{credito.id}).\n\n'
+                            f'Tipo de aplicación: {soporte_pago["tipo_pago"]}\n'
+                            f'Saldo pendiente de esa cuota: {saldo_cuota_txt}\n'
+                            f'Siguiente obligación sugerida: {siguiente_txt}\n'
+                            f'Saldo pendiente del crédito: ${credito.saldo_pendiente():,.0f}\n\n'
                             f'Conserve este recibo para sus registros.\n\n'
                             f'Atentamente,\nSistema de Créditos'
                         )
@@ -663,7 +851,7 @@ def nuevo_pago(request):
     
     # Obtener información de créditos para mostrar en el template
     creditos_info = []
-    for credito in Credito.objects.filter(estado__in=['APROBADO', 'DESEMBOLSADO']).exclude(estado='PAGADO'):
+    for credito in Credito.objects.filter(estado__in=['APROBADO', 'DESEMBOLSADO', 'VENCIDO']).exclude(estado='PAGADO'):
         if credito.puede_recibir_pagos():
             creditos_info.append({
                 'id': credito.id,
@@ -1419,6 +1607,10 @@ def confirmacion_pago(request, pago_id):
     email_enviado_param = request.GET.get('email_enviado') == '1'
     sin_email_param = request.GET.get('sin_email') == '1'
     url_recibo_pdf = request.build_absolute_uri(reverse('generar_recibo_pdf', args=[pago.id]))
+    agenda_cobrador_url = None
+    if credito.cobrador_id:
+        fecha_agenda = pago.fecha_pago.date().strftime('%Y-%m-%d')
+        agenda_cobrador_url = reverse('agenda_cobrador_especifico', args=[credito.cobrador_id]) + f'?fecha={fecha_agenda}'
     
     context = {
         'pago': pago,
@@ -1432,6 +1624,7 @@ def confirmacion_pago(request, pago_id):
         'email_enviado_param': email_enviado_param,
         'sin_email_param': sin_email_param,
         'url_recibo_pdf': url_recibo_pdf,
+        'agenda_cobrador_url': agenda_cobrador_url,
     }
     
     return render(request, 'confirmacion_pago.html', context)
@@ -1901,18 +2094,24 @@ def _generar_recibo_pdf_bytes(pago):
     story.append(info_table)
     story.append(Spacer(1, 20))
     
+    soporte = _resumen_soporte_pago(pago)
+    saldo_cuota = soporte['saldo_cuota']
+    tipo_pago = soporte['tipo_pago']
+    proxima_cuota = soporte['proxima_cuota']
+
     # Detalle del pago
     story.append(Paragraph("DETALLE DEL PAGO", subtitle_style))
     
     detalle_pago = [
         ["Concepto", "Monto"],
         [f"Cuota #{pago.numero_cuota} del Crédito #{pago.credito.id:04d}", f"${pago.monto:,.0f}"],
+        ["Tipo de aplicación", tipo_pago],
         ["", ""],
         ["TOTAL PAGADO", f"${pago.monto:,.0f}"]
     ]
     
     # Calcular información del crédito
-    cuotas_pagadas = round(pago.credito.total_pagado() / pago.credito.valor_cuota)
+    cuotas_pagadas = pago.credito.cronograma.filter(estado__in=['PAGADO', 'PAGADA']).count()
     progreso = (cuotas_pagadas / pago.credito.cantidad_cuotas) * 100
     
     detalle_table = Table(detalle_pago, colWidths=[4*inch, 2*inch])
@@ -1942,6 +2141,7 @@ def _generar_recibo_pdf_bytes(pago):
         ["Monto Total del Crédito", f"${pago.credito.monto_total:,.0f}"],
         ["Total Pagado hasta la fecha", f"${pago.credito.total_pagado():,.0f}"],
         ["Saldo Pendiente", f"${pago.credito.saldo_pendiente():,.0f}"],
+        ["Saldo de la cuota actual", f"${saldo_cuota:,.0f}" if saldo_cuota is not None else "N/A"],
         ["Cuotas Pagadas", f"{cuotas_pagadas} de {pago.credito.cantidad_cuotas}"],
         ["Progreso del Pago", f"{progreso:.1f}%"],
         ["Modalidad de Pago", pago.credito.get_tipo_plazo_display()],
@@ -1966,8 +2166,8 @@ def _generar_recibo_pdf_bytes(pago):
     story.append(Spacer(1, 15))
     
     # Próximo pago (si no está completo)
-    if pago.credito.estado != 'PAGADO' and cuotas_pagadas < pago.credito.cantidad_cuotas:
-        # Calcular próxima fecha estimada
+    if pago.credito.estado != 'PAGADO' and proxima_cuota:
+        # Calcular próxima fecha estimada según modalidad del crédito
         if pago.credito.tipo_plazo == 'DIARIO':
             proxima_fecha = pago.fecha_pago.date() + timedelta(days=1)
         elif pago.credito.tipo_plazo == 'SEMANAL':
@@ -1990,7 +2190,7 @@ def _generar_recibo_pdf_bytes(pago):
         
         story.append(Paragraph("PRÓXIMO PAGO", subtitle_style))
         proximo_texto = (
-            f"<b>Cuota #{cuotas_pagadas + 1}:</b> ${pago.credito.valor_cuota:,.0f}<br/>"
+            f"<b>Cuota #{proxima_cuota.numero_cuota}:</b> ${proxima_cuota.saldo_pendiente():,.0f}<br/>"
             f"<b>Fecha Estimada:</b> {proxima_fecha.strftime('%d/%m/%Y')}<br/>"
             f"<b>Modalidad:</b> {pago.credito.get_tipo_plazo_display()}"
         )
@@ -2052,7 +2252,7 @@ def buscar_creditos_cliente(request):
         # Traer créditos en estado vigente (no PAGADO ni RECHAZADO)
         candidatos = Credito.objects.filter(
             cliente=cliente,
-            estado__in=['APROBADO', 'DESEMBOLSADO']
+            estado__in=['APROBADO', 'DESEMBOLSADO', 'VENCIDO']
         )
         
         # Solo incluir créditos con saldo pendiente "real" (> 1 peso).
@@ -2088,6 +2288,16 @@ def buscar_creditos_cliente(request):
         # Preparar lista de créditos (solo los que pueden recibir pagos)
         creditos_data = []
         for credito in creditos:
+            proxima_cuota = credito.cronograma.filter(
+                estado__in=['PENDIENTE', 'PARCIAL']
+            ).order_by('numero_cuota').first()
+            if proxima_cuota:
+                numero_cuota_sugerida = proxima_cuota.numero_cuota
+                monto_sugerido = proxima_cuota.saldo_pendiente()
+            else:
+                numero_cuota_sugerida = 1
+                monto_sugerido = credito.valor_cuota if credito.valor_cuota else credito.saldo_pendiente()
+            cuotas_pagadas = credito.cronograma.filter(estado='PAGADO').count() if credito.cronograma.exists() else 0
             creditos_data.append({
                 'id': credito.id,
                 'monto_total': float(credito.monto_total),
@@ -2097,7 +2307,10 @@ def buscar_creditos_cliente(request):
                 'fecha_desembolso': credito.fecha_desembolso.strftime('%d/%m/%Y') if credito.fecha_desembolso else 'N/A',
                 'tipo_plazo': credito.get_tipo_plazo_display(),
                 'cantidad_cuotas': credito.cantidad_cuotas,
-                'valor_cuota': float(credito.valor_cuota)
+                'valor_cuota': float(credito.valor_cuota),
+                'cuotas_pagadas': cuotas_pagadas,
+                'numero_cuota_sugerida': numero_cuota_sugerida,
+                'monto_sugerido': float(monto_sugerido),
             })
         
         return JsonResponse({
@@ -3399,6 +3612,25 @@ def agenda_cobrador(request, cobrador_id=None):
     # Agrupar tareas por estado para estadísticas
     tareas_por_estado = tareas.values('estado').annotate(cantidad=Count('id'))
     estadisticas_estado = {item['estado']: item['cantidad'] for item in tareas_por_estado}
+
+    # Enriquecer tarjetas: total pendiente del cliente en el día (para priorización en móvil)
+    tareas_list = list(tareas)
+    total_cliente_hoy = {}
+    cuotas_cliente_hoy = {}
+    for tarea in tareas_list:
+        if tarea.estado == 'COBRADO':
+            continue
+        saldo_tarea = tarea.monto_a_cobrar
+        if saldo_tarea <= 0:
+            continue
+        cliente_id = tarea.cuota.credito.cliente_id
+        total_cliente_hoy[cliente_id] = total_cliente_hoy.get(cliente_id, 0) + saldo_tarea
+        cuotas_cliente_hoy[cliente_id] = cuotas_cliente_hoy.get(cliente_id, 0) + 1
+
+    for tarea in tareas_list:
+        cliente_id = tarea.cuota.credito.cliente_id
+        tarea.total_cliente_hoy = total_cliente_hoy.get(cliente_id, 0)
+        tarea.cuotas_cliente_hoy = cuotas_cliente_hoy.get(cliente_id, 0)
     
     # Fechas para navegación (anterior/siguiente día)
     fecha_anterior = (fecha - timedelta(days=1)).strftime('%Y-%m-%d')
@@ -3411,7 +3643,7 @@ def agenda_cobrador(request, cobrador_id=None):
         'fecha_anterior': fecha_anterior,
         'fecha_siguiente': fecha_siguiente,
         'es_hoy': es_hoy,
-        'tareas': tareas,
+        'tareas': tareas_list,
         'total_tareas': total_tareas,
         'tareas_completadas': tareas_completadas,
         'monto_total_cobrar': monto_total_cobrar,
@@ -3499,18 +3731,15 @@ def procesar_cobro_completo(request, tarea_id):
         
         from decimal import Decimal
         
-        # Validar que el pago no supere el saldo pendiente del crédito
-        credito = tarea.credito
-        monto_total_credito = credito.monto_total or credito.monto
-        total_ya_pagado = credito.total_pagado()
-        saldo_pend = monto_total_credito - total_ya_pagado
-        if monto_decimal > saldo_pend:
+        # Validar contra la cuota de la tarea (no contra todo el crédito)
+        saldo_cuota = tarea.cuota.saldo_pendiente()
+        if monto_decimal > saldo_cuota:
             return JsonResponse({
                 'success': False,
-                'error': f'El monto (${monto_decimal:,.0f}) supera el saldo pendiente del crédito (${saldo_pend:,.0f}).'
+                'error': f'El monto (${monto_decimal:,.0f}) supera el saldo pendiente de la cuota (${saldo_cuota:,.0f}).'
             })
         
-        # 🎯 USAR EXACTAMENTE LA MISMA LÓGICA QUE nuevo_pago - CREAR PAGO
+        # Registrar pago de la gestión de campo
         pago = Pago.objects.create(
             credito=tarea.credito,
             cuota=tarea.cuota,
@@ -3525,11 +3754,20 @@ def procesar_cobro_completo(request, tarea_id):
             credito.estado = 'PAGADO'
             credito.save()
         
-        # Actualizar tarea como cobrada
-        tarea.estado = 'COBRADO'
+        # Actualizar tarea:
+        # - Si la cuota se cubrió totalmente => COBRADO
+        # - Si quedó saldo => REPROGRAMADO automático para mañana
+        es_parcial = tarea.cuota.estado == 'PARCIAL'
+        tarea.estado = 'REPROGRAMADO' if es_parcial else 'COBRADO'
         tarea.fecha_visita = timezone.now()
         tarea.monto_cobrado = monto_decimal  # Usar directamente el Decimal ya validado
         tarea.observaciones = observaciones
+        if es_parcial:
+            tarea.fecha_reprogramacion = (timezone.now().date() + timedelta(days=1))
+            nota_parcial = f'Pago parcial de ${monto_decimal:,.0f}. Reprogramado automáticamente para {tarea.fecha_reprogramacion.strftime("%d/%m/%Y")}.'
+            tarea.observaciones = f"{(observaciones or '').strip()} {nota_parcial}".strip()
+        else:
+            tarea.fecha_reprogramacion = None
         if latitud:
             tarea.latitud = float(latitud)
         if longitud:
@@ -3541,7 +3779,7 @@ def procesar_cobro_completo(request, tarea_id):
         TareaCobroLog.objects.create(
             tarea=tarea,
             usuario=request.user,
-            accion='COBRADO',
+            accion='REPROGRAMADO' if es_parcial else 'COBRADO',
             observaciones=observaciones,
             monto_registrado=monto_decimal,
         )
@@ -3566,10 +3804,26 @@ def procesar_cobro_completo(request, tarea_id):
                 pdf_buffer = _generar_recibo_pdf_bytes(pago)
                 nombre_pdf = f'recibo_pago_{pago.id:05d}.pdf'
                 asunto = f'Comprobante de pago #{pago.id:05d} - Crédito #{credito.id}'
+                soporte_pago = _resumen_soporte_pago(pago)
+                saldo_cuota_txt = (
+                    f"${soporte_pago['saldo_cuota']:,.0f}"
+                    if soporte_pago['saldo_cuota'] is not None else 'N/A'
+                )
+                if soporte_pago['proxima_cuota']:
+                    siguiente_txt = (
+                        f"Cuota #{soporte_pago['proxima_cuota'].numero_cuota} "
+                        f"por ${soporte_pago['proxima_cuota'].saldo_pendiente():,.0f}"
+                    )
+                else:
+                    siguiente_txt = 'Sin cuotas pendientes'
                 cuerpo = (
                     f'Hola {cliente.nombre_completo},\n\n'
                     f'Adjunto encontrará el comprobante de su pago por ${pago.monto:,.0f} '
                     f'(cuota #{pago.numero_cuota}, crédito #{credito.id}).\n\n'
+                    f'Tipo de aplicación: {soporte_pago["tipo_pago"]}\n'
+                    f'Saldo pendiente de esa cuota: {saldo_cuota_txt}\n'
+                    f'Siguiente obligación sugerida: {siguiente_txt}\n'
+                    f'Saldo pendiente del crédito: ${credito.saldo_pendiente():,.0f}\n\n'
                     f'Conserve este recibo para sus registros.\n\n'
                     f'Atentamente,\nSistema de Créditos'
                 )
@@ -3588,11 +3842,17 @@ def procesar_cobro_completo(request, tarea_id):
         # 🎯 REDIRIGIR AL MISMO FLUJO QUE nuevo_pago
         return JsonResponse({
             'success': True,
-            'mensaje': 'Pago registrado exitosamente',
+            'mensaje': (
+                f'Pago parcial registrado. Tarea reprogramada automáticamente para {tarea.fecha_reprogramacion.strftime("%d/%m/%Y")}.'
+                if es_parcial else
+                'Pago registrado exitosamente'
+            ),
             'pago_id': pago.id,
             'redirect_url': f'/confirmacion-pago/{pago.id}/',
             'email_enviado': email_enviado,
             'tiene_email': bool(email_cliente),
+            'es_parcial': es_parcial,
+            'fecha_reprogramacion': tarea.fecha_reprogramacion.strftime('%Y-%m-%d') if tarea.fecha_reprogramacion else None,
         })
         
     except Exception as e:
@@ -3707,9 +3967,10 @@ def actualizar_tarea(request, tarea_id):
         tarea.usuario_ultima_accion = request.user
         tarea.save(update_fields=['usuario_ultima_accion'])
         acciones_permitidas = [c[0] for c in TareaCobroLog.ACCIONES]
-        log_accion = nuevo_estado if nuevo_estado in acciones_permitidas else 'NO_ENCONTRADO'
+        estado_final = tarea.estado
+        log_accion = estado_final if estado_final in acciones_permitidas else 'NO_ENCONTRADO'
         monto_log = None
-        if nuevo_estado == 'COBRADO' and 'pago_creado' in locals():
+        if 'pago_creado' in locals():
             monto_log = getattr(pago_creado, 'monto', None)
         TareaCobroLog.objects.create(
             tarea=tarea,
@@ -3735,14 +3996,19 @@ def actualizar_tarea(request, tarea_id):
         }
         
         # Si se creó un pago, incluir información del pago
-        if nuevo_estado == 'COBRADO' and 'pago_creado' in locals():
+        if 'pago_creado' in locals():
             response_data['pago'] = {
                 'id': pago_creado.id,
                 'monto': float(pago_creado.monto),
                 'fecha': pago_creado.fecha_pago.strftime('%d/%m/%Y %H:%M'),
                 'cliente': tarea.credito.cliente.nombre_completo,
                 'cuota': tarea.cuota.numero_cuota,
-                'mensaje': f'✅ Pago de ${pago_creado.monto:,.0f} registrado exitosamente'
+                'mensaje': (
+                    f'✅ Pago parcial de ${pago_creado.monto:,.0f} registrado. '
+                    f'Reprogramado para {tarea.fecha_reprogramacion.strftime("%d/%m/%Y")}.'
+                    if tarea.estado == 'REPROGRAMADO' and tarea.fecha_reprogramacion
+                    else f'✅ Pago de ${pago_creado.monto:,.0f} registrado exitosamente'
+                )
             }
         
         return JsonResponse(response_data)
@@ -3907,6 +4173,7 @@ def cierre_cobro_diario(request):
         return _forbidden_operacion(request)
     from datetime import date
     from django.db.models import Sum
+    from decimal import Decimal
 
     fecha_str = request.GET.get('fecha')
     if fecha_str:
@@ -3927,6 +4194,18 @@ def cierre_cobro_diario(request):
         monto_esperado = pagos_dia.aggregate(Sum('monto'))['monto__sum'] or 0
         cantidad_pagos = pagos_dia.count()
         cierre = CierreCobroDiario.objects.filter(cobrador=cobrador, fecha=fecha).first()
+        estado_arqueo = 'PENDIENTE'
+        if cierre and cierre.monto_recibido is not None and cierre.diferencia is not None:
+            diferencia_ajustada = cierre.diferencia
+            # Tolerancia de 1 peso para evitar "faltante/sobrante" por centavos residuales.
+            if abs(diferencia_ajustada) < Decimal('1'):
+                diferencia_ajustada = Decimal('0')
+            if diferencia_ajustada == 0:
+                estado_arqueo = 'EXACTO'
+            elif diferencia_ajustada > 0:
+                estado_arqueo = 'SOBRANTE'
+            else:
+                estado_arqueo = 'FALTANTE'
         filas.append({
             'cobrador': cobrador,
             'fecha': fecha,
@@ -3934,6 +4213,7 @@ def cierre_cobro_diario(request):
             'cantidad_pagos': cantidad_pagos,
             'cierre': cierre,
             'cerrado': cierre is not None,
+            'estado_arqueo': estado_arqueo,
         })
     # Ordenar por monto esperado descendente (los que más cobraron primero)
     filas.sort(key=lambda x: (-float(x['monto_esperado']), x['cobrador'].apellidos or ''))
@@ -3991,7 +4271,7 @@ def cerrar_cobro_cobrador(request):
     if not _usuario_admin_operativo(request.user):
         return _forbidden_operacion(request)
     from datetime import date, datetime
-    from decimal import Decimal
+    from decimal import Decimal, InvalidOperation
     from django.db.models import Sum
 
     if request.method != 'POST':
@@ -4013,15 +4293,42 @@ def cerrar_cobro_cobrador(request):
         fecha_pago__date=fecha
     ).aggregate(Sum('monto'))['monto__sum'] or Decimal('0')
     cantidad_pagos = Pago.objects.filter(credito__cobrador=cobrador, fecha_pago__date=fecha).count()
+    def _parse_monto_cierre(valor_raw):
+        if valor_raw is None:
+            return None
+        txt = str(valor_raw).strip().replace(' ', '')
+        if not txt:
+            return None
+        # Soporta formatos: 500000 | 500.000 | 500,000 | 500000.50 | 500000,50
+        if ',' in txt and '.' in txt:
+            # Si ambos existen, asumir comas como miles
+            txt = txt.replace(',', '')
+        elif ',' in txt and '.' not in txt:
+            parts = txt.split(',')
+            if len(parts) == 2 and len(parts[1]) <= 2:
+                txt = parts[0] + '.' + parts[1]  # coma decimal
+            else:
+                txt = txt.replace(',', '')  # comas de miles
+        elif '.' in txt:
+            parts = txt.split('.')
+            # Si hay más de un punto, o el sufijo parece miles (3 dígitos), limpiar miles
+            if len(parts) > 2 or (len(parts) == 2 and len(parts[1]) == 3):
+                txt = txt.replace('.', '')
+        return Decimal(txt)
+
     monto_recibido = None
     if monto_recibido_str:
         try:
-            monto_recibido = Decimal(str(monto_recibido_str).replace(',', '.'))
-        except Exception:
-            pass
+            monto_recibido = _parse_monto_cierre(monto_recibido_str)
+        except (InvalidOperation, ValueError):
+            messages.error(request, 'Monto recibido inválido. Use formato numérico válido (ej: 500000 o 500.000).')
+            return redirect(f"{reverse('resumen_cierre_cobrador', args=[cobrador.id])}?fecha={fecha.strftime('%Y-%m-%d')}")
     diferencia = None
     if monto_recibido is not None:
         diferencia = monto_recibido - monto_esperado
+        # Normalizar diferencias menores a 1 peso por redondeos de centavos.
+        if abs(diferencia) < Decimal('1'):
+            diferencia = Decimal('0')
     cierre, created = CierreCobroDiario.objects.update_or_create(
         cobrador=cobrador,
         fecha=fecha,
@@ -4038,7 +4345,7 @@ def cerrar_cobro_cobrador(request):
         messages.success(request, f'Cierre registrado para {cobrador.nombre_completo} - {fecha.strftime("%d/%m/%Y")}.')
     else:
         messages.success(request, f'Cierre actualizado para {cobrador.nombre_completo}.')
-    return redirect('cierre_cobro_diario' + '?fecha=' + fecha.strftime('%Y-%m-%d'))
+    return redirect(f"{reverse('cierre_cobro_diario')}?fecha={fecha.strftime('%Y-%m-%d')}")
 
 
 # ========================================

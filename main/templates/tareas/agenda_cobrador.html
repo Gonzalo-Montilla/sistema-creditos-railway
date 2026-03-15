@@ -112,10 +112,23 @@
             gap: 0.4rem;
         }
 
+        .mobile-actions-secondary .btn {
+            width: 100%;
+        }
+
+        .mobile-actions-secondary .mobile-btn-phone {
+            grid-column: 1 / -1;
+        }
+
         .btn-phone-mobile {
             min-height: 40px;
             min-width: 40px;
             padding: 0.45rem 0.6rem;
+        }
+
+        .mobile-actions .btn-phone-mobile {
+            min-height: 42px;
+            padding: 0.5rem 0.75rem;
         }
     }
     
@@ -337,8 +350,8 @@
         {% for tarea in tareas %}
         <div class="task-card card {{ tarea.estado|lower }}" data-tarea-id="{{ tarea.id }}" data-estado="{{ tarea.estado }}" data-prioridad="{{ tarea.prioridad|default:'' }}" data-monto="{{ tarea.monto_a_cobrar }}">
             <div class="card-body py-3">
-                <div class="row">
-                    <div class="col-8">
+                <div class="row g-2">
+                    <div class="col-12 col-md-8">
                         <div class="client-info">
                             <strong>{{ tarea.cuota.credito.cliente.nombre_completo }}</strong>
                             {% if tarea.cuota.credito.cliente.celular %}
@@ -357,6 +370,17 @@
                             <span class="amount-highlight">${{ tarea.monto_a_cobrar|floatformat:0 }}</span>
                             <small class="text-muted"> - Cuota #{{ tarea.cuota.numero_cuota }}</small>
                         </div>
+                        {% if tarea.total_cliente_hoy and tarea.total_cliente_hoy > 0 and tarea.estado != 'COBRADO' %}
+                            <div class="mt-1">
+                                <small class="text-primary fw-semibold">
+                                    <i class="fas fa-layer-group"></i>
+                                    Total cliente hoy: ${{ tarea.total_cliente_hoy|floatformat:0 }}
+                                    {% if tarea.cuotas_cliente_hoy and tarea.cuotas_cliente_hoy > 1 %}
+                                        ({{ tarea.cuotas_cliente_hoy }} cuotas)
+                                    {% endif %}
+                                </small>
+                            </div>
+                        {% endif %}
                         
                         {% if tarea.estado == 'COBRADO' %}
                             <div class="mt-1">
@@ -379,7 +403,7 @@
                         {% endif %}
                     </div>
                     
-                    <div class="col-4 text-end">
+                    <div class="col-12 col-md-4 text-md-end">
                         <div class="mb-2">
                             <span class="badge bg-{{ tarea.color_estado }}{% if tarea.color_estado == 'warning' %} text-dark{% endif %}">
                                 {{ tarea.get_estado_display }}
@@ -419,12 +443,19 @@
                                     <button class="btn btn-info btn-sm" onclick="reprogramar({{ tarea.id }})" title="Reprogramar visita">
                                         <i class="fas fa-clock me-1"></i> Reprogramar
                                     </button>
+                                    {% if tarea.cuota.credito.cliente.celular %}
+                                    <a href="tel:{{ tarea.cuota.credito.cliente.celular }}"
+                                       class="btn btn-outline-primary btn-sm btn-phone-mobile mobile-btn-phone"
+                                       title="Llamar al cliente">
+                                        <i class="fas fa-phone me-1"></i> Llamar
+                                    </a>
+                                    {% endif %}
                                 </div>
                             </div>
                         {% endif %}
                         
                         {% if tarea.cuota.credito.cliente.celular %}
-                            <div class="mt-2">
+                            <div class="mt-2 d-none d-md-block">
                                 <a href="tel:{{ tarea.cuota.credito.cliente.celular }}" 
                                    class="btn btn-outline-primary btn-sm btn-action btn-phone-mobile" title="Llamar al cliente">
                                     <i class="fas fa-phone"></i>

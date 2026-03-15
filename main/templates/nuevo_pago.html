@@ -19,11 +19,12 @@
         </h6>
     </div>
     <div class="card-body">
+        <div id="pago-feedback" class="mb-3" style="display: none;"></div>
         {% if not creditos_info %}
         <div class="alert alert-warning" role="alert">
             <i class="fas fa-exclamation-triangle"></i>
             <strong>No hay créditos disponibles para recibir pagos.</strong><br>
-            Todos los créditos están pagados o no están en estado APROBADO/DESEMBOLSADO.
+            Todos los créditos están pagados o no están en estado APROBADO/DESEMBOLSADO/VENCIDO.
         </div>
         {% endif %}
         
@@ -149,7 +150,7 @@
                 <a href="{% url 'pagos' %}" class="btn btn-secondary me-md-2">
                     <i class="fas fa-times"></i> Cancelar
                 </a>
-                <button type="submit" class="btn btn-primary" {% if not creditos_info %}disabled{% endif %}>
+                <button type="submit" class="btn btn-primary">
                     <i class="fas fa-save"></i> Registrar Pago
                 </button>
             </div>
@@ -207,7 +208,7 @@
         <div class="mt-3 p-2 bg-light rounded">
             <small class="text-muted">
                 <i class="fas fa-info-circle"></i>
-                <strong>Nota:</strong> Solo se muestran los créditos en estado "APROBADO" o "DESEMBOLSADO" que pueden recibir pagos.
+                <strong>Nota:</strong> Solo se muestran los créditos en estado "APROBADO", "DESEMBOLSADO" o "VENCIDO" que pueden recibir pagos.
             </small>
         </div>
     </div>
@@ -221,15 +222,32 @@
 let clienteEncontrado = null;
 let creditosDisponibles = [];
 
+function mostrarFeedback(tipo, mensaje) {
+    const feedback = document.getElementById('pago-feedback');
+    if (!feedback) return;
+    const tipoClase = tipo === 'error' ? 'danger' : (tipo === 'warning' ? 'warning' : 'info');
+    feedback.className = `alert alert-${tipoClase} mb-3`;
+    feedback.innerHTML = `<i class="fas fa-${tipoClase === 'danger' ? 'triangle-exclamation' : (tipoClase === 'warning' ? 'exclamation-triangle' : 'circle-info')} me-2"></i>${mensaje}`;
+    feedback.style.display = 'block';
+}
+
+function limpiarFeedback() {
+    const feedback = document.getElementById('pago-feedback');
+    if (!feedback) return;
+    feedback.style.display = 'none';
+    feedback.innerHTML = '';
+}
+
 // Función para buscar cliente por cédula
-function buscarCliente() {
+function buscarCliente(creditoPrefillId = null) {
     const cedula = document.getElementById('cedula_cliente_pago').value.trim();
     const btn = document.getElementById('buscar-cliente-btn');
     
     if (!cedula) {
-        alert('Por favor ingrese una cédula');
+        mostrarFeedback('warning', 'Ingrese una cédula para buscar al cliente.');
         return;
     }
+    limpiarFeedback();
     
     // Mostrar loading
     btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
@@ -247,14 +265,25 @@ function buscarCliente() {
                 creditosDisponibles = data.creditos;
                 mostrarClienteEncontrado(data.cliente);
                 llenarCreditosSelect(data.creditos);
+                if (creditoPrefillId) {
+                    const select = document.getElementById('credito_select');
+                    const existeCredito = data.creditos.some(c => String(c.id) === String(creditoPrefillId));
+                    if (select && existeCredito) {
+                        select.value = String(creditoPrefillId);
+                        if (typeof select.onchange === 'function') {
+                            select.onchange();
+                        }
+                    }
+                }
+                mostrarFeedback('info', `Cliente encontrado: <strong>${data.cliente.nombre_completo}</strong>. Seleccione el crédito para auto-llenar el pago.`);
             } else {
-                alert('Error: ' + data.error);
+                mostrarFeedback('error', data.error || 'No se pudo consultar el cliente.');
                 limpiarFormulario();
             }
         })
         .catch(error => {
             console.error('Error:', error);
-            alert('Error de conexión al buscar cliente');
+            mostrarFeedback('error', 'Error de conexión al buscar cliente.');
             limpiarFormulario();
         })
         .finally(() => {
@@ -307,15 +336,17 @@ function llenarCreditosSelect(creditos) {
     creditos.forEach(credito => {
         const option = document.createElement('option');
         option.value = credito.id;
-        option.textContent = `Crédito #${String(credito.id).padStart(4, '0')} - Saldo: $${credito.saldo_pendiente.toLocaleString()} (${credito.tipo_plazo} - ${credito.cantidad_cuotas} cuotas)`;
+        const cuotaSugerida = credito.numero_cuota_sugerida || 1;
+        const montoSugerido = credito.monto_sugerido || credito.valor_cuota || 0;
+        option.textContent = `Crédito #${String(credito.id).padStart(4, '0')} - Cuota #${cuotaSugerida} sugerida: $${montoSugerido.toLocaleString()} (Saldo crédito: $${credito.saldo_pendiente.toLocaleString()})`;
         select.appendChild(option);
     });
     
     // Habilitar select
     select.disabled = false;
     
-    // Agregar event listener para cuando se seleccione un crédito
-    select.addEventListener('change', function() {
+    // Reasignar handler para evitar listeners duplicados
+    select.onchange = function() {
         limpiarErrorMonto();
         const creditoId = this.value;
         if (creditoId) {
@@ -326,22 +357,25 @@ function llenarCreditosSelect(creditos) {
         } else {
             limpiarInformacionCuota();
         }
-    });
+    };
 }
 
 // Función para llenar información de la cuota automáticamente
 function llenarInformacionCuota(credito) {
     limpiarErrorMonto();
-    // Llenar monto con el valor de la cuota
+    // Llenar monto con saldo real de la cuota pendiente (si existe)
     const montoInput = document.getElementById('id_monto');
+    const montoSugerido = (credito.monto_sugerido && credito.monto_sugerido > 0)
+        ? credito.monto_sugerido
+        : credito.valor_cuota;
     if (montoInput) {
-        montoInput.value = credito.valor_cuota.toFixed(2);
+        montoInput.value = Number(montoSugerido).toFixed(2);
         montoInput.style.backgroundColor = '#e7f3ff'; // Azul claro para indicar auto-llenado
     }
     
-    // Calcular la siguiente cuota a pagar
-    const cuotasPagadas = Math.round(credito.total_pagado / credito.valor_cuota);
-    const siguienteCuota = cuotasPagadas + 1;
+    // Determinar cuota sugerida usando cronograma (evita errores con pagos parciales)
+    const cuotasPagadas = Number(credito.cuotas_pagadas || 0);
+    const siguienteCuota = Number(credito.numero_cuota_sugerida || (cuotasPagadas + 1));
     
     // Llenar número de cuota
     const cuotaInput = document.getElementById('id_numero_cuota');
@@ -364,7 +398,7 @@ function llenarInformacionCuota(credito) {
     const cuotaHelp = document.getElementById('cuota-help');
     
     if (montoHelp) {
-        montoHelp.innerHTML = '<i class="fas fa-check-circle text-success"></i> Monto auto-llenado con el valor de la cuota';
+        montoHelp.innerHTML = `<i class="fas fa-check-circle text-success"></i> Monto sugerido con saldo pendiente de cuota #${siguienteCuota}`;
     }
     if (cuotaHelp) {
         cuotaHelp.innerHTML = `<i class="fas fa-check-circle text-success"></i> Siguiente cuota calculada: #${siguienteCuota}`;
@@ -390,7 +424,7 @@ function mostrarInformacionCredito(credito, siguienteCuota) {
         creditoField.parentNode.insertBefore(creditoInfoDiv, creditoField.nextSibling);
     }
     
-    const cuotasPagadas = Math.round(credito.total_pagado / credito.valor_cuota);
+    const cuotasPagadas = Number(credito.cuotas_pagadas || 0);
     const progreso = (cuotasPagadas / credito.cantidad_cuotas) * 100;
     
     creditoInfoDiv.innerHTML = `
@@ -483,6 +517,7 @@ function limpiarInformacionCuota() {
 
 // Función para limpiar formulario
 function limpiarFormulario() {
+    limpiarFeedback();
     document.getElementById('cliente-info').style.display = 'none';
     const select = document.getElementById('credito_select');
     select.innerHTML = '<option value="">Primero busque al cliente</option>';
@@ -510,6 +545,7 @@ document.addEventListener('DOMContentLoaded', function() {
         if (clienteEncontrado) {
             limpiarFormulario();
         }
+        limpiarFeedback();
     });
     
     // Al cambiar el monto, quitar mensaje de error anterior (ej. "monto muy bajo")
@@ -536,6 +572,16 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         }
     });
+
+    // Si viene desde "Créditos", precargar cédula y crédito automáticamente
+    const params = new URLSearchParams(window.location.search);
+    const cedulaPrefill = (params.get('cedula') || '').trim();
+    const creditoPrefill = (params.get('credito') || '').trim();
+    const cedulaInput = document.getElementById('cedula_cliente_pago');
+    if (cedulaInput && cedulaPrefill && !cedulaInput.value) {
+        cedulaInput.value = cedulaPrefill;
+        buscarCliente(creditoPrefill || null);
+    }
 });
 </script>
 {% endblock %}

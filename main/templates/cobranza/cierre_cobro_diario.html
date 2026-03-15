@@ -76,6 +76,7 @@
                         <th class="text-end">Monto según sistema</th>
                         <th class="text-end">Recibido (arqueo)</th>
                         <th class="text-end">Diferencia</th>
+                        <th>Arqueo</th>
                         <th>Estado</th>
                         <th>Acciones</th>
                     </tr>
@@ -101,6 +102,17 @@
                             {% endif %}
                         </td>
                         <td>
+                            {% if f.estado_arqueo == 'EXACTO' %}
+                            <span class="badge bg-success">Exacto</span>
+                            {% elif f.estado_arqueo == 'SOBRANTE' %}
+                            <span class="badge bg-info text-dark">Sobrante</span>
+                            {% elif f.estado_arqueo == 'FALTANTE' %}
+                            <span class="badge bg-danger">Faltante</span>
+                            {% else %}
+                            <span class="badge bg-light text-muted border">Pendiente</span>
+                            {% endif %}
+                        </td>
+                        <td>
                             {% if f.cerrado %}
                             <span class="badge bg-success">Cerrado</span>
                             {% else %}
@@ -119,12 +131,14 @@
                             <a href="{% url 'resumen_cierre_cobrador' f.cobrador.id %}?fecha={{ fecha|date:'Y-m-d' }}#form-cierre" class="btn btn-sm btn-outline-secondary">
                                 <i class="bi bi-pencil-square"></i> Editar cierre
                             </a>
+                            {% elif not f.cerrado and f.cantidad_pagos == 0 %}
+                            <span class="badge bg-light text-muted border">Sin pagos hoy</span>
                             {% endif %}
                         </td>
                     </tr>
                     {% empty %}
                     <tr>
-                        <td colspan="7" class="text-center py-4">
+                        <td colspan="8" class="text-center py-4">
                             <div class="text-muted mb-2">No hay cobradores activos para esta operación.</div>
                             <a href="{% url 'nuevo_cobrador' %}" class="btn btn-sm btn-primary">
                                 <i class="bi bi-person-plus"></i> Registrar cobrador
@@ -170,6 +184,18 @@
                     </span>
                     {% else %}
                     <span class="text-muted">—</span>
+                    {% endif %}
+                </div>
+                <div class="linea mb-3">
+                    <span class="label">Arqueo</span>
+                    {% if f.estado_arqueo == 'EXACTO' %}
+                    <span class="badge bg-success">Exacto</span>
+                    {% elif f.estado_arqueo == 'SOBRANTE' %}
+                    <span class="badge bg-info text-dark">Sobrante</span>
+                    {% elif f.estado_arqueo == 'FALTANTE' %}
+                    <span class="badge bg-danger">Faltante</span>
+                    {% else %}
+                    <span class="badge bg-light text-muted border">Pendiente</span>
                     {% endif %}
                 </div>
                 <div class="d-grid gap-2">

@@ -61,6 +61,9 @@
             width: 280px;
             z-index: 1050;
             transition: left 0.3s ease;
+            overflow-y: auto;
+            overscroll-behavior: contain;
+            -webkit-overflow-scrolling: touch;
         }
         
         .sidebar.show {
@@ -92,6 +95,57 @@
             top: 0;
             z-index: 1048;
             box-shadow: 0 6px 20px rgba(0, 0, 0, 0.18);
+        }
+
+        .top-user-bar {
+            position: sticky;
+            top: 0;
+            z-index: 1047;
+            background: rgba(255, 255, 255, 0.96);
+            border-bottom: 1px solid #dbe5f3;
+            backdrop-filter: blur(4px);
+        }
+
+        .top-user-inner {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 0.75rem;
+            min-height: 52px;
+            padding: 0.35rem 0.85rem;
+        }
+
+        .top-user-meta {
+            display: flex;
+            flex-direction: column;
+            min-width: 0;
+        }
+
+        .top-user-meta .app-name {
+            font-weight: 700;
+            font-size: 0.9rem;
+            color: #16315e;
+            line-height: 1.1;
+        }
+
+        .top-user-meta .user-name {
+            font-size: 0.8rem;
+            color: #4d6282;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            max-width: 220px;
+        }
+
+        .profile-badge {
+            border: 1px solid #cfe0fb;
+            background: #eef4ff;
+            color: #1b4cb8;
+            border-radius: 999px;
+            font-weight: 600;
+            font-size: 0.72rem;
+            padding: 0.28rem 0.62rem;
+            white-space: nowrap;
         }
         
         .mobile-menu-btn {
@@ -206,6 +260,8 @@
             .sidebar {
                 width: 85vw;
                 max-width: 320px;
+                top: 0;
+                height: 100vh;
             }
 
             .btn,
@@ -802,7 +858,7 @@
                         </li>
                         {% endif %}
                         <li class="nav-item">
-                            <a class="nav-link {% if 'tarea' in request.resolver_match.url_name or 'agenda' in request.resolver_match.url_name %}active{% endif %}" href="{% url 'agenda_cobrador' %}">
+                            <a class="nav-link {% if request.resolver_match.url_name == 'agenda_cobrador' or request.resolver_match.url_name == 'agenda_cobrador_especifico' or request.resolver_match.url_name == 'acceso_cobrador' or request.resolver_match.url_name == 'procesar_cobro_completo' or request.resolver_match.url_name == 'actualizar_tarea' %}active{% endif %}" href="{% url 'agenda_cobrador' %}">
                                 <i class="bi bi-calendar-check me-2"></i>Agenda / Tareas
                             </a>
                         </li>
@@ -834,6 +890,11 @@
                     <!-- CARTERA Y REPORTES -->
                     <div class="sidebar-section-label">CARTERA</div>
                     <ul class="nav flex-column mb-2">
+                        <li class="nav-item">
+                            <a class="nav-link {% if request.resolver_match.url_name == 'dashboard_negocio' %}active{% endif %}" href="{% url 'dashboard_negocio' %}">
+                                <i class="bi bi-bar-chart-line me-2"></i>Dashboard negocio
+                            </a>
+                        </li>
                         <li class="nav-item">
                             <a class="nav-link {% if request.resolver_match.url_name == 'gestion_cartera' or request.resolver_match.url_name == 'cartera_vencida' or request.resolver_match.url_name == 'actualizar_cartera' %}active{% endif %}" href="{% url 'gestion_cartera' %}">
                                 <i class="bi bi-wallet2 me-2"></i>Gestión de cartera
@@ -889,6 +950,25 @@
             <!-- Main content -->
             <main class="col-md-9 ms-sm-auto col-lg-10 px-md-4 main-content">
                 <div class="py-4 content-shell">
+                    <div class="top-user-bar rounded-3 mb-3">
+                        <div class="top-user-inner">
+                            <div class="top-user-meta">
+                                <span class="app-name">Panel operativo</span>
+                                <span class="user-name">{{ user.get_full_name|default:user.username }}</span>
+                            </div>
+                            <span class="profile-badge">
+                                {% if user.is_superuser %}
+                                    Superadmin
+                                {% elif user.is_staff %}
+                                    Administrativo
+                                {% elif user.cobrador %}
+                                    Cobrador
+                                {% else %}
+                                    Operador
+                                {% endif %}
+                            </span>
+                        </div>
+                    </div>
                     <!-- Messages -->
                     {% if messages %}
                         {% for message in messages %}

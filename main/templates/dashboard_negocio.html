@@ -1,0 +1,178 @@
+{% extends 'base.html' %}
+
+{% block title %}Dashboard de Negocio{% endblock %}
+
+{% block breadcrumb %}
+<nav class="breadcrumb-nav" aria-label="Navegación">
+    <a href="{% url 'dashboard' %}">Inicio</a><span class="separator">/</span><span>Dashboard de negocio</span>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1 class="page-title mb-0"><i class="bi bi-bar-chart-line me-2"></i>Dashboard de Negocio</h1>
+</div>
+
+<div class="card mb-4">
+    <div class="card-body">
+        <form method="get" class="row g-2 align-items-end">
+            <div class="col-md-3">
+                <label class="form-label small text-muted mb-1">Desde</label>
+                <input type="date" name="fecha_desde" class="form-control" value="{{ fecha_desde|date:'Y-m-d' }}">
+            </div>
+            <div class="col-md-3">
+                <label class="form-label small text-muted mb-1">Hasta</label>
+                <input type="date" name="fecha_hasta" class="form-control" value="{{ fecha_hasta|date:'Y-m-d' }}">
+            </div>
+            <div class="col-md-2">
+                <button type="submit" class="btn btn-primary w-100"><i class="bi bi-funnel me-1"></i>Aplicar</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="alert alert-light border mb-4">
+    <i class="bi bi-info-circle me-1"></i>
+    <strong>Lectura de métricas:</strong>
+    <span class="text-muted">Desembolsado, recaudo, efectividad y cierres exactos usan el periodo filtrado. Cartera y mora son foto actual del sistema. Embudo de créditos es operativo actual.</span>
+</div>
+
+<div class="row g-3 mb-4">
+    <div class="col-md-4 col-xl-2">
+        <div class="metric-card primary">
+            <i class="bi bi-cash-stack fs-2"></i>
+            <div class="metric-number">${{ kpi_total_desembolsado|floatformat:0 }}</div>
+            <p>Desembolsado periodo</p>
+        </div>
+    </div>
+    <div class="col-md-4 col-xl-2">
+        <div class="metric-card success">
+            <i class="bi bi-wallet2 fs-2"></i>
+            <div class="metric-number">${{ kpi_total_recaudado|floatformat:0 }}</div>
+            <p>Recaudo periodo</p>
+        </div>
+    </div>
+    <div class="col-md-4 col-xl-2">
+        <div class="metric-card warning">
+            <i class="bi bi-bank fs-2"></i>
+            <div class="metric-number">${{ kpi_cartera_activa|floatformat:0 }}</div>
+            <p>Cartera activa</p>
+        </div>
+    </div>
+    <div class="col-md-4 col-xl-2">
+        <div class="metric-card danger">
+            <i class="bi bi-exclamation-triangle fs-2"></i>
+            <div class="metric-number">{{ kpi_porcentaje_mora|floatformat:1 }}%</div>
+            <p>% cartera vencida</p>
+        </div>
+    </div>
+    <div class="col-md-4 col-xl-2">
+        <div class="metric-card primary">
+            <i class="bi bi-check2-circle fs-2"></i>
+            <div class="metric-number">{{ kpi_efectividad_cobranza|floatformat:1 }}%</div>
+            <p>Efectividad cobranza</p>
+        </div>
+    </div>
+    <div class="col-md-4 col-xl-2">
+        <div class="metric-card success">
+            <i class="bi bi-shield-check fs-2"></i>
+            <div class="metric-number">{{ kpi_cierres_exactos|floatformat:1 }}%</div>
+            <p>Cierres exactos</p>
+        </div>
+    </div>
+</div>
+
+<div class="row g-4">
+    <div class="col-lg-8">
+        <div class="card">
+            <div class="card-header"><strong>Flujo diario: desembolsado vs recaudo</strong></div>
+            <div class="card-body"><div id="chartFlujo"></div></div>
+        </div>
+    </div>
+    <div class="col-lg-4">
+        <div class="card">
+            <div class="card-header"><strong>Composición de mora</strong></div>
+            <div class="card-body"><div id="chartMora"></div></div>
+        </div>
+    </div>
+    <div class="col-lg-6">
+        <div class="card">
+            <div class="card-header"><strong>Eficacia por cobrador (objetivo vs real)</strong></div>
+            <div class="card-body"><div id="chartCobrador"></div></div>
+        </div>
+    </div>
+    <div class="col-lg-6">
+        <div class="card">
+            <div class="card-header"><strong>Embudo de créditos (foto actual)</strong></div>
+            <div class="card-body"><div id="chartPipeline"></div></div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
+<script>
+    const flujoLabels = {{ chart_flujo_labels|safe }};
+    const flujoRecaudo = {{ chart_flujo_recaudado|safe }};
+    const flujoDesembolso = {{ chart_flujo_desembolsado|safe }};
+    const moraLabels = {{ chart_mora_labels|safe }};
+    const moraValues = {{ chart_mora_values|safe }};
+    const cobradorLabels = {{ chart_cobrador_labels|safe }};
+    const cobradorObjetivo = {{ chart_cobrador_objetivo|safe }};
+    const cobradorReal = {{ chart_cobrador_real|safe }};
+    const pipelineLabels = {{ chart_pipeline_labels|safe }};
+    const pipelineValues = {{ chart_pipeline_values|safe }};
+
+    const cop = (v) => '$' + Number(v || 0).toLocaleString('es-CO');
+
+    new ApexCharts(document.querySelector("#chartFlujo"), {
+        chart: { type: 'line', height: 320, toolbar: { show: false } },
+        series: [
+            { name: 'Recaudo', data: flujoRecaudo },
+            { name: 'Desembolso', data: flujoDesembolso }
+        ],
+        xaxis: { categories: flujoLabels },
+        stroke: { width: 3, curve: 'smooth' },
+        yaxis: { labels: { formatter: cop } },
+        tooltip: { y: { formatter: cop } },
+        colors: ['#10b981', '#1d4ed8']
+    }).render();
+
+    new ApexCharts(document.querySelector("#chartMora"), {
+        chart: { type: 'donut', height: 320 },
+        labels: moraLabels,
+        series: moraValues,
+        colors: ['#16a34a', '#f59e0b', '#ef4444', '#7f1d1d'],
+        legend: { position: 'bottom' }
+    }).render();
+
+    new ApexCharts(document.querySelector("#chartCobrador"), {
+        chart: { type: 'bar', height: 320, toolbar: { show: false } },
+        series: [
+            { name: 'Objetivo', data: cobradorObjetivo },
+            { name: 'Real cobrado', data: cobradorReal }
+        ],
+        xaxis: { categories: cobradorLabels },
+        yaxis: { labels: { formatter: cop } },
+        tooltip: {
+            y: { formatter: cop },
+            custom: function({ series, seriesIndex, dataPointIndex, w }) {
+                const objetivo = Number(w.config.series[0].data[dataPointIndex] || 0);
+                const real = Number(w.config.series[1].data[dataPointIndex] || 0);
+                const ef = objetivo > 0 ? ((real / objetivo) * 100).toFixed(1) : '0.0';
+                return `<div class="px-2 py-1"><strong>${w.globals.labels[dataPointIndex]}</strong><br/>Objetivo: ${cop(objetivo)}<br/>Real: ${cop(real)}<br/>Eficacia: ${ef}%</div>`;
+            }
+        },
+        colors: ['#94a3b8', '#0ea5e9']
+    }).render();
+
+    new ApexCharts(document.querySelector("#chartPipeline"), {
+        chart: { type: 'bar', height: 320, toolbar: { show: false } },
+        plotOptions: { bar: { horizontal: true, borderRadius: 6 } },
+        series: [{ name: 'Créditos', data: pipelineValues }],
+        xaxis: { categories: pipelineLabels },
+        colors: ['#6366f1']
+    }).render();
+</script>
+{% endblock %}

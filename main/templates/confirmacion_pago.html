@@ -25,6 +25,20 @@
     <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
 </div>
 
+{% if agenda_cobrador_url %}
+<div class="card border-success mb-3">
+    <div class="card-body text-center">
+        <a href="{{ agenda_cobrador_url }}" class="btn btn-success btn-lg w-100 py-3">
+            <i class="fas fa-route me-2"></i>
+            <strong>Seguir cobrando</strong>
+        </a>
+        <small class="text-muted d-block mt-2">
+            Regresa a la agenda del cobrador en la misma fecha para continuar con el siguiente cobro.
+        </small>
+    </div>
+</div>
+{% endif %}
+
 {% if email_enviado_param %}
 <div class="alert alert-info alert-dismissible fade show" role="alert">
     <i class="fas fa-envelope me-2"></i>
@@ -223,8 +237,13 @@ Puedes descargar tu recibo completo aquí: ` + urlRecibo + `
 ¡Gracias por tu pago puntual! 😊`;
     
     if (celular && celular.trim() !== '') {
-        const numeroLimpio = celular.replace(/\D/g, '');
-        const urlWhatsApp = `https://wa.me/57${numeroLimpio}?text=${encodeURIComponent(mensaje)}`;
+        let numeroLimpio = celular.replace(/\D/g, '');
+        if (numeroLimpio.length === 10) {
+            numeroLimpio = `57${numeroLimpio}`;
+        } else if (numeroLimpio.length > 10 && !numeroLimpio.startsWith('57')) {
+            numeroLimpio = `57${numeroLimpio}`;
+        }
+        const urlWhatsApp = `https://wa.me/${numeroLimpio}?text=${encodeURIComponent(mensaje)}`;
         window.open(urlWhatsApp, '_blank');
     } else {
         // Si no hay celular, copiar mensaje al portapapeles
