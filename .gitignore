@@ -10,6 +10,9 @@ staticfiles/
 
 # Variables de entorno
 .env
+.venv/
+venv/
+env/
 
 # IDEs
 .vscode/

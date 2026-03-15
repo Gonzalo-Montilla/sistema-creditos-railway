@@ -341,9 +341,9 @@
                     <div class="col-8">
                         <div class="client-info">
                             <strong>{{ tarea.cuota.credito.cliente.nombre_completo }}</strong>
-                            {% if tarea.cuota.credito.cliente.telefono %}
+                            {% if tarea.cuota.credito.cliente.celular %}
                                 <br><small class="text-muted">
-                                    <i class="fas fa-phone"></i> {{ tarea.cuota.credito.cliente.telefono }}
+                                    <i class="fas fa-phone"></i> {{ tarea.cuota.credito.cliente.celular }}
                                 </small>
                             {% endif %}
                             {% if tarea.cuota.credito.cliente.direccion %}
@@ -400,10 +400,10 @@
                                     <i class="fas fa-dollar-sign"></i> Cobrar
                                 </button>
                                 <button class="btn btn-warning btn-action" onclick="cambiarEstado({{ tarea.id }}, 'NO_ENCONTRADO')">
-                                    <i class="fas fa-user-times"></i> No
+                                    <i class="fas fa-user-times"></i> No encontrado
                                 </button>
                                 <button class="btn btn-info btn-action" onclick="reprogramar({{ tarea.id }})">
-                                    <i class="fas fa-clock"></i> +
+                                    <i class="fas fa-clock"></i> Reprogramar
                                 </button>
                             </div>
                             
@@ -423,9 +423,9 @@
                             </div>
                         {% endif %}
                         
-                        {% if tarea.cuota.credito.cliente.telefono %}
+                        {% if tarea.cuota.credito.cliente.celular %}
                             <div class="mt-2">
-                                <a href="tel:{{ tarea.cuota.credito.cliente.telefono }}" 
+                                <a href="tel:{{ tarea.cuota.credito.cliente.celular }}" 
                                    class="btn btn-outline-primary btn-sm btn-action btn-phone-mobile" title="Llamar al cliente">
                                     <i class="fas fa-phone"></i>
                                 </a>
@@ -450,6 +450,15 @@
                 <button type="button" class="btn btn-outline-secondary btn-sm" onclick="location.reload()">
                     <i class="fas fa-rotate me-1"></i> Actualizar agenda
                 </button>
+                {% if user.is_staff or user.is_superuser %}
+                <form method="post" action="{% url 'generar_tareas_diarias' %}" class="d-inline">
+                    {% csrf_token %}
+                    <input type="hidden" name="fecha" value="{{ fecha|date:'Y-m-d' }}">
+                    <button type="submit" class="btn btn-success btn-sm">
+                        <i class="fas fa-wand-magic-sparkles me-1"></i> Generar tareas del día
+                    </button>
+                </form>
+                {% endif %}
             </div>
         </div>
     {% endif %}
@@ -633,12 +642,6 @@
 <script>
 let currentTaskId = null;
 
-// Función de prueba simple
-function testCobrar(tareaId) {
-    alert('Botón cobrar funciona! Tarea ID: ' + tareaId);
-    console.log('testCobrar ejecutado con tareaId:', tareaId);
-}
-
 function cambiarFecha() {
     const fecha = document.getElementById('fechaInput').value;
     window.location.href = '?fecha=' + fecha;
@@ -670,14 +673,11 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 function marcarCobrado(tareaId) {
-    console.log('🎯 marcarCobrado llamado con tareaId:', tareaId);
-    
     try {
         currentTaskId = tareaId;
         
         // Obtener datos de la tarjeta de tarea
         const taskCard = document.querySelector(`[data-tarea-id="${tareaId}"]`);
-        console.log('📋 Tarjeta encontrada:', taskCard);
         
         if (!taskCard) {
             alert('Error: No se encontró la tarjeta de tarea');
@@ -710,8 +710,6 @@ function marcarCobrado(tareaId) {
             (cuotaElement.dataset.cuota || cuotaElement.textContent.match(/\d+/)?.[0] || '1') : 
             '1';
         
-        console.log('💰 Datos extraídos:', { clienteNombre, clienteTelefono, montoSugerido, numeroCuota });
-        
         // Llenar el modal con los datos obtenidos
         document.getElementById('tareaId').value = tareaId;
         document.getElementById('clienteNombre').textContent = clienteNombre;
@@ -729,28 +727,20 @@ function marcarCobrado(tareaId) {
         // Restaurar botón de procesar
         restaurarBotonCobro();
         
-        console.log('🚀 Intentando abrir modal modalCobro...');
-        
         // Abrir el modal usando Bootstrap 5
         const modalElement = document.getElementById('modalCobro');
-        console.log('🗺 Modal element found:', modalElement);
         
         if (modalElement) {
             try {
                 const modal = new bootstrap.Modal(modalElement);
                 modal.show();
-                console.log('✅ Modal abierto con Bootstrap 5');
             } catch (e1) {
-                console.log('❌ Bootstrap 5 failed, trying jQuery:', e1);
                 try {
                     $('#modalCobro').modal('show');
-                    console.log('✅ Modal abierto con jQuery');
                 } catch (e2) {
-                    console.log('❌ jQuery failed, trying manual:', e2);
                     modalElement.classList.add('show');
                     modalElement.style.display = 'block';
                     modalElement.style.backgroundColor = 'rgba(0,0,0,0.5)';
-                    console.log('✅ Modal mostrado manualmente');
                 }
             }
         } else {
@@ -888,8 +878,6 @@ function enviarFormularioCobroCompleto() {
     formData.append('longitud', document.getElementById('longitud').value || '');
     formData.append('csrfmiddlewaretoken', document.querySelector('[name=csrfmiddlewaretoken]').value);
     
-    console.log('🚀 Enviando formulario de cobro completo para tarea:', tareaId);
-    
     // Enviar petición al backend
     fetch(`/tareas/cobrar/${tareaId}/`, {
         method: 'POST',
@@ -898,12 +886,8 @@ function enviarFormularioCobroCompleto() {
             'X-Requested-With': 'XMLHttpRequest'
         }
     })
-    .then(response => {
-        console.log('📝 Respuesta recibida:', response.status, response.statusText);
-        return response.json();
-    })
+    .then(response => response.json())
     .then(data => {
-        console.log('📊 Datos de respuesta:', data);
         if (data.success) {
             // Redirigir a confirmación; pasar parámetros para mostrar si se envió correo o si no hay email (WhatsApp)
             let url = data.redirect_url;
@@ -945,23 +929,18 @@ function procesarReprogramacion() {
 }
 
 function enviarActualizacion(tareaId, formData) {
-    console.log('🚀 Enviando actualización para tarea:', tareaId);
-    console.log('📄 FormData contenido:', Array.from(formData.entries()));
-    
     // Obtener CSRF token
     let csrfToken = document.querySelector('[name=csrfmiddlewaretoken]');
     if (!csrfToken) {
         // Buscar en meta tag o cookie como alternativa
         csrfToken = document.querySelector('meta[name=csrf-token]');
         if (!csrfToken) {
-            console.error('❌ No se encontró CSRF token');
             mostrarMensaje('error', 'Error: Token de seguridad no encontrado');
             return;
         }
     }
     
     const csrfValue = csrfToken.value || csrfToken.getAttribute('content');
-    console.log('🔒 CSRF Token encontrado:', csrfValue ? '✓' : '❌');
     
     fetch(`/tareas/actualizar/${tareaId}/`, {
         method: 'POST',
@@ -971,18 +950,13 @@ function enviarActualizacion(tareaId, formData) {
         }
     })
     .then(response => {
-        console.log('📡 Respuesta recibida:', response.status, response.statusText);
         if (!response.ok) {
             throw new Error(`HTTP ${response.status}: ${response.statusText}`);
         }
         return response.json();
     })
     .then(data => {
-        console.log('📊 Datos de respuesta:', data);
-        
         if (data.success) {
-            console.log('✅ Éxito! Procesando respuesta...');
-            
             // Cerrar modales
             const modals = document.querySelectorAll('.modal');
             modals.forEach(modalEl => {
@@ -997,7 +971,6 @@ function enviarActualizacion(tareaId, formData) {
             
             // Mostrar mensaje de éxito con información del pago si existe
             if (data.pago) {
-                console.log('💰 Pago creado:', data.pago);
                 mostrarMensaje('success', data.pago.mensaje, data.pago);
                 
                 // Recargar después de más tiempo para que vean el comprobante
@@ -1012,12 +985,10 @@ function enviarActualizacion(tareaId, formData) {
                 }, 1000);
             }
         } else {
-            console.error('❌ Error en respuesta:', data.error);
             mostrarMensaje('error', data.error || 'Error al actualizar la tarea');
         }
     })
     .catch(error => {
-        console.error('❌ Error en fetch:', error);
         mostrarMensaje('error', 'Error de conexión: ' + error.message);
     });
 }

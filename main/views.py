@@ -25,6 +25,69 @@ from datetime import datetime, timedelta, date
 from io import BytesIO
 import json
 import re
+from decimal import Decimal
+
+def _usuario_admin_operativo(user):
+    """Permisos mínimos para operaciones críticas de crédito/cobranza."""
+    return bool(user and user.is_authenticated and (user.is_staff or user.is_superuser))
+
+def _forbidden_operacion(request, mensaje='No tiene permisos para esta operación.'):
+    """Respuesta consistente para denegar operaciones críticas."""
+    es_ajax = (
+        request.headers.get('X-Requested-With') == 'XMLHttpRequest'
+        or (request.content_type and 'application/json' in request.content_type)
+    )
+    if es_ajax:
+        return JsonResponse({'success': False, 'message': mensaje}, status=403)
+    messages.error(request, mensaje)
+    return redirect('dashboard')
+
+def _usuario_cobrador_activo(user):
+    """Retorna el cobrador activo asociado al usuario, si existe."""
+    if not user or not user.is_authenticated:
+        return None
+    return Cobrador.objects.filter(usuario=user, activo=True).first()
+
+def _usuario_puede_ver_credito(user, credito):
+    """Admin puede ver todo; cobrador solo su cartera asignada."""
+    if _usuario_admin_operativo(user):
+        return True
+    cobrador = _usuario_cobrador_activo(user)
+    return bool(cobrador and credito and credito.cobrador_id == cobrador.id)
+
+def _usuario_puede_ver_pago(user, pago):
+    """Delega el permiso al crédito asociado al pago."""
+    return bool(pago and _usuario_puede_ver_credito(user, pago.credito))
+
+def _aplicar_pago_a_cuota_si_corresponde(pago):
+    """
+    Sincroniza el pago manual con cronograma/cuota para mantener coherencia
+    con el flujo de cobro en agenda.
+    """
+    cuota = pago.cuota
+    if not cuota and pago.numero_cuota:
+        cuota = CronogramaPago.objects.filter(
+            credito=pago.credito,
+            numero_cuota=pago.numero_cuota
+        ).first()
+        if cuota and not pago.cuota_id:
+            pago.cuota = cuota
+            pago.save(update_fields=['cuota'])
+
+    if not cuota:
+        return
+
+    monto_decimal = Decimal(str(pago.monto))
+    cuota.monto_pagado = (cuota.monto_pagado or Decimal('0')) + monto_decimal
+
+    if cuota.monto_pagado >= cuota.monto_cuota:
+        cuota.monto_pagado = cuota.monto_cuota
+        cuota.estado = 'PAGADO'
+        cuota.fecha_pago = pago.fecha_pago.date()
+    else:
+        cuota.estado = 'PARCIAL'
+
+    cuota.save(update_fields=['monto_pagado', 'estado', 'fecha_pago'])
 
 def login_view(request):
     if request.user.is_authenticated:
@@ -66,6 +129,11 @@ def logout_view(request):
 
 @login_required
 def dashboard(request):
+    if not _usuario_admin_operativo(request.user):
+        cobrador = _usuario_cobrador_activo(request.user)
+        if cobrador:
+            return redirect('agenda_cobrador_especifico', cobrador_id=cobrador.id)
+        return _forbidden_operacion(request)
     hoy = timezone.now().date()
     # Obtener estadísticas
     total_clientes = Cliente.objects.filter(activo=True).count()
@@ -140,6 +208,8 @@ def dashboard(request):
 
 @login_required
 def clientes(request):
+    if not _usuario_admin_operativo(request.user):
+        return _forbidden_operacion(request)
     from django.core.paginator import Paginator
     from django.db.models import Q
     
@@ -185,6 +255,8 @@ def clientes(request):
 
 @login_required
 def creditos(request):
+    if not _usuario_admin_operativo(request.user):
+        return _forbidden_operacion(request)
     from django.core.paginator import Paginator
     from django.db.models import Q
     
@@ -269,6 +341,8 @@ def creditos(request):
 
 @login_required
 def pagos(request):
+    if not _usuario_admin_operativo(request.user):
+        return _forbidden_operacion(request)
     from django.db.models import Sum
     from datetime import date, datetime, timedelta
     from django.utils import timezone
@@ -326,6 +400,8 @@ def pagos(request):
 # CRUD Clientes
 @login_required
 def nuevo_cliente(request):
+    if not _usuario_admin_operativo(request.user):
+        return _forbidden_operacion(request)
     if request.method == 'POST':
         form = ClienteForm(request.POST, request.FILES)
         if form.is_valid():
@@ -343,6 +419,8 @@ def nuevo_cliente(request):
 
 @login_required
 def editar_cliente(request, cliente_id):
+    if not _usuario_admin_operativo(request.user):
+        return _forbidden_operacion(request)
     cliente = get_object_or_404(Cliente, id=cliente_id)
     if request.method == 'POST':
         form = ClienteForm(request.POST, request.FILES, instance=cliente)
@@ -361,6 +439,8 @@ def editar_cliente(request, cliente_id):
 
 @login_required
 def eliminar_cliente(request, cliente_id):
+    if not _usuario_admin_operativo(request.user):
+        return _forbidden_operacion(request)
     cliente = get_object_or_404(Cliente, id=cliente_id)
     if request.method == 'POST':
         cliente.activo = False
@@ -372,6 +452,8 @@ def eliminar_cliente(request, cliente_id):
 @login_required
 def reactivar_cliente(request, cliente_id):
     """Reactivar un cliente que estaba inactivo."""
+    if not _usuario_admin_operativo(request.user):
+        return _forbidden_operacion(request)
     cliente = get_object_or_404(Cliente, id=cliente_id)
     if request.method == 'POST':
         cliente.activo = True
@@ -384,6 +466,8 @@ def reactivar_cliente(request, cliente_id):
 # CRUD Créditos
 @login_required
 def nuevo_credito(request):
+    if not _usuario_admin_operativo(request.user):
+        return _forbidden_operacion(request)
     cliente_prellenado = None
     if request.method == 'POST':
         form = CreditoForm(request.POST)
@@ -439,6 +523,8 @@ def nuevo_credito(request):
 
 @login_required
 def editar_credito(request, credito_id):
+    if not _usuario_admin_operativo(request.user):
+        return _forbidden_operacion(request)
     credito = get_object_or_404(Credito, id=credito_id)
     if request.method == 'POST':
         form = CreditoForm(request.POST, instance=credito)
@@ -453,6 +539,8 @@ def editar_credito(request, credito_id):
 # CRUD Pagos
 @login_required
 def nuevo_pago(request):
+    if not _usuario_admin_operativo(request.user):
+        return _forbidden_operacion(request)
     if request.method == 'POST':
         form = PagoForm(request.POST)
         
@@ -473,6 +561,7 @@ def nuevo_pago(request):
         if form.is_valid():
             credito = form.cleaned_data['credito']
             monto_pago = form.cleaned_data['monto']
+            numero_cuota = form.cleaned_data.get('numero_cuota')
             monto_total_credito = credito.monto_total or credito.monto
             total_ya_pagado = credito.total_pagado()
             if total_ya_pagado + monto_pago > monto_total_credito:
@@ -481,9 +570,25 @@ def nuevo_pago(request):
                     f'El monto (${monto_pago:,.0f}) supera el saldo pendiente del crédito. '
                     f'Saldo pendiente: ${monto_total_credito - total_ya_pagado:,.0f}.'
                 )
+            elif numero_cuota:
+                cuota_obj = CronogramaPago.objects.filter(
+                    credito=credito,
+                    numero_cuota=numero_cuota
+                ).first()
+                if not cuota_obj:
+                    form.add_error('numero_cuota', f'La cuota #{numero_cuota} no existe para este crédito.')
+                elif cuota_obj.estado == 'PAGADO':
+                    form.add_error('numero_cuota', f'La cuota #{numero_cuota} ya está pagada.')
+                elif monto_pago > cuota_obj.saldo_pendiente():
+                    form.add_error(
+                        'monto',
+                        f'El monto supera el saldo pendiente de la cuota #{numero_cuota}. '
+                        f'Saldo de la cuota: ${cuota_obj.saldo_pendiente():,.0f}.'
+                    )
             else:
                 pago = form.save()
                 credito = pago.credito
+                _aplicar_pago_a_cuota_si_corresponde(pago)
                 
                 # Actualizar estado del crédito si está completamente pagado
                 if credito.esta_al_dia():
@@ -589,8 +694,11 @@ def _cliente_y_codeudor_tienen_habeas_data(cliente):
 
 @login_required
 def aprobar_credito(request, credito_id):
-    """Acepta GET (enlace directo) o POST (formulario desde el modal)."""
-    if request.method not in ('GET', 'POST'):
+    """Aprobación de crédito vía POST."""
+    if not _usuario_admin_operativo(request.user):
+        return _forbidden_operacion(request)
+    if request.method != 'POST':
+        messages.error(request, 'Método no permitido para aprobar crédito.')
         return redirect('creditos')
     credito = get_object_or_404(Credito, id=credito_id)
     
@@ -621,6 +729,11 @@ def aprobar_credito(request, credito_id):
 
 @login_required
 def rechazar_credito(request, credito_id):
+    if not _usuario_admin_operativo(request.user):
+        return _forbidden_operacion(request)
+    if request.method != 'POST':
+        messages.error(request, 'Método no permitido para rechazar crédito.')
+        return redirect('creditos')
     credito = get_object_or_404(Credito, id=credito_id)
     
     if credito.estado != 'SOLICITADO':
@@ -647,6 +760,11 @@ def rechazar_credito(request, credito_id):
 
 @login_required
 def desembolsar_credito(request, credito_id):
+    if not _usuario_admin_operativo(request.user):
+        return _forbidden_operacion(request)
+    if request.method != 'POST':
+        messages.error(request, 'Método no permitido para desembolsar crédito.')
+        return redirect('creditos')
     credito = get_object_or_404(Credito, id=credito_id)
     
     if credito.estado != 'APROBADO':
@@ -732,6 +850,8 @@ def desembolsar_credito(request, credito_id):
 # Vistas para Codeudores
 @login_required
 def detalle_cliente(request, cliente_id):
+    if not _usuario_admin_operativo(request.user):
+        return _forbidden_operacion(request)
     cliente = get_object_or_404(Cliente, id=cliente_id)
     try:
         codeudor = cliente.codeudor
@@ -772,6 +892,8 @@ def _get_json_or_post(request, key, default=None):
 @login_required
 def solicitar_habeas_data(request):
     """Genera OTP, envía correo si hay email; retorna JSON con otp (para contingencia WhatsApp), celular, message."""
+    if not _usuario_admin_operativo(request.user):
+        return JsonResponse({'success': False, 'message': 'No tiene permisos para esta operación.'}, status=403)
     if request.method != 'POST':
         return JsonResponse({'success': False, 'message': 'Método no permitido'}, status=405)
     tipo = _get_json_or_post(request, 'tipo')
@@ -810,6 +932,8 @@ def solicitar_habeas_data(request):
 @login_required
 def validar_otp_habeas_data(request):
     """Valida OTP, genera PDF, guarda en Cliente/Codeudor, envía correo con PDF. Retorna JSON."""
+    if not _usuario_admin_operativo(request.user):
+        return JsonResponse({'success': False, 'message': 'No tiene permisos para esta operación.'}, status=403)
     if request.method != 'POST':
         return JsonResponse({'success': False, 'message': 'Método no permitido'}, status=405)
     tipo = _get_json_or_post(request, 'tipo')
@@ -829,6 +953,8 @@ def validar_otp_habeas_data(request):
 @login_required
 def regenerar_habeas_data(request):
     """Regenera el PDF de Habeas Data con el formato actual (código único, disclaimer). POST JSON: tipo, id."""
+    if not _usuario_admin_operativo(request.user):
+        return JsonResponse({'success': False, 'message': 'No tiene permisos para esta operación.'}, status=403)
     if request.method != 'POST':
         return JsonResponse({'success': False, 'message': 'Método no permitido'}, status=405)
     tipo = _get_json_or_post(request, 'tipo')
@@ -847,6 +973,8 @@ def regenerar_habeas_data(request):
 @login_required
 def descargar_habeas_data(request, tipo, objeto_id):
     """Sirve el PDF de autorización Habeas Data del cliente o codeudor. ?inline=1 para vista previa en modal."""
+    if not _usuario_admin_operativo(request.user):
+        return _forbidden_operacion(request)
     if tipo == 'cliente':
         obj = get_object_or_404(Cliente, id=objeto_id)
     else:
@@ -873,6 +1001,8 @@ def descargar_habeas_data(request, tipo, objeto_id):
 @login_required
 def solicitar_firma_pagare(request):
     """Genera OTP para cliente y codeudor del crédito. POST JSON: credito_id."""
+    if not _usuario_admin_operativo(request.user):
+        return _forbidden_operacion(request)
     if request.method != 'POST':
         return JsonResponse({'success': False, 'message': 'Método no permitido'}, status=405)
     try:
@@ -888,6 +1018,8 @@ def solicitar_firma_pagare(request):
 @login_required
 def validar_otp_pagare_view(request):
     """Valida OTP del cliente o codeudor. POST JSON: credito_id, tipo_firmante, otp."""
+    if not _usuario_admin_operativo(request.user):
+        return _forbidden_operacion(request)
     if request.method != 'POST':
         return JsonResponse({'success': False, 'message': 'Método no permitido'}, status=405)
     try:
@@ -914,6 +1046,8 @@ def _credito_tiene_pagare_completo(credito_id):
 @login_required
 def regenerar_pagare(request):
     """Regenera el PDF del pagaré con el formato actual (páginas independientes + anexo). POST JSON: credito_id."""
+    if not _usuario_admin_operativo(request.user):
+        return JsonResponse({'success': False, 'message': 'No tiene permisos para esta operación.'}, status=403)
     if request.method != 'POST':
         return JsonResponse({'success': False, 'message': 'Método no permitido'}, status=405)
     try:
@@ -930,6 +1064,8 @@ def regenerar_pagare(request):
 def descargar_pagare(request, credito_id):
     """Sirve el PDF del pagaré del crédito. ?inline=1 para vista previa en modal."""
     credito = get_object_or_404(Credito, id=credito_id)
+    if not _usuario_puede_ver_credito(request.user, credito):
+        return _forbidden_operacion(request)
     if not credito.documento_pagare:
         return HttpResponse('No hay documento de pagaré para este crédito.', status=404)
     try:
@@ -951,6 +1087,8 @@ def descargar_pagare(request, credito_id):
 @login_required
 def solicitar_firma_renovacion(request):
     """Genera OTP para documento de renovación. POST JSON: credito_id."""
+    if not _usuario_admin_operativo(request.user):
+        return _forbidden_operacion(request)
     if request.method != 'POST':
         return JsonResponse({'success': False, 'message': 'Método no permitido'}, status=405)
     try:
@@ -966,6 +1104,8 @@ def solicitar_firma_renovacion(request):
 @login_required
 def validar_otp_renovacion_view(request):
     """Valida OTP de renovación. POST JSON: credito_id, otp."""
+    if not _usuario_admin_operativo(request.user):
+        return _forbidden_operacion(request)
     if request.method != 'POST':
         return JsonResponse({'success': False, 'message': 'Método no permitido'}, status=405)
     try:
@@ -985,6 +1125,8 @@ def validar_otp_renovacion_view(request):
 def descargar_renovacion(request, credito_id):
     """Sirve el PDF de renovación del crédito. ?inline=1 para vista previa."""
     credito = get_object_or_404(Credito, id=credito_id)
+    if not _usuario_puede_ver_credito(request.user, credito):
+        return _forbidden_operacion(request)
     if not credito.documento_renovacion:
         return HttpResponse('No hay documento de renovación para este crédito.', status=404)
     try:
@@ -1006,6 +1148,8 @@ def descargar_renovacion(request, credito_id):
 @login_required
 def solicitar_firma_retanqueo(request):
     """Genera OTP para documento de retanqueo. POST JSON: credito_id."""
+    if not _usuario_admin_operativo(request.user):
+        return _forbidden_operacion(request)
     if request.method != 'POST':
         return JsonResponse({'success': False, 'message': 'Método no permitido'}, status=405)
     try:
@@ -1024,6 +1168,8 @@ def solicitar_firma_retanqueo(request):
 @login_required
 def validar_otp_retanqueo_view(request):
     """Valida OTP del documento de retanqueo. POST JSON: credito_id, otp."""
+    if not _usuario_admin_operativo(request.user):
+        return _forbidden_operacion(request)
     if request.method != 'POST':
         return JsonResponse({'success': False, 'message': 'Método no permitido'}, status=405)
     try:
@@ -1046,6 +1192,8 @@ def validar_otp_retanqueo_view(request):
 def descargar_retanqueo(request, credito_id):
     """Sirve el PDF del documento de retanqueo del crédito. ?inline=1 para vista previa."""
     credito = get_object_or_404(Credito, id=credito_id)
+    if not _usuario_puede_ver_credito(request.user, credito):
+        return _forbidden_operacion(request)
     if not credito.documento_retanqueo:
         return HttpResponse('No hay documento de retanqueo para este crédito.', status=404)
     try:
@@ -1070,6 +1218,8 @@ def retanqueo_credito(request, credito_id):
     GET: formulario con saldo a liquidar y monto de la nueva solicitud.
     POST: ejecutar retanqueo y redirigir al nuevo crédito o a créditos.
     """
+    if not _usuario_admin_operativo(request.user):
+        return _forbidden_operacion(request)
     credito = get_object_or_404(Credito, id=credito_id)
     if not credito.puede_retanquear():
         messages.error(
@@ -1113,6 +1263,8 @@ def retanqueo_credito(request, credito_id):
 
 @login_required
 def nuevo_codeudor(request, cliente_id):
+    if not _usuario_admin_operativo(request.user):
+        return _forbidden_operacion(request)
     cliente = get_object_or_404(Cliente, id=cliente_id)
     
     # Verificar si ya tiene codeudor
@@ -1138,6 +1290,8 @@ def nuevo_codeudor(request, cliente_id):
 
 @login_required
 def editar_codeudor(request, codeudor_id):
+    if not _usuario_admin_operativo(request.user):
+        return _forbidden_operacion(request)
     codeudor = get_object_or_404(Codeudor, id=codeudor_id)
     
     if request.method == 'POST':
@@ -1153,6 +1307,8 @@ def editar_codeudor(request, codeudor_id):
 
 @login_required
 def eliminar_codeudor(request, codeudor_id):
+    if not _usuario_admin_operativo(request.user):
+        return _forbidden_operacion(request)
     codeudor = get_object_or_404(Codeudor, id=codeudor_id)
     cliente = codeudor.cliente
     
@@ -1167,6 +1323,8 @@ def eliminar_codeudor(request, codeudor_id):
 @login_required
 def buscar_cliente(request):
     """Vista AJAX para buscar cliente por cédula"""
+    if not _usuario_admin_operativo(request.user):
+        return JsonResponse({'success': False, 'error': 'No tiene permisos para esta operación.'}, status=403)
     cedula = request.GET.get('cedula', '').strip()
     
     if not cedula:
@@ -1207,6 +1365,8 @@ def buscar_cliente(request):
 def confirmacion_pago(request, pago_id):
     """Vista para mostrar confirmación de pago con opciones de descarga/envío"""
     pago = get_object_or_404(Pago, id=pago_id)
+    if not _usuario_puede_ver_pago(request.user, pago):
+        return _forbidden_operacion(request)
     credito = pago.credito
     cliente = credito.cliente
     
@@ -1280,6 +1440,8 @@ def confirmacion_pago(request, pago_id):
 @login_required
 def buscar_cliente_credito(request):
     """Vista AJAX para buscar cliente por cédula en el formulario de crédito"""
+    if not _usuario_admin_operativo(request.user):
+        return JsonResponse({'success': False, 'error': 'No tiene permisos para esta operación.'}, status=403)
     cedula = request.GET.get('cedula', '').strip()
     
     if not cedula:
@@ -1322,6 +1484,8 @@ def obtener_datos_credito(request, credito_id):
     """Vista AJAX para obtener datos completos del crédito"""
     try:
         credito = get_object_or_404(Credito, id=credito_id)
+        if not _usuario_puede_ver_credito(request.user, credito):
+            return JsonResponse({'success': False, 'error': 'No tiene permisos para ver este crédito.'}, status=403)
         
         # Calcular fechas del cronograma (simulado)
         fechas_cronograma = []
@@ -1388,6 +1552,8 @@ def obtener_datos_credito(request, credito_id):
 def obtener_pagos_credito(request, credito_id):
     """Devuelve los abonos (pagos) del crédito para mostrar en detalle del crédito."""
     credito = get_object_or_404(Credito, id=credito_id)
+    if not _usuario_puede_ver_credito(request.user, credito):
+        return JsonResponse({'success': False, 'error': 'No tiene permisos para ver este crédito.'}, status=403)
     pagos = credito.pago_set.order_by('-fecha_pago')
     lista = []
     for p in pagos:
@@ -1575,6 +1741,8 @@ def _generar_pdf_resumen_cronograma_bytes(credito):
 def generar_pdf_cronograma(request, credito_id):
     """Genera y descarga el PDF resumen + cronograma del crédito."""
     credito = get_object_or_404(Credito, id=credito_id)
+    if not _usuario_puede_ver_credito(request.user, credito):
+        return _forbidden_operacion(request)
     try:
         buffer = _generar_pdf_resumen_cronograma_bytes(credito)
     except Exception:
@@ -1588,6 +1756,8 @@ def generar_pdf_cronograma(request, credito_id):
 def resumen_credito_json(request, credito_id):
     """Devuelve JSON con resumen del crédito y cronograma para el modal tras aprobar."""
     credito = get_object_or_404(Credito, id=credito_id)
+    if not _usuario_puede_ver_credito(request.user, credito):
+        return JsonResponse({'success': False, 'message': 'No tiene permisos para ver este crédito.'}, status=403)
     if credito.estado != 'APROBADO' and credito.estado != 'DESEMBOLSADO':
         return JsonResponse({'success': False, 'message': 'Crédito no disponible'}, status=400)
     if not credito.cronograma.exists():
@@ -1631,6 +1801,8 @@ def detalle_pago(request, pago_id):
     """Vista AJAX para obtener detalles de un pago"""
     try:
         pago = get_object_or_404(Pago, id=pago_id)
+        if not _usuario_puede_ver_pago(request.user, pago):
+            return JsonResponse({'success': False, 'error': 'No tiene permisos para ver este pago.'}, status=403)
         
         return JsonResponse({
             'success': True,
@@ -1849,6 +2021,8 @@ def _generar_recibo_pdf_bytes(pago):
 def generar_recibo_pdf(request, pago_id):
     """Genera y descarga PDF del recibo de pago."""
     pago = get_object_or_404(Pago, id=pago_id)
+    if not _usuario_puede_ver_pago(request.user, pago):
+        return _forbidden_operacion(request)
     try:
         buffer = _generar_recibo_pdf_bytes(pago)
     except Exception:
@@ -1862,6 +2036,8 @@ def generar_recibo_pdf(request, pago_id):
 @login_required
 def buscar_creditos_cliente(request):
     """Vista AJAX para buscar créditos de un cliente por cédula. Solo devuelve créditos con saldo pendiente > 0."""
+    if not _usuario_admin_operativo(request.user):
+        return JsonResponse({'success': False, 'error': 'No tiene permisos para esta operación.'}, status=403)
     cedula = request.GET.get('cedula', '').strip()
     
     if not cedula:
@@ -1951,6 +2127,8 @@ def buscar_creditos_cliente(request):
 @login_required
 def cobradores(request):
     """Lista principal de cobradores"""
+    if not _usuario_admin_operativo(request.user):
+        return _forbidden_operacion(request)
     cobradores = Cobrador.objects.all().order_by('nombres', 'apellidos')
     
     # Estadísticas básicas
@@ -1969,6 +2147,8 @@ def cobradores(request):
 @login_required
 def nuevo_cobrador(request):
     """Crear nuevo cobrador"""
+    if not _usuario_admin_operativo(request.user):
+        return _forbidden_operacion(request)
     from .forms import CobradorForm
     
     if request.method == 'POST':
@@ -1989,6 +2169,8 @@ def nuevo_cobrador(request):
 @login_required
 def detalle_cobrador(request, cobrador_id):
     """Ver detalle completo de un cobrador"""
+    if not _usuario_admin_operativo(request.user):
+        return _forbidden_operacion(request)
     cobrador = get_object_or_404(Cobrador, id=cobrador_id)
     
     # Estadísticas del cobrador
@@ -2012,6 +2194,8 @@ def detalle_cobrador(request, cobrador_id):
 @login_required
 def editar_cobrador(request, cobrador_id):
     """Editar un cobrador existente"""
+    if not _usuario_admin_operativo(request.user):
+        return _forbidden_operacion(request)
     from .forms import CobradorForm
     
     cobrador = get_object_or_404(Cobrador, id=cobrador_id)
@@ -2038,6 +2222,8 @@ def editar_cobrador(request, cobrador_id):
 @login_required
 def rutas(request):
     """Lista principal de rutas"""
+    if not _usuario_admin_operativo(request.user):
+        return _forbidden_operacion(request)
     rutas = Ruta.objects.all().order_by('nombre')
     
     # Estadísticas básicas
@@ -2056,6 +2242,8 @@ def rutas(request):
 @login_required
 def nueva_ruta(request):
     """Crear nueva ruta"""
+    if not _usuario_admin_operativo(request.user):
+        return _forbidden_operacion(request)
     from .forms import RutaForm
     
     if request.method == 'POST':
@@ -2076,6 +2264,8 @@ def nueva_ruta(request):
 @login_required
 def detalle_ruta(request, ruta_id):
     """Ver detalle completo de una ruta"""
+    if not _usuario_admin_operativo(request.user):
+        return _forbidden_operacion(request)
     ruta = get_object_or_404(Ruta, id=ruta_id)
     
     # Estadísticas de la ruta
@@ -2096,6 +2286,8 @@ def detalle_ruta(request, ruta_id):
 @login_required
 def editar_ruta(request, ruta_id):
     """Editar una ruta existente"""
+    if not _usuario_admin_operativo(request.user):
+        return _forbidden_operacion(request)
     from .forms import RutaForm
     
     ruta = get_object_or_404(Ruta, id=ruta_id)
@@ -2122,6 +2314,8 @@ def editar_ruta(request, ruta_id):
 @login_required
 def gestion_diaria_cobros(request):
     """Dashboard de Control de Cobranza Diaria - Vista Administrador"""
+    if not _usuario_admin_operativo(request.user):
+        return _forbidden_operacion(request)
     import logging
     logger = logging.getLogger(__name__)
     from datetime import date, timedelta
@@ -2344,6 +2538,8 @@ def gestion_diaria_cobros(request):
 @login_required
 def gestion_cartera(request):
     """Vista principal de gestión de cartera - Calcula datos reales"""
+    if not _usuario_admin_operativo(request.user):
+        return _forbidden_operacion(request)
     from datetime import date, timedelta
     from django.db.models import Sum, Count, Avg
     from decimal import Decimal
@@ -2432,6 +2628,8 @@ def gestion_cartera(request):
 @login_required
 def resumen_dinero(request):
     """Resumen del dinero: desembolsado, cobrado, saldo en cartera. Ecuación de conciliación."""
+    if not _usuario_admin_operativo(request.user):
+        return _forbidden_operacion(request)
     from decimal import Decimal
     from django.db.models import Sum
 
@@ -2475,6 +2673,8 @@ def resumen_dinero(request):
 @login_required
 def cartera_vencida(request):
     """Vista de cartera vencida con filtros"""
+    if not _usuario_admin_operativo(request.user):
+        return _forbidden_operacion(request)
     from django.db.models import Q
     from django.core.paginator import Paginator
     
@@ -2546,6 +2746,8 @@ def cartera_vencida(request):
 @login_required
 def clientes_en_mora(request):
     """Listado de clientes que tienen al menos un crédito en mora (agrupado por cliente)."""
+    if not _usuario_admin_operativo(request.user):
+        return _forbidden_operacion(request)
     from collections import defaultdict
     from decimal import Decimal
 
@@ -2611,6 +2813,8 @@ def clientes_en_mora(request):
 @login_required
 def lista_usuarios(request):
     """Lista todos los usuarios del sistema"""
+    if not _usuario_admin_operativo(request.user):
+        return _forbidden_operacion(request)
     from django.contrib.auth.models import User
     from django.core.paginator import Paginator
     
@@ -2634,6 +2838,8 @@ def lista_usuarios(request):
 @login_required
 def nuevo_usuario(request):
     """Crear nuevo usuario"""
+    if not _usuario_admin_operativo(request.user):
+        return _forbidden_operacion(request)
     from django.contrib.auth.models import User
     from django.contrib.auth.forms import UserCreationForm
     from django import forms
@@ -2690,6 +2896,8 @@ def nuevo_usuario(request):
 @login_required
 def editar_usuario(request, user_id):
     """Editar usuario existente"""
+    if not _usuario_admin_operativo(request.user):
+        return _forbidden_operacion(request)
     from django.contrib.auth.models import User
     from django import forms
     
@@ -2739,6 +2947,8 @@ def editar_usuario(request, user_id):
 @login_required
 def eliminar_usuario(request, user_id):
     """Eliminar usuario"""
+    if not _usuario_admin_operativo(request.user):
+        return _forbidden_operacion(request)
     from django.contrib.auth.models import User
     
     usuario = get_object_or_404(User, id=user_id)
@@ -2761,6 +2971,8 @@ def eliminar_usuario(request, user_id):
 @login_required
 def cambiar_password_usuario(request, user_id):
     """Cambiar contraseña de usuario"""
+    if not _usuario_admin_operativo(request.user):
+        return _forbidden_operacion(request)
     from django.contrib.auth.models import User
     from django.contrib.auth.forms import SetPasswordForm
     
@@ -2783,6 +2995,8 @@ def cambiar_password_usuario(request, user_id):
 @login_required
 def actualizar_cartera(request):
     """Actualiza el estado de cartera de todos los créditos"""
+    if not _usuario_admin_operativo(request.user):
+        return _forbidden_operacion(request)
     if request.method == 'POST':
         # Actualizar todos los créditos activos
         creditos_activos = Credito.objects.filter(estado__in=['DESEMBOLSADO', 'VENCIDO'])
@@ -2803,6 +3017,8 @@ def actualizar_cartera(request):
 @login_required
 def exportar_cartera_excel(request):
     """Exporta la cartera vencida a un archivo Excel"""
+    if not _usuario_admin_operativo(request.user):
+        return _forbidden_operacion(request)
     from django.http import HttpResponse
     from django.db.models import Q
     import pandas as pd
@@ -2937,6 +3153,8 @@ def exportar_cartera_excel(request):
 @login_required
 def kpis_cobradores(request):
     """Vista detallada de KPIs por cobrador"""
+    if not _usuario_admin_operativo(request.user):
+        return _forbidden_operacion(request)
     from datetime import date, timedelta
     from django.db.models import Q, Sum, Count, Avg, Max, Min
     from .models import TareaCobro, CarteraAnalisis
@@ -3116,7 +3334,12 @@ def kpis_cobradores(request):
 @login_required
 def acceso_cobrador(request):
     """Vista de acceso optimizada para cobradores móviles"""
-    return render(request, 'tareas/acceso_cobrador.html')
+    if _usuario_admin_operativo(request.user):
+        return render(request, 'tareas/acceso_cobrador.html')
+    cobrador = _usuario_cobrador_activo(request.user)
+    if cobrador:
+        return redirect('agenda_cobrador_especifico', cobrador_id=cobrador.id)
+    return _forbidden_operacion(request)
 
 @login_required
 def agenda_cobrador(request, cobrador_id=None):
@@ -3124,20 +3347,26 @@ def agenda_cobrador(request, cobrador_id=None):
     from datetime import date, timedelta
     from django.db.models import Count, Sum
     from .models import TareaCobro
-    
-    # Si no se especifica cobrador, intentar detectar por usuario logueado
-    if not cobrador_id:
-        try:
-            cobrador = Cobrador.objects.get(usuario=request.user)
-            cobrador_id = cobrador.id
-        except Cobrador.DoesNotExist:
-            # Si el usuario no es cobrador, mostrar selector
+
+    es_admin = _usuario_admin_operativo(request.user)
+    cobrador_usuario = _usuario_cobrador_activo(request.user)
+
+    # Reglas de acceso:
+    # - Admin: puede ver selector o cualquier agenda.
+    # - Cobrador: solo su propia agenda, incluso si manipula cobrador_id por URL.
+    if es_admin:
+        if not cobrador_id:
             cobradores = Cobrador.objects.filter(activo=True)
             return render(request, 'tareas/selector_cobrador.html', {
                 'cobradores': cobradores
             })
-    else:
         cobrador = get_object_or_404(Cobrador, id=cobrador_id, activo=True)
+    else:
+        if not cobrador_usuario:
+            return _forbidden_operacion(request)
+        if cobrador_id and int(cobrador_id) != cobrador_usuario.id:
+            return _forbidden_operacion(request, 'No tiene permisos para ver la agenda de otro cobrador.')
+        cobrador = cobrador_usuario
     
     # Fecha a consultar (por defecto hoy)
     fecha_str = request.GET.get('fecha')
@@ -3213,10 +3442,6 @@ def procesar_cobro_completo(request, tarea_id):
         latitud = request.POST.get('latitud')
         longitud = request.POST.get('longitud')
         
-        # LOGS para depuración
-        print(f"[DEBUG] monto_recibido original: '{monto_cobrado}'")  # Valor crudo como string
-        print(f"[DEBUG] Todo el POST data: {dict(request.POST.items())}")  # Ver todos los datos enviados
-        
         if not monto_cobrado:
             return JsonResponse({'success': False, 'error': 'Debe especificar el monto cobrado'})
         
@@ -3247,13 +3472,10 @@ def procesar_cobro_completo(request, tarea_id):
                 if not monto_limpio.endswith(',') and len(monto_limpio.split(',')[-1]) >= 3:
                     monto_limpio = monto_limpio.replace(',', '')
         
-        print(f"[DEBUG] monto_limpio después de limpiar: '{monto_limpio}'")
-        
         # Validación directa con Decimal (más preciso)
         try:
             from decimal import Decimal, InvalidOperation
             monto_decimal = Decimal(monto_limpio)
-            print(f"[DEBUG] monto convertido directamente a Decimal: {monto_decimal}")
             
             if monto_decimal <= Decimal('0'):
                 return JsonResponse({'success': False, 'error': 'El monto debe ser mayor que cero'})
@@ -3272,8 +3494,7 @@ def procesar_cobro_completo(request, tarea_id):
                     'error': f'El monto ${monto_decimal} parece muy alto. Verifique el valor.'
                 })
                 
-        except (ValueError, InvalidOperation) as e:
-            print(f"[DEBUG] Error al convertir monto: {e}")
+        except (ValueError, InvalidOperation):
             return JsonResponse({'success': False, 'error': f'Monto inválido: "{monto_cobrado}". Use solo números y punto decimal.'})
         
         from decimal import Decimal
@@ -3289,8 +3510,6 @@ def procesar_cobro_completo(request, tarea_id):
                 'error': f'El monto (${monto_decimal:,.0f}) supera el saldo pendiente del crédito (${saldo_pend:,.0f}).'
             })
         
-        print(f"[DEBUG] Usando monto_decimal para crear pago: {monto_decimal}")
-        
         # 🎯 USAR EXACTAMENTE LA MISMA LÓGICA QUE nuevo_pago - CREAR PAGO
         pago = Pago.objects.create(
             credito=tarea.credito,
@@ -3299,8 +3518,6 @@ def procesar_cobro_completo(request, tarea_id):
             numero_cuota=tarea.cuota.numero_cuota,
             observaciones=f"📱 Cobro por {tarea.cobrador.nombre_completo}\n{observaciones}".strip()
         )
-        print(f"[DEBUG] Pago creado con monto: {pago.monto}")
-        
         credito = pago.credito
         
         # 🎯 ACTUALIZAR ESTADO DEL CRÉDITO - MISMA LÓGICA QUE nuevo_pago
@@ -3312,7 +3529,6 @@ def procesar_cobro_completo(request, tarea_id):
         tarea.estado = 'COBRADO'
         tarea.fecha_visita = timezone.now()
         tarea.monto_cobrado = monto_decimal  # Usar directamente el Decimal ya validado
-        print(f"[DEBUG] Tarea actualizada con monto_cobrado: {tarea.monto_cobrado}")
         tarea.observaciones = observaciones
         if latitud:
             tarea.latitud = float(latitud)
@@ -3380,7 +3596,6 @@ def procesar_cobro_completo(request, tarea_id):
         })
         
     except Exception as e:
-        print(f"ERROR EN PROCESAR_COBRO_COMPLETO: {str(e)}")
         return JsonResponse({
             'success': False,
             'error': f'Error: {str(e)}'
@@ -3474,11 +3689,9 @@ def actualizar_tarea(request, tarea_id):
                 lng = float(longitud) if longitud else None
                 
                 # 🎆 MAGIA: Marcar tarea Y crear pago automáticamente
-                print(f"[DEBUG][actualizar_tarea] Enviando monto_decimal: {monto_decimal}")
                 pago_creado = tarea.marcar_como_cobrado(monto_decimal, observaciones, lat, lng)
                 
-            except (ValueError, InvalidOperation) as e:
-                print(f"[DEBUG][actualizar_tarea] Error al convertir monto: {e}")
+            except (ValueError, InvalidOperation):
                 return JsonResponse({'success': False, 'error': f'Monto inválido: "{monto_cobrado}". Use solo números y punto decimal.'})
         else:
             fecha_reprog = None
@@ -3540,6 +3753,8 @@ def actualizar_tarea(request, tarea_id):
 @login_required
 def panel_supervisor(request):
     """Panel de supervisor para ver progreso de todos los cobradores"""
+    if not _usuario_admin_operativo(request.user):
+        return _forbidden_operacion(request)
     from datetime import date, timedelta
     from django.db.models import Count, Sum, Avg, Q
     from .models import TareaCobro
@@ -3660,6 +3875,8 @@ def panel_supervisor(request):
 @login_required
 def generar_tareas_diarias(request):
     """Vista para generar tareas diarias manualmente"""
+    if not _usuario_admin_operativo(request.user):
+        return _forbidden_operacion(request)
     if request.method == 'POST':
         fecha_str = request.POST.get('fecha')
         try:
@@ -3686,6 +3903,8 @@ def generar_tareas_diarias(request):
 @login_required
 def cierre_cobro_diario(request):
     """Lista cobradores activos y para la fecha elegida: lo que debían entregar y estado de cierre."""
+    if not _usuario_admin_operativo(request.user):
+        return _forbidden_operacion(request)
     from datetime import date
     from django.db.models import Sum
 
@@ -3733,6 +3952,8 @@ def cierre_cobro_diario(request):
 @login_required
 def resumen_cierre_cobrador(request, cobrador_id):
     """Detalle de lo que cobró un cobrador en una fecha: listado de pagos y opción de cerrar con arqueo."""
+    if not _usuario_admin_operativo(request.user):
+        return _forbidden_operacion(request)
     from datetime import date
     from django.db.models import Sum
 
@@ -3767,6 +3988,8 @@ def resumen_cierre_cobrador(request, cobrador_id):
 @login_required
 def cerrar_cobro_cobrador(request):
     """POST: registra el cierre (monto recibido) y calcula diferencia (arqueo)."""
+    if not _usuario_admin_operativo(request.user):
+        return _forbidden_operacion(request)
     from datetime import date, datetime
     from decimal import Decimal
     from django.db.models import Sum
@@ -3825,6 +4048,8 @@ def cerrar_cobro_cobrador(request):
 @login_required
 def recaudacion_cobradores(request):
     """Vista para mostrar reportes de recaudación por cobrador"""
+    if not _usuario_admin_operativo(request.user):
+        return _forbidden_operacion(request)
     from datetime import date, timedelta
     from django.db.models import Q, Sum, Count, Avg
     
@@ -3927,6 +4152,8 @@ def recaudacion_cobradores(request):
 @login_required
 def exportar_recaudacion_excel(request):
     """Exporta el reporte de recaudación (mismo filtro que recaudacion_cobradores) a Excel."""
+    if not _usuario_admin_operativo(request.user):
+        return _forbidden_operacion(request)
     from datetime import date
     from datetime import datetime as dt
     from django.db.models import Q, Sum
@@ -4007,6 +4234,8 @@ def exportar_recaudacion_excel(request):
 @login_required
 def reporte_tareas_pendientes(request):
     """Lista tareas en estado PENDIENTE con fecha de asignación ya pasada (sin gestionar a tiempo)."""
+    if not _usuario_admin_operativo(request.user):
+        return _forbidden_operacion(request)
     from datetime import date, timedelta
     from django.db.models import Q, Count
 
@@ -4079,6 +4308,8 @@ def reporte_tareas_pendientes(request):
 @login_required
 def detalles_pagos_cobrador(request, cobrador_id):
     """Vista AJAX que devuelve detalles completos de pagos de un cobrador"""
+    if not _usuario_admin_operativo(request.user):
+        return JsonResponse({'success': False, 'error': 'No tiene permisos para esta operación.'}, status=403)
     try:
         cobrador = get_object_or_404(Cobrador, id=cobrador_id)
         
@@ -4154,12 +4385,6 @@ def detalles_pagos_cobrador(request, cobrador_id):
                 }
             })
         
-        # Debug: agregar información de depuración
-        print(f"Cobrador: {cobrador.nombre_completo}")
-        print(f"Fechas: {fecha_desde} a {fecha_hasta}")
-        print(f"Total pagos encontrados: {cantidad_pagos}")
-        print(f"Total recaudado: {total_recaudado}")
-        
         return JsonResponse({
             'success': True,
             'cobrador': {
@@ -4181,10 +4406,6 @@ def detalles_pagos_cobrador(request, cobrador_id):
         })
         
     except Exception as e:
-        print(f"Error en detalles_pagos_cobrador: {str(e)}")
-        import traceback
-        traceback.print_exc()
-        
         return JsonResponse({
             'success': False,
             'error': f'Error al cargar los datos: {str(e)}'

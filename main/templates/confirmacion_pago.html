@@ -173,8 +173,8 @@
             <div class="col-md-4 mb-3">
                 <button class="btn btn-warning btn-lg w-100" onclick="verDetallesCompletos()">
                     <i class="fas fa-eye fa-2x mb-2"></i><br>
-                    <strong>Ver Detalles</strong><br>
-                    <small>Información completa</small>
+                    <strong>Ir a pagos</strong><br>
+                    <small>Ver historial completo</small>
                 </button>
             </div>
         </div>
@@ -239,8 +239,7 @@ Puedes descargar tu recibo completo aquí: ` + urlRecibo + `
 
 // Función para ver detalles completos
 function verDetallesCompletos() {
-    // Llamar a la función existente para mostrar detalles del pago
-    verDetallesPago({{ pago.id }});
+    window.location.href = "{% url 'pagos' %}";
 }
 
 // Animaciones de entrada

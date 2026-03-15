@@ -767,6 +767,7 @@
                                 <i class="bi bi-house-door me-2"></i>Inicio
                             </a>
                         </li>
+                        {% if user.is_staff or user.is_superuser %}
                         <li class="nav-item">
                             <a class="nav-link {% if 'cliente' in request.resolver_match.url_name %}active{% endif %}" href="{% url 'clientes' %}">
                                 <i class="bi bi-people me-2"></i>Clientes
@@ -782,11 +783,13 @@
                                 <i class="bi bi-currency-dollar me-2"></i>Pagos
                             </a>
                         </li>
+                        {% endif %}
                     </ul>
 
                     <!-- COBRANZA -->
                     <div class="sidebar-section-label">COBRANZA</div>
                     <ul class="nav flex-column mb-2">
+                        {% if user.is_staff or user.is_superuser %}
                         <li class="nav-item">
                             <a class="nav-link {% if request.resolver_match.url_name == 'gestion_diaria_cobros' %}active{% endif %}" href="{% url 'gestion_diaria_cobros' %}">
                                 <i class="bi bi-calendar-day me-2"></i>Gestión Diaria
@@ -797,11 +800,13 @@
                                 <i class="bi bi-clipboard-data me-2"></i>Panel supervisor
                             </a>
                         </li>
+                        {% endif %}
                         <li class="nav-item">
                             <a class="nav-link {% if 'tarea' in request.resolver_match.url_name or 'agenda' in request.resolver_match.url_name %}active{% endif %}" href="{% url 'agenda_cobrador' %}">
                                 <i class="bi bi-calendar-check me-2"></i>Agenda / Tareas
                             </a>
                         </li>
+                        {% if user.is_staff or user.is_superuser %}
                         <li class="nav-item">
                             <a class="nav-link {% if request.resolver_match.url_name == 'cobradores' or request.resolver_match.url_name == 'nuevo_cobrador' or request.resolver_match.url_name == 'detalle_cobrador' or request.resolver_match.url_name == 'editar_cobrador' or request.resolver_match.url_name == 'rutas' or request.resolver_match.url_name == 'nueva_ruta' or request.resolver_match.url_name == 'detalle_ruta' or request.resolver_match.url_name == 'editar_ruta' %}active{% endif %}" href="{% url 'cobradores' %}">
                                 <i class="bi bi-person-badge me-2"></i>Cobradores y rutas
@@ -822,8 +827,10 @@
                                 <i class="bi bi-cash-coin me-2"></i>Cierre de cobro diario
                             </a>
                         </li>
+                        {% endif %}
                     </ul>
 
+                    {% if user.is_staff or user.is_superuser %}
                     <!-- CARTERA Y REPORTES -->
                     <div class="sidebar-section-label">CARTERA</div>
                     <ul class="nav flex-column mb-2">
@@ -865,6 +872,7 @@
                         </li>
                         {% endif %}
                     </ul>
+                    {% endif %}
 
                     <hr class="my-3" style="border-color: rgba(255, 255, 255, 0.25);">
 

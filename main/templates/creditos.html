@@ -227,12 +227,13 @@
                                             <i class="fas fa-check me-1"></i>
                                             <span class="d-none d-lg-inline">Aprobar</span>
                                         </button>
-                                        <a href="{% url 'rechazar_credito' credito.id %}" 
-                                           class="btn btn-danger btn-sm flex-fill d-flex align-items-center justify-content-center"
-                                           onclick="return confirm('¿Rechazar crédito de {{ credito.cliente.nombre }}?')">
-                                            <i class="fas fa-times me-1"></i>
-                                            <span class="d-none d-lg-inline">Rechazar</span>
-                                        </a>
+                                        <form method="post" action="{% url 'rechazar_credito' credito.id %}" class="flex-fill" onsubmit="return confirm('¿Rechazar crédito de {{ credito.cliente.nombre }}?');">
+                                            {% csrf_token %}
+                                            <button type="submit" class="btn btn-danger btn-sm w-100 d-flex align-items-center justify-content-center">
+                                                <i class="fas fa-times me-1"></i>
+                                                <span class="d-none d-lg-inline">Rechazar</span>
+                                            </button>
+                                        </form>
                                     </div>
                                 {% elif credito.estado == 'APROBADO' %}
                                     {% if credito.credito_retanqueado_id %}
@@ -240,10 +241,12 @@
                                         {% if credito.tiene_documento_retanqueo_firmado %}
                                             <div class="d-flex flex-wrap gap-1">
                                                 <a href="{% url 'descargar_retanqueo' credito.id %}" target="_blank" class="btn btn-outline-secondary btn-sm" title="Ver/descargar doc. retanqueo"><i class="bi bi-file-pdf me-1"></i>Ver doc. retanqueo</a>
-                                                <a href="{% url 'desembolsar_credito' credito.id %}" class="btn btn-info btn-sm d-flex align-items-center justify-content-center"
-                                                   onclick="return confirm('¿Confirmar desembolso de ${{ credito.monto|floatformat:0 }} a {{ credito.cliente.nombre }}? (Crédito por retanqueo)')">
-                                                    <i class="fas fa-hand-holding-usd me-2"></i>Desembolsar
-                                                </a>
+                                                <form method="post" action="{% url 'desembolsar_credito' credito.id %}" onsubmit="return confirm('¿Confirmar desembolso de ${{ credito.monto|floatformat:0 }} a {{ credito.cliente.nombre }}? (Crédito por retanqueo)');">
+                                                    {% csrf_token %}
+                                                    <button type="submit" class="btn btn-info btn-sm d-flex align-items-center justify-content-center">
+                                                        <i class="fas fa-hand-holding-usd me-2"></i>Desembolsar
+                                                    </button>
+                                                </form>
                                             </div>
                                         {% else %}
                                             <button type="button" class="btn btn-warning btn-sm d-flex align-items-center justify-content-center" onclick="abrirModalFirmarDocRetanqueo({{ credito.id }})">
@@ -258,10 +261,12 @@
                                         {% if credito.tiene_documento_renovacion_firmado %}
                                             <div class="d-flex flex-wrap gap-1">
                                                 <a href="{% url 'descargar_renovacion' credito.id %}" target="_blank" class="btn btn-outline-secondary btn-sm" title="Ver/descargar doc. renovación"><i class="bi bi-file-pdf me-1"></i>Ver doc. renovación</a>
-                                                <a href="{% url 'desembolsar_credito' credito.id %}" class="btn btn-info btn-sm d-flex align-items-center justify-content-center"
-                                                   onclick="return confirm('¿Confirmar desembolso de ${{ credito.monto|floatformat:0 }} a {{ credito.cliente.nombre }}?')">
-                                                    <i class="fas fa-hand-holding-usd me-2"></i>Desembolsar
-                                                </a>
+                                                <form method="post" action="{% url 'desembolsar_credito' credito.id %}" onsubmit="return confirm('¿Confirmar desembolso de ${{ credito.monto|floatformat:0 }} a {{ credito.cliente.nombre }}?');">
+                                                    {% csrf_token %}
+                                                    <button type="submit" class="btn btn-info btn-sm d-flex align-items-center justify-content-center">
+                                                        <i class="fas fa-hand-holding-usd me-2"></i>Desembolsar
+                                                    </button>
+                                                </form>
                                             </div>
                                         {% else %}
                                             <button type="button" class="btn btn-warning btn-sm d-flex align-items-center justify-content-center" onclick="abrirModalFirmarDocRenovacion({{ credito.id }})">
@@ -284,12 +289,13 @@
                                                     <span class="d-none d-lg-inline">Regenerar PDF</span>
                                                 </button>
                                             </div>
-                                            <a href="{% url 'desembolsar_credito' credito.id %}" 
-                                               class="btn btn-info btn-sm d-flex align-items-center justify-content-center"
-                                               onclick="return confirm('¿Confirmar desembolso de ${{ credito.monto|floatformat:0 }} a {{ credito.cliente.nombre }}?')">
-                                                <i class="fas fa-hand-holding-usd me-2"></i>
-                                                <span>Desembolsar</span>
-                                            </a>
+                                            <form method="post" action="{% url 'desembolsar_credito' credito.id %}" onsubmit="return confirm('¿Confirmar desembolso de ${{ credito.monto|floatformat:0 }} a {{ credito.cliente.nombre }}?');">
+                                                {% csrf_token %}
+                                                <button type="submit" class="btn btn-info btn-sm d-flex align-items-center justify-content-center">
+                                                    <i class="fas fa-hand-holding-usd me-2"></i>
+                                                    <span>Desembolsar</span>
+                                                </button>
+                                            </form>
                                         {% else %}
                                             <button type="button" class="btn btn-warning btn-sm d-flex align-items-center justify-content-center" onclick="abrirModalFirmarPagare({{ credito.id }})">
                                                 <i class="fas fa-file-signature me-2"></i>
@@ -815,7 +821,7 @@ function mostrarDetallesCredito(id, cliente, monto, estado, tasa, plazo, fecha, 
                                             <i class="fas fa-percentage me-2"></i>Tasa de Interés
                                         </h6>
                                         <p class="card-text mb-0">
-                                            <strong class="fs-5">${tasa}% anual</strong>
+                                            <strong class="fs-5">${tasa}% mensual</strong>
                                         </p>
                                     </div>
                                 </div>
@@ -1166,7 +1172,7 @@ function mostrarModalAprobacion(credito) {
                                         <div class="row">
                                             <div class="col-6">
                                                 <p><strong>Monto:</strong><br><span class="text-success fs-5">$${credito.monto.toLocaleString()}</span></p>
-                                                <p><strong>Tasa:</strong><br>${credito.tasa_interes}% anual</p>
+                                                <p><strong>Tasa:</strong><br>${credito.tasa_interes}% mensual</p>
                                                 <p><strong>Modalidad:</strong><br>${credito.tipo_plazo}</p>
                                             </div>
                                             <div class="col-6">

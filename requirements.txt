@@ -2,7 +2,8 @@ Django==5.2.4
 python-dotenv==1.0.1
 whitenoise==6.11.0
 gunicorn==21.2.0
-psycopg2-binary==2.9.7
+# Compatible con Python 3.12 en Windows (evita compilación con Visual C++ en local)
+psycopg2-binary==2.9.10
 dj-database-url==3.0.1
 Pillow==11.3.0
 reportlab==4.4.4
