@@ -130,6 +130,32 @@
             min-height: 42px;
             padding: 0.5rem 0.75rem;
         }
+
+        .agenda-date-controls {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 0.4rem;
+        }
+
+        .agenda-date-controls .btn {
+            width: 100%;
+            min-height: 42px;
+            border-radius: 8px !important;
+        }
+
+        .agenda-date-controls .btn-fecha-actual,
+        .agenda-date-controls .btn-hoy {
+            grid-column: 1 / -1;
+        }
+
+        #modalCobro .modal-footer {
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        #modalCobro .modal-footer .btn {
+            width: 100%;
+        }
     }
     
     /* Extra small devices */
@@ -302,18 +328,18 @@
             <div class="card border-primary">
                 <div class="card-body py-2">
                     <label class="form-label small text-muted mb-1 d-block">Ver agenda del día</label>
-                    <div class="btn-group btn-group-sm w-100 flex-wrap" role="group">
+                    <div class="agenda-date-controls">
                         <a href="?fecha={{ fecha_anterior }}" class="btn btn-outline-secondary">
                             <i class="fas fa-chevron-left"></i> Anterior
                         </a>
-                        <button type="button" class="btn btn-primary flex-grow-1" data-bs-toggle="modal" data-bs-target="#fechaModal" id="btnFechaActual">
+                        <button type="button" class="btn btn-primary btn-fecha-actual" data-bs-toggle="modal" data-bs-target="#fechaModal" id="btnFechaActual">
                             <i class="fas fa-calendar-alt me-1"></i> {{ fecha|date:"d/m/Y" }}
                         </button>
                         <a href="?fecha={{ fecha_siguiente }}" class="btn btn-outline-secondary">
                             Siguiente <i class="fas fa-chevron-right"></i>
                         </a>
-                        <a href="?fecha={% now 'Y-m-d' %}" class="btn btn-outline-success">Hoy</a>
-                    </div>
+                        <a href="?fecha={% now 'Y-m-d' %}" class="btn btn-outline-success btn-hoy">Hoy</a>
+                    </div> 
                 </div>
             </div>
         </div>
@@ -353,43 +379,37 @@
                 <div class="row g-2">
                     <div class="col-12 col-md-8">
                         <div class="client-info">
-                            <strong>{{ tarea.cuota.credito.cliente.nombre_completo }}</strong>
-                            {% if tarea.cuota.credito.cliente.celular %}
+                            <strong>{{ tarea.cliente_nombre }}</strong>
+                            {% if tarea.cliente_celular %}
                                 <br><small class="text-muted">
-                                    <i class="fas fa-phone"></i> {{ tarea.cuota.credito.cliente.celular }}
+                                    <i class="fas fa-phone"></i> {{ tarea.cliente_celular }}
                                 </small>
                             {% endif %}
-                            {% if tarea.cuota.credito.cliente.direccion %}
+                            {% if tarea.cliente_direccion %}
                                 <br><small class="text-muted">
-                                    <i class="fas fa-map-marker-alt"></i> {{ tarea.cuota.credito.cliente.direccion|truncatechars:30 }}
+                                    <i class="fas fa-map-marker-alt"></i> {{ tarea.cliente_direccion|truncatechars:30 }}
                                 </small>
                             {% endif %}
                         </div>
                         
                         <div class="mt-2">
                             <span class="amount-highlight">${{ tarea.monto_a_cobrar|floatformat:0 }}</span>
-                            <small class="text-muted"> - Cuota #{{ tarea.cuota.numero_cuota }}</small>
+                            <small class="text-muted cuota-info" data-cuota="{{ tarea.cuota_referencia }}"> - Cuotas #{{ tarea.cuotas_resumen }}</small>
                         </div>
-                        {% if tarea.total_cliente_hoy and tarea.total_cliente_hoy > 0 and tarea.estado != 'COBRADO' %}
-                            <div class="mt-1">
-                                <small class="text-primary fw-semibold">
-                                    <i class="fas fa-layer-group"></i>
-                                    Total cliente hoy: ${{ tarea.total_cliente_hoy|floatformat:0 }}
-                                    {% if tarea.cuotas_cliente_hoy and tarea.cuotas_cliente_hoy > 1 %}
-                                        ({{ tarea.cuotas_cliente_hoy }} cuotas)
-                                    {% endif %}
-                                </small>
-                            </div>
+                        {% if tarea.cuotas_count > 1 and tarea.estado != 'COBRADO' %}
+                        <div class="mt-1">
+                            <small class="text-primary fw-semibold">
+                                <i class="fas fa-layer-group"></i>
+                                Cobro agrupado: {{ tarea.cuotas_count }} cuotas del cliente
+                            </small>
+                        </div>
                         {% endif %}
                         
                         {% if tarea.estado == 'COBRADO' %}
                             <div class="mt-1">
                                 <small class="text-success">
                                     <i class="fas fa-check-circle"></i> 
-                                    Cobrado: ${{ tarea.monto_cobrado|floatformat:0 }}
-                                    {% if tarea.fecha_visita %}
-                                        {{ tarea.fecha_visita|time:"H:i" }}
-                                    {% endif %}
+                                    Cobro registrado para este cliente
                                 </small>
                             </div>
                         {% endif %}
@@ -406,7 +426,7 @@
                     <div class="col-12 col-md-4 text-md-end">
                         <div class="mb-2">
                             <span class="badge bg-{{ tarea.color_estado }}{% if tarea.color_estado == 'warning' %} text-dark{% endif %}">
-                                {{ tarea.get_estado_display }}
+                                {{ tarea.estado_display }}
                             </span>
                             {% if tarea.prioridad == 'ALTA' %}
                                 <span class="badge bg-danger">Alta</span>
@@ -418,10 +438,10 @@
                             {% endif %}
                         </div>
                         
-                        {% if puede_editar and tarea.estado != 'COBRADO' %}
+                        {% if puede_editar and tarea.puede_cobrar %}
                             <div class="btn-group-vertical btn-group-sm d-none d-md-block" role="group">
                                 <button class="btn btn-success btn-action" onclick="marcarCobrado({{ tarea.id }})">
-                                    <i class="fas fa-dollar-sign"></i> Cobrar
+                                    <i class="fas fa-dollar-sign"></i> Cobrar total
                                 </button>
                                 <button class="btn btn-warning btn-action" onclick="cambiarEstado({{ tarea.id }}, 'NO_ENCONTRADO')">
                                     <i class="fas fa-user-times"></i> No encontrado
@@ -434,7 +454,7 @@
                             <!-- Botones móviles: acción primaria + secundarias -->
                             <div class="mobile-actions d-md-none">
                                 <button class="btn btn-success btn-sm" onclick="marcarCobrado({{ tarea.id }})" title="Cobrar ahora">
-                                    <i class="fas fa-dollar-sign me-1"></i> Cobrar ahora
+                                    <i class="fas fa-dollar-sign me-1"></i> Cobrar total
                                 </button>
                                 <div class="mobile-actions-secondary">
                                     <button class="btn btn-warning btn-sm" onclick="cambiarEstado({{ tarea.id }}, 'NO_ENCONTRADO')" title="Marcar no encontrado">
@@ -443,8 +463,8 @@
                                     <button class="btn btn-info btn-sm" onclick="reprogramar({{ tarea.id }})" title="Reprogramar visita">
                                         <i class="fas fa-clock me-1"></i> Reprogramar
                                     </button>
-                                    {% if tarea.cuota.credito.cliente.celular %}
-                                    <a href="tel:{{ tarea.cuota.credito.cliente.celular }}"
+                                    {% if tarea.cliente_celular %}
+                                    <a href="tel:{{ tarea.cliente_celular }}"
                                        class="btn btn-outline-primary btn-sm btn-phone-mobile mobile-btn-phone"
                                        title="Llamar al cliente">
                                         <i class="fas fa-phone me-1"></i> Llamar
@@ -454,9 +474,9 @@
                             </div>
                         {% endif %}
                         
-                        {% if tarea.cuota.credito.cliente.celular %}
+                        {% if tarea.cliente_celular %}
                             <div class="mt-2 d-none d-md-block">
-                                <a href="tel:{{ tarea.cuota.credito.cliente.celular }}" 
+                                <a href="tel:{{ tarea.cliente_celular }}" 
                                    class="btn btn-outline-primary btn-sm btn-action btn-phone-mobile" title="Llamar al cliente">
                                     <i class="fas fa-phone"></i>
                                 </a>
@@ -521,7 +541,7 @@
 
 <!-- Modal de cobro COMPLETO -->
 <div class="modal fade" id="modalCobro" tabindex="-1">
-    <div class="modal-dialog modal-lg">
+    <div class="modal-dialog modal-lg modal-fullscreen-sm-down">
         <div class="modal-content">
             <div class="modal-header bg-success text-white">
                 <h5 class="modal-title">
@@ -711,7 +731,7 @@ function marcarCobrado(tareaId) {
         const taskCard = document.querySelector(`[data-tarea-id="${tareaId}"]`);
         
         if (!taskCard) {
-            alert('Error: No se encontró la tarjeta de tarea');
+            mostrarMensaje('error', 'Error: No se encontró la tarjeta de tarea');
             return;
         }
         
@@ -775,12 +795,12 @@ function marcarCobrado(tareaId) {
                 }
             }
         } else {
-            alert('Modal modalCobro no encontrado!');
+            mostrarMensaje('error', 'No se encontró la ventana de cobro.');
         }
         
     } catch (error) {
         console.error('❌ Error en marcarCobrado:', error);
-        alert('Error: ' + error.message);
+        mostrarMensaje('error', 'Error: ' + error.message);
     }
 }
 
@@ -929,13 +949,13 @@ function enviarFormularioCobroCompleto() {
             }
             window.location.href = url;
         } else {
-            alert('Error: ' + (data.error || 'Error desconocido'));
+            mostrarMensaje('error', data.error || 'Error desconocido');
             restaurarBotonCobro();
         }
     })
     .catch(error => {
         console.error('❌ Error:', error);
-        alert('Error de conexión. Por favor, intente nuevamente.');
+        mostrarMensaje('error', 'Error de conexión. Por favor, intente nuevamente.');
         restaurarBotonCobro();
     });
 }

@@ -10,7 +10,7 @@ from main.models import CronogramaPago
 
 
 class Command(BaseCommand):
-    help = 'Envía por correo recordatorios de cuotas que vencen hoy (o en la fecha indicada).'
+    help = 'Envía por correo recordatorios automáticos de pago (cuotas del día).'
 
     def add_arguments(self, parser):
         parser.add_argument(
@@ -38,10 +38,10 @@ class Command(BaseCommand):
         if dry_run:
             self.stdout.write('Modo dry-run: no se enviarán correos.')
 
-        # Cuotas que vencen ese día y están pendientes
+        # Cuotas que vencen ese día y están pendientes/parciales
         cuotas = CronogramaPago.objects.filter(
             fecha_vencimiento=dia,
-            estado='PENDIENTE',
+            estado__in=['PENDIENTE', 'PARCIAL'],
         ).select_related('credito', 'credito__cliente').order_by('credito_id', 'numero_cuota')
 
         # Agrupar por crédito (un correo por crédito con todas las cuotas del día)
@@ -64,18 +64,26 @@ class Command(BaseCommand):
             lineas = []
             total_dia = 0
             for cuota in lista_cuotas:
-                lineas.append(f"  • Cuota #{cuota.numero_cuota}: ${cuota.monto_cuota:,.0f}")
-                total_dia += float(cuota.monto_cuota)
+                if cuota.estado == 'PARCIAL':
+                    valor = cuota.saldo_pendiente()
+                    lineas.append(f"  • Cuota #{cuota.numero_cuota} (saldo pendiente): ${valor:,.0f}")
+                else:
+                    valor = cuota.monto_cuota
+                    lineas.append(f"  • Cuota #{cuota.numero_cuota}: ${valor:,.0f}")
+                total_dia += float(valor)
             texto_cuotas = '\n'.join(lineas)
 
-            asunto = f'Recordatorio: cuota(s) del crédito #{credito.id} vencen el {dia.strftime("%d/%m/%Y")}'
+            asunto = f'Recordatorio de pago CREDIFLOW - Crédito #{credito.id} ({dia.strftime("%d/%m/%Y")})'
             cuerpo = (
-                f'Hola {cliente.nombre_completo},\n\n'
-                f'Le recordamos que tiene cuota(s) del crédito #{credito.id} con vencimiento el {dia.strftime("%d/%m/%Y")}:\n\n'
+                f'Estimado(a) {cliente.nombre_completo},\n\n'
+                f'Recuerde que hoy ({dia.strftime("%d/%m/%Y")}) corresponde el pago de su cuota del crédito con CREDIFLOW.\n\n'
+                f'Crédito: #{credito.id}\n'
+                f'Valor a pagar hoy: ${total_dia:,.0f}\n\n'
+                f'Detalle:\n'
                 f'{texto_cuotas}\n\n'
-                f'Total a pagar (cuotas de este día): ${total_dia:,.0f}\n\n'
-                f'Referencia: Crédito #{credito.id}.\n\n'
-                f'Atentamente,\nSistema de Créditos'
+                f'Su puntualidad es la mejor referencia para próximos créditos.\n\n'
+                f'Atentamente,\n'
+                f'Equipo CREDIFLOW'
             )
 
             if dry_run:

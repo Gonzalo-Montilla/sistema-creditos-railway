@@ -12,10 +12,15 @@
 <div class="page-header">
     <h1 class="page-title mb-0"><i class="bi bi-people me-2"></i>Clientes</h1>
     <div class="btn-group-actions">
+        {% if es_admin_operativo %}
+        <a href="{% url 'exportar_clientes_excel' %}?{% if ver_inactivos %}ver_inactivos=1&{% endif %}{% if cartera_estado and cartera_estado != 'todos' %}cartera_estado={{ cartera_estado }}&{% endif %}{% if q %}q={{ q|urlencode }}&{% endif %}" class="btn btn-outline-success">
+            <i class="bi bi-file-earmark-excel"></i> Exportar Excel
+        </a>
         {% if ver_inactivos %}
-            <a href="{% url 'clientes' %}?{% if q %}q={{ q|urlencode }}&{% endif %}per_page={{ per_page }}" class="btn btn-outline-success btn-sm">Ver activos</a>
+            <a href="{% url 'clientes' %}?{% if cartera_estado and cartera_estado != 'todos' %}cartera_estado={{ cartera_estado }}&{% endif %}{% if q %}q={{ q|urlencode }}&{% endif %}per_page={{ per_page }}" class="btn btn-outline-success btn-sm">Ver activos</a>
         {% else %}
-            <a href="{% url 'clientes' %}?ver_inactivos=1{% if q %}&q={{ q|urlencode }}{% endif %}&per_page={{ per_page }}" class="btn btn-outline-secondary btn-sm">Ver inactivos</a>
+            <a href="{% url 'clientes' %}?ver_inactivos=1{% if cartera_estado and cartera_estado != 'todos' %}&cartera_estado={{ cartera_estado }}{% endif %}{% if q %}&q={{ q|urlencode }}{% endif %}&per_page={{ per_page }}" class="btn btn-outline-secondary btn-sm">Ver desactivados</a>
+        {% endif %}
         {% endif %}
         <a href="{% url 'nuevo_cliente' %}" class="btn btn-primary">
             <i class="bi bi-plus-circle"></i> Nuevo cliente
@@ -29,12 +34,13 @@
             <div class="col">
                 <h5 class="mb-0">
                     <i class="bi bi-list"></i>
-                    {% if ver_inactivos %}Lista de Clientes Inactivos{% else %}Lista de Clientes Activos{% endif %}
+                    {% if ver_inactivos %}Lista de Clientes Desactivados{% else %}Lista de Clientes Activos{% endif %}
                 </h5>
             </div>
             <div class="col-auto">
                 <form method="get" action="{% url 'clientes' %}" class="d-flex flex-wrap gap-2 align-items-end" id="form-busqueda">
                     {% if ver_inactivos %}<input type="hidden" name="ver_inactivos" value="1">{% endif %}
+                    {% if cartera_estado and cartera_estado != 'todos' %}<input type="hidden" name="cartera_estado" value="{{ cartera_estado }}">{% endif %}
                     <input type="hidden" name="per_page" value="{{ per_page }}">
                     <div class="input-group">
                         <input type="text" name="q" class="form-control" placeholder="Cédula, nombre, apellido o barrio..." 
@@ -43,8 +49,8 @@
                             <i class="bi bi-search"></i> Buscar
                         </button>
                     </div>
-                    {% if q or ver_inactivos %}
-                    <a href="{% if ver_inactivos %}{% url 'clientes' %}?ver_inactivos=1&per_page={{ per_page }}{% else %}{% url 'clientes' %}?per_page={{ per_page }}{% endif %}" class="btn btn-outline-secondary">
+                    {% if q or ver_inactivos or cartera_estado != 'todos' %}
+                    <a href="{% if ver_inactivos %}{% url 'clientes' %}?ver_inactivos=1{% if cartera_estado and cartera_estado != 'todos' %}&cartera_estado={{ cartera_estado }}{% endif %}&per_page={{ per_page }}{% else %}{% url 'clientes' %}?{% if cartera_estado and cartera_estado != 'todos' %}cartera_estado={{ cartera_estado }}&{% endif %}per_page={{ per_page }}{% endif %}" class="btn btn-outline-secondary">
                         <i class="bi bi-x-circle"></i> Limpiar
                     </a>
                     {% endif %}
@@ -53,10 +59,24 @@
             </div>
         </div>
         <div class="row align-items-center g-2 mt-2 pt-2 border-top">
+            <div class="col-auto">
+                <form method="get" action="{% url 'clientes' %}" class="d-flex align-items-center gap-2">
+                    {% if ver_inactivos %}<input type="hidden" name="ver_inactivos" value="1">{% endif %}
+                    {% if q %}<input type="hidden" name="q" value="{{ q }}">{% endif %}
+                    <input type="hidden" name="per_page" value="{{ per_page }}">
+                    <label class="form-label mb-0 small text-muted">Estado cartera</label>
+                    <select name="cartera_estado" class="form-select form-select-sm" style="width:auto;" onchange="this.form.submit()">
+                        <option value="todos" {% if cartera_estado == 'todos' %}selected{% endif %}>Todos</option>
+                        <option value="con_credito_activo" {% if cartera_estado == 'con_credito_activo' %}selected{% endif %}>Con crédito activo</option>
+                        <option value="sin_credito_activo" {% if cartera_estado == 'sin_credito_activo' %}selected{% endif %}>Sin crédito activo</option>
+                    </select>
+                </form>
+            </div>
             <div class="col-auto ms-auto">
                 <form method="get" action="{% url 'clientes' %}" class="d-flex align-items-center gap-2">
                     {% if ver_inactivos %}<input type="hidden" name="ver_inactivos" value="1">{% endif %}
                     {% if q %}<input type="hidden" name="q" value="{{ q }}">{% endif %}
+                    {% if cartera_estado and cartera_estado != 'todos' %}<input type="hidden" name="cartera_estado" value="{{ cartera_estado }}">{% endif %}
                     <label class="form-label mb-0 small text-muted">Mostrar</label>
                     <select name="per_page" class="form-select form-select-sm" style="width:auto;" onchange="this.form.submit()">
                         <option value="10" {% if per_page == 10 %}selected{% endif %}>10</option>
@@ -138,6 +158,7 @@
                         <td>{{ cliente.fecha_registro|date:"d/m/Y" }}</td>
                         <td>
                             <div class="btn-group" role="group">
+                                {% if es_admin_operativo %}
                                 <a href="{% url 'detalle_cliente' cliente.id %}" class="btn btn-sm btn-outline-info" 
                                    title="Ver detalle completo">
                                     <i class="bi bi-eye"></i>
@@ -158,6 +179,9 @@
                                    title="Desactivar cliente">
                                     <i class="bi bi-trash"></i>
                                 </a>
+                                {% endif %}
+                                {% else %}
+                                <span class="text-muted small">Solo creación</span>
                                 {% endif %}
                             </div>
                         </td>

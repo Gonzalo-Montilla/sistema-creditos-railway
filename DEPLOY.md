@@ -1,6 +1,6 @@
-# Despliegue del sistema (fuera de Railway)
+# Despliegue del sistema (VPS / PaaS)
 
-Este proyecto está preparado para desplegarse en **cualquier entorno** (VPS, otro PaaS, Docker, etc.). El archivo `railway.toml` solo se usa si desplegás en Railway.
+Este proyecto está preparado para desplegarse en **cualquier entorno** (VPS, PaaS, Docker, etc.).
 
 ## Variables de entorno recomendadas (producción)
 
@@ -28,7 +28,7 @@ Si tu plataforma no usa Procfile, ejecutá algo equivalente (migrate, collectsta
 
 ## Tareas programadas (cron)
 
-Para que los cobradores vean desde las 6:00 AM los clientes a recaudar hoy, hay que ejecutar la generación de tareas diarias. **No depende de Railway**; configuralo en tu propio entorno:
+Para que los cobradores vean desde las 6:00 AM los clientes a recaudar hoy, hay que ejecutar la generación de tareas diarias desde tu propio entorno:
 
 ### Opción 1: Cron del sistema (Linux / VPS)
 
@@ -60,6 +60,5 @@ todos los días a las 6:00 (o la hora que prefieras).
 
 ## Resumen
 
-- **Railway:** opcional; si no usás Railway, ignorá `railway.toml` y configurá según este documento.
 - **Base de datos:** definir `DATABASE_URL` en producción.
 - **Cron:** configurar en tu servidor o PaaS la ejecución de `generar_tareas_diarias` a las 6:00 para la programación diaria de cobranza.

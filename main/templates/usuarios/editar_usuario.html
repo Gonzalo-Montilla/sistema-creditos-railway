@@ -71,17 +71,29 @@
                                 </small>
                             </div>
                         </div>
-                        
                         <div class="col-md-6 mb-3">
-                            <div class="form-check">
-                                {{ form.is_staff }}
-                                <label class="form-check-label" for="{{ form.is_staff.id_for_label }}">
-                                    {{ form.is_staff.label }}
-                                </label>
-                                <small class="form-text text-muted d-block">
-                                    Otorga permisos de administrador
-                                </small>
-                            </div>
+                            <label for="{{ form.rol.id_for_label }}" class="form-label">
+                                {{ form.rol.label }} <span class="text-danger">*</span>
+                            </label>
+                            {{ form.rol }}
+                            {% if form.rol.errors %}
+                                <div class="invalid-feedback d-block">{{ form.rol.errors.0 }}</div>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="{{ form.cobrador.id_for_label }}" class="form-label">
+                                {{ form.cobrador.label }}
+                            </label>
+                            {{ form.cobrador }}
+                            {% if form.cobrador.errors %}
+                                <div class="invalid-feedback d-block">{{ form.cobrador.errors.0 }}</div>
+                            {% endif %}
+                            <small class="form-text text-muted d-block">
+                                Solo aplica cuando el rol es cobrador.
+                            </small>
                         </div>
                     </div>
                     

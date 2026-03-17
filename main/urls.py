@@ -12,6 +12,7 @@ urlpatterns = [
     
     # Clientes
     path('clientes/', views.clientes, name='clientes'),
+    path('exportar-clientes-excel/', views.exportar_clientes_excel, name='exportar_clientes_excel'),
     path('nuevo-cliente/', views.nuevo_cliente, name='nuevo_cliente'),
     path('editar-cliente/<int:cliente_id>/', views.editar_cliente, name='editar_cliente'),
     path('eliminar-cliente/<int:cliente_id>/', views.eliminar_cliente, name='eliminar_cliente'),
@@ -37,6 +38,7 @@ urlpatterns = [
     
     # Créditos
     path('creditos/', views.creditos, name='creditos'),
+    path('exportar-creditos-excel/', views.exportar_creditos_excel, name='exportar_creditos_excel'),
     path('nuevo-credito/', views.nuevo_credito, name='nuevo_credito'),
     path('editar-credito/<int:credito_id>/', views.editar_credito, name='editar_credito'),
     path('aprobar-credito/<int:credito_id>/', views.aprobar_credito, name='aprobar_credito'),
@@ -54,6 +56,7 @@ urlpatterns = [
     
     # Pagos
     path('pagos/', views.pagos, name='pagos'),
+    path('exportar-pagos-excel/', views.exportar_pagos_excel, name='exportar_pagos_excel'),
     path('nuevo-pago/', views.nuevo_pago, name='nuevo_pago'),
     path('detalle-pago/<int:pago_id>/', views.detalle_pago, name='detalle_pago'),
     path('generar-recibo-pdf/<int:pago_id>/', views.generar_recibo_pdf, name='generar_recibo_pdf'),

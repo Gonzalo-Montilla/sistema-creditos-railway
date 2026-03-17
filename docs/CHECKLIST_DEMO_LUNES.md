@@ -24,6 +24,23 @@ cd "C:\Proyectos\sistema-creditos"
 
 Debe mostrar rutas clave en verde y mensaje final de OK.
 
+## 2.1) Auditoria de integridad operativa (recomendada)
+
+En la misma terminal:
+
+```powershell
+cd "C:\Proyectos\sistema-creditos"
+python manage.py auditar_operacion
+```
+
+Si reporta hallazgos corregibles, ejecutar:
+
+```powershell
+python manage.py auditar_operacion --fix
+```
+
+Objetivo: validar coherencia entre pagos, cuotas y tareas antes de la presentacion.
+
 ## 3) Recorrido funcional recomendado para demo
 
 1. Login.

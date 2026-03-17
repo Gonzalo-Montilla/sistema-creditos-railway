@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <meta name="theme-color" content="#667eea">
     <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
     <meta name="apple-mobile-web-app-title" content="Sistema Créditos">
     <title>{% block title %}Sistema de Créditos{% endblock %}</title>
@@ -640,6 +641,48 @@
             border-width: 1px;
         }
 
+        /* Alertas globales de alta visibilidad (operación y bloqueos) */
+        .app-alert {
+            border-width: 2px !important;
+            box-shadow: 0 8px 20px rgba(15, 23, 42, 0.10);
+            padding: 0.85rem 1rem;
+            font-weight: 600;
+            font-size: 0.95rem;
+            display: flex;
+            align-items: flex-start;
+            gap: 0.6rem;
+        }
+        .app-alert .app-alert-icon {
+            font-size: 1.05rem;
+            margin-top: 0.1rem;
+            flex-shrink: 0;
+        }
+        .app-alert .app-alert-body {
+            flex: 1 1 auto;
+            min-width: 0;
+            line-height: 1.35;
+        }
+        .app-alert .app-alert-title {
+            display: block;
+            font-size: 0.78rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-bottom: 0.15rem;
+            opacity: 0.92;
+        }
+        .app-alert.alert-danger,
+        .app-alert.alert-warning {
+            border-left-width: 5px !important;
+        }
+        .app-alert.alert-danger {
+            animation: alertPulse 1.2s ease 1;
+        }
+        @keyframes alertPulse {
+            0% { box-shadow: 0 0 0 rgba(220, 38, 38, 0); }
+            50% { box-shadow: 0 0 0 4px rgba(220, 38, 38, 0.18); }
+            100% { box-shadow: 0 8px 20px rgba(15, 23, 42, 0.10); }
+        }
+
         .table {
             color: #1e293b;
             --bs-table-bg: transparent;
@@ -823,7 +866,7 @@
                                 <i class="bi bi-house-door me-2"></i>Inicio
                             </a>
                         </li>
-                        {% if user.is_staff or user.is_superuser %}
+                        {% if user.is_staff or user.is_superuser or user.cobrador %}
                         <li class="nav-item">
                             <a class="nav-link {% if 'cliente' in request.resolver_match.url_name %}active{% endif %}" href="{% url 'clientes' %}">
                                 <i class="bi bi-people me-2"></i>Clientes
@@ -834,6 +877,8 @@
                                 <i class="bi bi-credit-card me-2"></i>Créditos
                             </a>
                         </li>
+                        {% endif %}
+                        {% if user.is_staff or user.is_superuser %}
                         <li class="nav-item">
                             <a class="nav-link {% if 'pago' in request.resolver_match.url_name %}active{% endif %}" href="{% url 'pagos' %}">
                                 <i class="bi bi-currency-dollar me-2"></i>Pagos
@@ -972,18 +1017,27 @@
                     <!-- Messages -->
                     {% if messages %}
                         {% for message in messages %}
-                            <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+                            <div class="app-alert alert {% if message.tags == 'error' %}alert-danger{% elif message.tags %}alert-{{ message.tags }}{% else %}alert-info{% endif %} alert-dismissible fade show" role="alert">
                                 {% if message.tags == 'success' %}
-                                    <i class="bi bi-check-circle me-2"></i>
+                                    <i class="bi bi-check-circle-fill app-alert-icon"></i>
                                 {% elif message.tags == 'error' %}
-                                    <i class="bi bi-exclamation-circle me-2"></i>
+                                    <i class="bi bi-exclamation-octagon-fill app-alert-icon"></i>
                                 {% elif message.tags == 'warning' %}
-                                    <i class="bi bi-exclamation-triangle me-2"></i>
+                                    <i class="bi bi-exclamation-triangle-fill app-alert-icon"></i>
                                 {% else %}
-                                    <i class="bi bi-info-circle me-2"></i>
+                                    <i class="bi bi-info-circle-fill app-alert-icon"></i>
                                 {% endif %}
-                                {{ message }}
-                                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                                <div class="app-alert-body">
+                                    <span class="app-alert-title">
+                                        {% if message.tags == 'success' %}Operación exitosa
+                                        {% elif message.tags == 'error' %}Atención crítica
+                                        {% elif message.tags == 'warning' %}Alerta operativa
+                                        {% else %}Información importante
+                                        {% endif %}
+                                    </span>
+                                    {{ message }}
+                                </div>
+                                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Cerrar alerta"></button>
                             </div>
                         {% endfor %}
                     {% endif %}

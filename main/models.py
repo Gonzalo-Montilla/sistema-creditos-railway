@@ -448,6 +448,20 @@ class Credito(models.Model):
         
         # Generar descripción usando la función centralizada
         self.descripcion_pago = generar_descripcion_credito(resultado)
+
+    @property
+    def plazo_meses_real(self):
+        """Plazo real en meses, calculado desde cuotas y tipo de plazo."""
+        from .creditos_utils import calcular_plazo_en_meses
+        return float(calcular_plazo_en_meses(self.cantidad_cuotas, self.tipo_plazo))
+
+    @property
+    def plazo_meses_display(self):
+        """Representación amigable del plazo en meses para UI/reportes."""
+        valor = self.plazo_meses_real
+        if float(valor).is_integer():
+            return str(int(valor))
+        return f"{valor:.1f}".rstrip('0').rstrip('.')
     
     def obtener_fechas_pago(self):
         """Genera las fechas de pago basadas en la fecha de desembolso"""
@@ -708,7 +722,7 @@ class CronogramaPago(models.Model):
         return self.monto_cuota - self.monto_pagado
     
     def esta_vencida(self):
-        from datetime import date
+        from datetime import date, timedelta
         return self.fecha_vencimiento < date.today() and self.estado == 'PENDIENTE'
     
     def __str__(self):
@@ -762,7 +776,7 @@ class CarteraAnalisis(models.Model):
     @classmethod
     def generar_analisis_diario_seguro(cls):
         """Versión mejorada y segura del análisis de cartera con datos reales"""
-        from datetime import date
+        from datetime import date, timedelta
         from decimal import Decimal
         from django.db.models import Sum, Count, Avg
         from django.utils import timezone as tz
@@ -1233,10 +1247,12 @@ class TareaCobro(models.Model):
         - Incluir TODAS las cuotas que vencen exactamente en 'fecha'.
         - Incluir cuotas que fueron reprogramadas para 'fecha'.
         - Arrastrar tareas no cobradas del día anterior (pendiente/no encontrado/no estaba).
+        - Rescatar cuotas vencidas históricas (anteriores a 'fecha') que sigan pendientes/parciales
+          y no tengan tarea para la fecha objetivo.
         - Sin límite de cantidad por cobrador.
         - No arrastrar backlog de días anteriores (solo hoy), salvo reprogramadas.
         """
-        from datetime import date
+        from datetime import date, timedelta
         from django.db.models import Q, Max
         import logging
 
@@ -1397,6 +1413,43 @@ class TareaCobro(models.Model):
                         logger.error(
                             f'Error creando tarea (HOY) para {cuota.credito.cliente.nombre_completo}: {str(e)}'
                         )
+                    continue
+
+            # 4) Rescate de backlog histórico:
+            # cuotas vencidas antes de 'fecha' que siguen pendientes/parciales y no tienen tarea en 'fecha'.
+            cuotas_historicas = CronogramaPago.objects.filter(
+                Q(credito__cobrador=cobrador) &
+                Q(fecha_vencimiento__lt=fecha) &
+                Q(estado__in=['PENDIENTE', 'PARCIAL']) &
+                Q(credito__estado__in=['DESEMBOLSADO', 'VENCIDO'])
+            ).exclude(
+                id__in=cls.objects.filter(fecha_asignacion=fecha).values_list('cuota_id', flat=True)
+            ).select_related('credito__cliente').order_by(
+                'fecha_vencimiento', 'numero_cuota'
+            )
+
+            for cuota in cuotas_historicas:
+                dias_mora = (fecha - cuota.fecha_vencimiento).days
+                if dias_mora > 15:
+                    prioridad = 'ALTA'
+                elif dias_mora > 5:
+                    prioridad = 'MEDIA'
+                else:
+                    prioridad = 'BAJA'
+
+                try:
+                    cls.objects.create(
+                        cobrador=cobrador,
+                        cuota=cuota,
+                        fecha_asignacion=fecha,
+                        prioridad=prioridad,
+                        orden_visita=orden_visita,
+                        observaciones='Rescate automático de cuota vencida histórica.'
+                    )
+                    tareas_creadas += 1
+                    tareas_cobrador += 1
+                    orden_visita += 1
+                except Exception:
                     continue
 
             if verbose:

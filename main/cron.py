@@ -151,7 +151,3 @@ def daily_automation_task():
         'tareas_creadas': tareas_creadas,
         'sistema_ok': sistema_ok
     }
-
-
-# Alias por compatibilidad con código que usaba el nombre anterior
-railway_daily_task = daily_automation_task

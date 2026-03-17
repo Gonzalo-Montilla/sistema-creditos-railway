@@ -12,6 +12,9 @@
 <div class="page-header">
     <h1 class="page-title mb-0"><i class="bi bi-currency-dollar me-2"></i>Pagos</h1>
     <div class="btn-group-actions">
+        <button type="button" class="btn btn-outline-success" onclick="exportarPagosExcel()">
+            <i class="bi bi-file-earmark-excel"></i> Exportar Excel
+        </button>
         <a href="{% url 'nuevo_pago' %}" class="btn btn-primary"><i class="bi bi-plus-circle"></i> Registrar pago</a>
     </div>
 </div>
@@ -473,6 +476,17 @@ function compartirRecibo(pagoId, celular) {
             notificarPago('warning', 'No se pudo copiar automáticamente. Copie manualmente el mensaje del recibo.');
         });
     }
+}
+
+function exportarPagosExcel() {
+    const params = new URLSearchParams();
+    const fecha = (document.getElementById('fechaFilter')?.value || '').trim();
+    const q = (document.getElementById('searchInput')?.value || '').trim();
+    if (fecha) params.set('fecha', fecha);
+    if (q) params.set('q', q);
+    const baseUrl = '{% url "exportar_pagos_excel" %}';
+    const target = params.toString() ? `${baseUrl}?${params.toString()}` : baseUrl;
+    window.open(target, '_blank');
 }
 
 // Función para mostrar errores

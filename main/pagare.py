@@ -63,6 +63,16 @@ def solicitar_otp_pagare(credito_id):
 
     resultado = {'success': True, 'cliente': None, 'codeudor': None, 'message': ''}
     cliente = credito.cliente
+    try:
+        codeudor = credito.cliente.codeudor
+    except Exception:
+        codeudor = None
+
+    if codeudor and not (getattr(codeudor, 'email', None) or '').strip():
+        return {
+            'success': False,
+            'message': 'El codeudor no tiene correo registrado. Actualice el correo antes de solicitar firma de pagaré.'
+        }
 
     # Invalidar OTPs anteriores de este crédito
     PagareOTP.objects.filter(credito_id=credito_id).delete()
@@ -103,11 +113,6 @@ def solicitar_otp_pagare(credito_id):
     }
 
     # OTP Codeudor (si existe)
-    try:
-        codeudor = credito.cliente.codeudor
-    except Exception:
-        codeudor = None
-
     if codeudor:
         otp_cod = _generate_otp()
         PagareOTP.objects.create(

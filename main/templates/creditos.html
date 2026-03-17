@@ -12,6 +12,9 @@
 <div class="page-header">
     <h1 class="page-title mb-0"><i class="bi bi-credit-card me-2"></i>Créditos</h1>
     <div class="btn-group-actions">
+        <a href="{% url 'exportar_creditos_excel' %}?{% if q %}q={{ q|urlencode }}&{% endif %}{% if filtro_cobrador_id %}cobrador={{ filtro_cobrador_id }}&{% endif %}{% if filtro_fecha_desde %}fecha_desde={{ filtro_fecha_desde }}&{% endif %}{% if filtro_fecha_hasta %}fecha_hasta={{ filtro_fecha_hasta }}&{% endif %}" class="btn btn-outline-success">
+            <i class="bi bi-file-earmark-excel"></i> Exportar Excel
+        </a>
         <a href="{% url 'nuevo_credito' %}" class="btn btn-primary"><i class="bi bi-plus-circle"></i> Nuevo crédito</a>
     </div>
 </div>
@@ -169,7 +172,7 @@
                             <div class="small">
                                 <strong>{{ credito.cantidad_cuotas }}</strong> {{ credito.get_tipo_plazo_display|lower }}{% if credito.cantidad_cuotas > 1 %}s{% endif %}
                                 <br>
-                                <span class="text-muted">{{ credito.plazo_meses }} meses</span>
+                                <span class="text-muted">{{ credito.plazo_meses_display }} meses</span>
                                 <br>
                                 {% if credito.credito_retanqueado_id %}
                                     <span class="badge bg-info-subtle text-info-emphasis border border-info-subtle mt-1">Retanqueo</span>
@@ -214,7 +217,7 @@
                             <div class="d-flex flex-column gap-2">
                                 <!-- Botón Ver Detalles -->
                                 <button class="btn btn-outline-primary btn-sm d-flex align-items-center justify-content-start" 
-                                        onclick="mostrarDetallesCredito({{ credito.id }}, '{{ credito.cliente.nombre|escapejs }}', '{{ credito.monto|floatformat:0 }}', '{{ credito.get_estado_display }}', '{{ credito.tasa_interes }}', '{{ credito.plazo_meses }}', '{{ credito.fecha_solicitud|date:"d/m/Y" }}', '{% if credito.cobrador %}{{ credito.cobrador.nombre_completo|escapejs }}{% else %}Sin asignar{% endif %}')">
+                                        onclick="mostrarDetallesCredito({{ credito.id }}, '{{ credito.cliente.nombre|escapejs }}', '{{ credito.monto|floatformat:0 }}', '{{ credito.get_estado_display }}', '{{ credito.tasa_interes }}', '{{ credito.plazo_meses_display }}', '{{ credito.fecha_solicitud|date:"d/m/Y" }}', '{% if credito.cobrador %}{{ credito.cobrador.nombre_completo|escapejs }}{% else %}Sin asignar{% endif %}')">
                                     <i class="fas fa-eye me-2"></i>
                                     <span>Ver Detalles</span>
                                 </button>
@@ -222,6 +225,7 @@
                                 <!-- Botones según estado -->
                                 {% if credito.estado == 'SOLICITADO' %}
                                     <div class="d-flex gap-1">
+                                        {% if puede_aprobar_credito %}
                                         <button onclick="abrirModalAprobacion({{ credito.id }})" 
                                                 class="btn btn-success btn-sm flex-fill d-flex align-items-center justify-content-center">
                                             <i class="fas fa-check me-1"></i>
@@ -234,8 +238,14 @@
                                                 <span class="d-none d-lg-inline">Rechazar</span>
                                             </button>
                                         </form>
+                                        {% else %}
+                                        <button class="btn btn-outline-secondary btn-sm w-100" disabled>
+                                            <i class="fas fa-lock me-1"></i> Solo gerente/administrador
+                                        </button>
+                                        {% endif %}
                                     </div>
                                 {% elif credito.estado == 'APROBADO' %}
+                                    {% if puede_aprobar_credito %}
                                     {% if credito.credito_retanqueado_id %}
                                         {# Retanqueo: doc. retanqueo OTP, luego desembolsar #}
                                         {% if credito.tiene_documento_retanqueo_firmado %}
@@ -307,6 +317,12 @@
                                             </button>
                                         {% endif %}
                                     {% endif %}
+                                    {% else %}
+                                    <button class="btn btn-outline-secondary btn-sm d-flex align-items-center justify-content-center" disabled>
+                                        <i class="fas fa-lock me-2"></i>
+                                        <span>Desembolso solo gerente/administrador</span>
+                                    </button>
+                                    {% endif %}
                                 {% elif credito.estado == 'DESEMBOLSADO' %}
                                     <div class="d-flex flex-wrap gap-1">
                                         <a href="{% url 'nuevo_pago' %}?cedula={{ credito.cliente.cedula|urlencode }}&credito={{ credito.id }}" 
@@ -347,11 +363,13 @@
                                 {% endif %}
                                 
                                 <!-- Botón Editar -->
+                                {% if puede_editar_credito %}
                                 <a href="{% url 'editar_credito' credito.id %}" 
                                    class="btn btn-outline-warning btn-sm d-flex align-items-center justify-content-center">
                                     <i class="fas fa-edit me-2"></i>
                                     <span>Editar</span>
                                 </a>
+                                {% endif %}
                             </div>
                         </td>
                     </tr>
@@ -940,9 +958,11 @@ function mostrarDetallesCredito(id, cliente, monto, estado, tasa, plazo, fecha, 
                         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
                             <i class="fas fa-times me-2"></i>Cerrar
                         </button>
+                        {% if puede_editar_credito %}
                         <a href="/editar-credito/${id}/" class="btn btn-primary">
                             <i class="fas fa-edit me-2"></i>Editar Crédito
                         </a>
+                        {% endif %}
                     </div>
                 </div>
             </div>

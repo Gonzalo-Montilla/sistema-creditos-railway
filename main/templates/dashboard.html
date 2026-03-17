@@ -258,6 +258,38 @@
     <div class="col-lg-6">
         <div class="card h-100">
             <div class="card-header bg-light border-bottom">
+                <h5 class="mb-0"><i class="bi bi-pie-chart me-2"></i>Composición de clientes</h5>
+            </div>
+            <div class="card-body">
+                <div class="row align-items-center">
+                    <div class="col-md-6">
+                        <canvas id="clientesDonutChart" height="220"></canvas>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="small text-muted mb-2">Total clientes registrados: <strong>{{ total_clientes }}</strong></div>
+                        <div class="d-flex align-items-center justify-content-between mb-2">
+                            <span><i class="bi bi-circle-fill text-success me-1"></i>Con crédito activo</span>
+                            <strong>{{ clientes_con_credito_activo }}</strong>
+                        </div>
+                        <div class="d-flex align-items-center justify-content-between">
+                            <span><i class="bi bi-circle-fill text-secondary me-1"></i>Sin crédito activo</span>
+                            <strong>{{ clientes_sin_credito_activo }}</strong>
+                        </div>
+                        <hr>
+                        <small class="text-muted">
+                            Activo = cliente con al menos un crédito en estado Aprobado, Desembolsado o Vencido.
+                        </small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-3 mt-1">
+    <div class="col-12">
+        <div class="card h-100">
+            <div class="card-header bg-light border-bottom">
                 <h5 class="mb-0"><i class="bi bi-clock-history me-2"></i>Actividad reciente</h5>
             </div>
             <div class="card-body">
@@ -286,4 +318,35 @@
         </div>
     </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const chartEl = document.getElementById('clientesDonutChart');
+    if (!chartEl) return;
+    const labels = {{ chart_clientes_labels|safe }};
+    const values = {{ chart_clientes_values|safe }};
+    new Chart(chartEl, {
+        type: 'doughnut',
+        data: {
+            labels: labels,
+            datasets: [{
+                data: values,
+                backgroundColor: ['#16a34a', '#6c757d'],
+                borderColor: '#ffffff',
+                borderWidth: 2
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { position: 'bottom' }
+            }
+        }
+    });
+});
+</script>
 {% endblock %}

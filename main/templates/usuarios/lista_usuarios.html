@@ -57,14 +57,16 @@
                         <th>Usuario</th>
                         <th>Nombre Completo</th>
                         <th>Email</th>
-                        <th>Tipo</th>
+                        <th>Rol</th>
+                        <th>Cobrador vinculado</th>
                         <th>Estado</th>
                         <th>Último acceso</th>
                         <th class="text-center">Acciones</th>
                     </tr>
                 </thead>
                 <tbody>
-                    {% for usuario in usuarios %}
+                    {% for row in usuarios_rows %}
+                    {% with usuario=row.usuario %}
                     <tr>
                         <td>
                             <strong>{{ usuario.username }}</strong>
@@ -72,14 +74,19 @@
                         <td>{{ usuario.first_name }} {{ usuario.last_name }}</td>
                         <td>{{ usuario.email|default:"-" }}</td>
                         <td>
-                            {% if usuario.is_superuser %}
-                                <span class="badge bg-danger">Administrador</span>
-                            {% elif usuario.is_staff %}
-                                <span class="badge bg-warning">Staff</span>
+                            {% if row.rol == 'GERENTE' %}
+                                <span class="badge bg-danger">Gerente</span>
+                            {% elif row.rol == 'ADMIN' %}
+                                <span class="badge bg-primary">Administrador</span>
+                            {% elif row.rol == 'SUPERVISOR' %}
+                                <span class="badge bg-warning text-dark">Supervisor</span>
+                            {% elif row.rol == 'COBRADOR' %}
+                                <span class="badge bg-info text-dark">Cobrador</span>
                             {% else %}
-                                <span class="badge bg-info">Usuario</span>
+                                <span class="badge bg-secondary">Operador</span>
                             {% endif %}
                         </td>
+                        <td>{{ row.cobrador|default:"-" }}</td>
                         <td>
                             {% if usuario.is_active %}
                                 <span class="badge bg-success">Activo</span>
@@ -113,6 +120,7 @@
                             </div>
                         </td>
                     </tr>
+                    {% endwith %}
                     {% endfor %}
                 </tbody>
             </table>

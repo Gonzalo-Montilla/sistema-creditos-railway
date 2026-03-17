@@ -167,6 +167,15 @@
             </a>
         </div>
     </div>
+    {% if fecha > today %}
+    <div class="alert alert-info app-alert mb-3" role="alert">
+        <i class="bi bi-calendar2-check app-alert-icon"></i>
+        <div class="app-alert-body">
+            <span class="app-alert-title">Previsualización</span>
+            Está viendo agenda futura ({{ fecha|date:"d/m/Y" }}). Esta vista se actualiza automáticamente según pagos y cambios.
+        </div>
+    </div>
+    {% endif %}
 
     <!-- Header con estadísticas generales -->
     <div class="row mb-4">
@@ -434,6 +443,59 @@
         </div>
     </div>
     {% endif %}
+
+    {% if tareas_detalle %}
+    <div class="row mt-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h6 class="mb-0">
+                        <i class="fas fa-list-check"></i> Lista detallada de tareas (dinámica)
+                    </h6>
+                    <small class="text-muted">Se actualiza al recargar o por auto-refresh</small>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-sm mb-0 align-middle">
+                            <thead>
+                                <tr>
+                                    <th>Cobrador</th>
+                                    <th>Cliente</th>
+                                    <th>Cuota</th>
+                                    <th>Vence</th>
+                                    <th>Estado tarea</th>
+                                    <th>Estado cuota</th>
+                                    <th class="text-end">Saldo pendiente</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for t in tareas_detalle %}
+                                <tr>
+                                    <td>{{ t.cobrador }}</td>
+                                    <td>{{ t.cliente }}</td>
+                                    <td>#{{ t.cuota_numero }}</td>
+                                    <td>{{ t.fecha_vencimiento|date:"d/m/Y" }}</td>
+                                    <td>
+                                        <span class="badge {% if t.estado_tarea == 'COBRADO' %}bg-success{% elif t.estado_tarea == 'PENDIENTE' %}bg-secondary{% elif t.estado_tarea == 'REPROGRAMADO' %}bg-info{% elif t.estado_tarea == 'EN_PROCESO' %}bg-warning text-dark{% else %}bg-danger{% endif %}">
+                                            {{ t.estado_tarea_display }}
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <span class="badge {% if t.estado_cuota == 'PAGADA' %}bg-success{% elif t.estado_cuota == 'PARCIAL' %}bg-warning text-dark{% elif t.estado_cuota == 'PENDIENTE' %}bg-secondary{% else %}bg-danger{% endif %}">
+                                            {{ t.estado_cuota_display }}
+                                        </span>
+                                    </td>
+                                    <td class="text-end">${{ t.monto_pendiente|floatformat:0 }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
 </div>
 
 <!-- Botones flotantes -->
@@ -481,7 +543,7 @@
                         <i class="fas fa-info-circle"></i>
                         <strong>¿Qué hace esta función?</strong><br>
                         Genera las tareas de cobro para la fecha elegida (por defecto hoy) para cada cobrador con rutas asignadas.
-                        Se incluyen: cuotas que vencen ese día y tareas reprogramadas para esa fecha.
+                        Se incluyen: cuotas que vencen ese día, tareas reprogramadas para esa fecha y cuotas vencidas históricas pendientes.
                     </div>
                     
                     <div class="form-group">
@@ -546,13 +608,14 @@ function iniciarAutoRefresh() {
     }, 120000); // 2 minutos
 }
 
-// Pausar auto-refresh cuando hay modales abiertos
-$('.modal').on('shown.bs.modal', function() {
-    clearInterval(autoRefreshInterval);
-});
-
-$('.modal').on('hidden.bs.modal', function() {
-    iniciarAutoRefresh();
+// Pausar auto-refresh cuando hay modales abiertos (sin jQuery)
+document.querySelectorAll('.modal').forEach((modalEl) => {
+    modalEl.addEventListener('shown.bs.modal', function() {
+        clearInterval(autoRefreshInterval);
+    });
+    modalEl.addEventListener('hidden.bs.modal', function() {
+        iniciarAutoRefresh();
+    });
 });
 
 // Iniciar auto-refresh al cargar la página
@@ -592,9 +655,11 @@ function mostrarAlerta(tipo, mensaje) {
     {% endfor %}
 {% endif %}
 
-// Añadir tooltips a elementos con title
+// Añadir tooltips a elementos con title (Bootstrap 5, sin jQuery)
 document.addEventListener('DOMContentLoaded', function() {
-    $('[title]').tooltip();
+    document.querySelectorAll('[title]').forEach((el) => {
+        new bootstrap.Tooltip(el);
+    });
 });
 </script>
 {% endblock %}

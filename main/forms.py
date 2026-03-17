@@ -2,6 +2,20 @@ from django import forms
 from django.core.exceptions import ValidationError
 from .models import Cliente, Credito, Pago, Codeudor, CronogramaPago, Cobrador, Ruta
 
+def _normalizar_mayusculas(valor):
+    if valor is None:
+        return valor
+    valor = str(valor).strip()
+    return valor.upper() if valor else valor
+
+
+def _normalizar_minusculas(valor):
+    if valor is None:
+        return valor
+    valor = str(valor).strip()
+    return valor.lower() if valor else valor
+
+
 class ClienteForm(forms.ModelForm):
     class Meta:
         model = Cliente
@@ -58,10 +72,32 @@ class ClienteForm(forms.ModelForm):
             raise ValidationError('Ya existe un cliente con esta cédula.')
         return cedula
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        for campo in ['nombres', 'apellidos', 'referencia1_nombre', 'referencia2_nombre']:
+            if campo in self.fields:
+                self.fields[campo].widget.attrs.update({'style': 'text-transform: uppercase;'})
+        if 'email' in self.fields:
+            self.fields['email'].widget.attrs.update({'style': 'text-transform: lowercase;'})
+
+    def clean(self):
+        cleaned_data = super().clean()
+        for campo in ['nombres', 'apellidos', 'referencia1_nombre', 'referencia2_nombre']:
+            cleaned_data[campo] = _normalizar_mayusculas(cleaned_data.get(campo))
+        cleaned_data['email'] = _normalizar_minusculas(cleaned_data.get('email'))
+        return cleaned_data
+
 class CodeudorForm(forms.ModelForm):
     def __init__(self, *args, cliente=None, **kwargs):
         super().__init__(*args, **kwargs)
         self._cliente_asociado = cliente  # Para validar cédula distinta al cliente al crear
+        if 'email' in self.fields:
+            self.fields['email'].required = True
+        for campo in ['nombres', 'apellidos']:
+            if campo in self.fields:
+                self.fields[campo].widget.attrs.update({'style': 'text-transform: uppercase;'})
+        if 'email' in self.fields:
+            self.fields['email'].widget.attrs.update({'style': 'text-transform: lowercase;'})
 
     class Meta:
         model = Codeudor
@@ -72,7 +108,7 @@ class CodeudorForm(forms.ModelForm):
             'apellidos': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Apellidos del codeudor'}),
             'cedula': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Cédula del codeudor (5-10 dígitos)'}),
             'celular': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Celular del codeudor'}),
-            'email': forms.EmailInput(attrs={'class': 'form-control', 'placeholder': 'Correo (opcional, para envío Habeas Data)'}),
+            'email': forms.EmailInput(attrs={'class': 'form-control', 'placeholder': 'Correo del codeudor (obligatorio)'}),
             'direccion': forms.Textarea(attrs={'class': 'form-control', 'rows': 3, 'placeholder': 'Dirección completa'}),
             'barrio': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Barrio'}),
             'foto_rostro': forms.FileInput(attrs={'class': 'form-control', 'accept': 'image/*'}),
@@ -91,8 +127,17 @@ class CodeudorForm(forms.ModelForm):
             raise ValidationError('Ya existe un codeudor con esta cédula.')
         return cedula
 
+    def clean_email(self):
+        email = _normalizar_minusculas(self.cleaned_data.get('email'))
+        if not email:
+            raise ValidationError('El correo del codeudor es obligatorio para firma de documentos.')
+        return email
+
     def clean(self):
         cleaned_data = super().clean()
+        for campo in ['nombres', 'apellidos']:
+            cleaned_data[campo] = _normalizar_mayusculas(cleaned_data.get(campo))
+        cleaned_data['email'] = _normalizar_minusculas(cleaned_data.get('email'))
         cedula = cleaned_data.get('cedula', '').strip()
         cliente = self._cliente_asociado or (getattr(self.instance, 'cliente', None) if self.instance and self.instance.pk else None)
         if cliente and cedula and cliente.cedula == cedula:
@@ -437,6 +482,11 @@ class CobradorForm(forms.ModelForm):
         # Hacer que las rutas se muestren mejor
         self.fields['rutas'].queryset = Ruta.objects.filter(activa=True)
         self.fields['rutas'].widget.attrs.update({'class': 'form-check-input'})
+        for campo in ['nombres', 'apellidos']:
+            if campo in self.fields:
+                self.fields[campo].widget.attrs.update({'style': 'text-transform: uppercase;'})
+        if 'email' in self.fields:
+            self.fields['email'].widget.attrs.update({'style': 'text-transform: lowercase;'})
     
     def clean_numero_documento(self):
         numero = self.cleaned_data.get('numero_documento')
@@ -475,6 +525,13 @@ class CobradorForm(forms.ModelForm):
                 'La meta diaria no puede ser negativa'
             )
         return meta
+
+    def clean(self):
+        cleaned_data = super().clean()
+        for campo in ['nombres', 'apellidos']:
+            cleaned_data[campo] = _normalizar_mayusculas(cleaned_data.get(campo))
+        cleaned_data['email'] = _normalizar_minusculas(cleaned_data.get('email'))
+        return cleaned_data
 
 class RutaForm(forms.ModelForm):
     class Meta:

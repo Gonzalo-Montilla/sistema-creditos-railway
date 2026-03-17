@@ -34,7 +34,7 @@
 <div class="alert alert-light border mb-4">
     <i class="bi bi-info-circle me-1"></i>
     <strong>Lectura de métricas:</strong>
-    <span class="text-muted">Desembolsado, recaudo, efectividad y cierres exactos usan el periodo filtrado. Cartera y mora son foto actual del sistema. Embudo de créditos es operativo actual.</span>
+    <span class="text-muted">Desembolsado, recaudo, efectividad y cierres exactos usan el periodo filtrado. Cartera, mora y participación por modalidad son foto actual del sistema. Embudo de créditos es operativo actual.</span>
 </div>
 
 <div class="row g-3 mb-4">
@@ -95,7 +95,40 @@
             <div class="card-body"><div id="chartMora"></div></div>
         </div>
     </div>
-    <div class="col-lg-6">
+    <div class="col-lg-4">
+        <div class="card h-100">
+            <div class="card-header"><strong>Participación de cartera por modalidad</strong></div>
+            <div class="card-body">
+                <div id="chartModalidad"></div>
+                <div class="small text-muted mt-2">
+                    Base: saldo pendiente de cartera activa. Tooltip incluye créditos y participación.
+                </div>
+                <div class="table-responsive mt-3">
+                    <table class="table table-sm align-middle mb-0">
+                        <thead>
+                            <tr>
+                                <th>Modalidad</th>
+                                <th class="text-end">Créditos</th>
+                                <th class="text-end">Saldo</th>
+                                <th class="text-end">% Part.</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for fila in modalidad_detalle %}
+                            <tr>
+                                <td>{{ fila.label }}</td>
+                                <td class="text-end">{{ fila.cantidad }}</td>
+                                <td class="text-end">${{ fila.valor|floatformat:0 }}</td>
+                                <td class="text-end">{{ fila.participacion|floatformat:1 }}%</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-8">
         <div class="card">
             <div class="card-header"><strong>Eficacia por cobrador (objetivo vs real)</strong></div>
             <div class="card-body"><div id="chartCobrador"></div></div>
@@ -105,6 +138,30 @@
         <div class="card">
             <div class="card-header"><strong>Embudo de créditos (foto actual)</strong></div>
             <div class="card-body"><div id="chartPipeline"></div></div>
+        </div>
+    </div>
+    <div class="col-lg-6">
+        <div class="card h-100">
+            <div class="card-header"><strong>Composición de clientes</strong></div>
+            <div class="card-body">
+                <div id="chartClientesNegocio"></div>
+                <div class="small text-muted mt-2">Cliente activo = cliente con al menos un crédito en estado Aprobado, Desembolsado o Vencido.</div>
+                <hr>
+                <div class="row g-2">
+                    <div class="col-12 col-md-4">
+                        <div class="small text-muted">Total clientes registrados</div>
+                        <div class="fw-semibold">{{ total_clientes_dashboard_negocio }}</div>
+                    </div>
+                    <div class="col-6 col-md-4">
+                        <div class="small text-muted">Con crédito activo</div>
+                        <div class="fw-semibold">{{ clientes_con_credito_activo }} <span class="text-muted">({{ pct_clientes_con_credito|floatformat:1 }}%)</span></div>
+                    </div>
+                    <div class="col-6 col-md-4">
+                        <div class="small text-muted">Sin crédito activo</div>
+                        <div class="fw-semibold">{{ clientes_sin_credito_activo }} <span class="text-muted">({{ pct_clientes_sin_credito|floatformat:1 }}%)</span></div>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 </div>
@@ -121,10 +178,29 @@
     const cobradorLabels = {{ chart_cobrador_labels|safe }};
     const cobradorObjetivo = {{ chart_cobrador_objetivo|safe }};
     const cobradorReal = {{ chart_cobrador_real|safe }};
+    const modalidadLabels = {{ chart_modalidad_labels|safe }};
+    const modalidadValues = {{ chart_modalidad_values|safe }};
+    const modalidadCantidades = {{ chart_modalidad_cantidades|safe }};
+    const modalidadPorcentajes = {{ chart_modalidad_porcentajes|safe }};
+    const clientesLabels = {{ chart_clientes_labels|safe }};
+    const clientesValues = {{ chart_clientes_values|safe }};
     const pipelineLabels = {{ chart_pipeline_labels|safe }};
     const pipelineValues = {{ chart_pipeline_values|safe }};
 
     const cop = (v) => '$' + Number(v || 0).toLocaleString('es-CO');
+    const modalidadFiltrada = modalidadLabels
+        .map((label, idx) => ({
+            label,
+            value: Number(modalidadValues[idx] || 0),
+            cantidad: Number(modalidadCantidades[idx] || 0),
+            porcentaje: Number(modalidadPorcentajes[idx] || 0),
+        }))
+        .filter(item => item.value > 0);
+
+    const modalidadLabelsChart = modalidadFiltrada.map(item => item.label);
+    const modalidadValuesChart = modalidadFiltrada.map(item => item.value);
+    const modalidadCantidadesChart = modalidadFiltrada.map(item => item.cantidad);
+    const modalidadPorcentajesChart = modalidadFiltrada.map(item => item.porcentaje);
 
     new ApexCharts(document.querySelector("#chartFlujo"), {
         chart: { type: 'line', height: 320, toolbar: { show: false } },
@@ -167,12 +243,41 @@
         colors: ['#94a3b8', '#0ea5e9']
     }).render();
 
+    new ApexCharts(document.querySelector("#chartModalidad"), {
+        chart: { type: 'donut', height: 320 },
+        labels: modalidadLabelsChart,
+        series: modalidadValuesChart,
+        colors: ['#0ea5e9', '#22c55e', '#f59e0b', '#8b5cf6', '#ef4444', '#64748b'],
+        legend: { position: 'bottom' },
+        tooltip: {
+            custom: function({ seriesIndex, dataPointIndex }) {
+                // En donut Apex puede usar seriesIndex; en algunos eventos dataPointIndex llega undefined.
+                const idx = Number.isInteger(seriesIndex) ? seriesIndex : dataPointIndex;
+                const nombre = modalidadLabelsChart[idx] || 'Modalidad';
+                const valor = Number(modalidadValuesChart[idx] || 0);
+                const cantidad = Number(modalidadCantidadesChart[idx] || 0);
+                const pct = Number(modalidadPorcentajesChart[idx] || 0).toFixed(1);
+                return `<div class="px-2 py-1"><strong>${nombre}</strong><br/>Saldo: ${cop(valor)}<br/>Créditos: ${cantidad}<br/>Participación: ${pct}%</div>`;
+            }
+        },
+        noData: { text: 'Sin datos de cartera para el periodo' }
+    }).render();
+
     new ApexCharts(document.querySelector("#chartPipeline"), {
         chart: { type: 'bar', height: 320, toolbar: { show: false } },
         plotOptions: { bar: { horizontal: true, borderRadius: 6 } },
         series: [{ name: 'Créditos', data: pipelineValues }],
         xaxis: { categories: pipelineLabels },
         colors: ['#6366f1']
+    }).render();
+
+    new ApexCharts(document.querySelector("#chartClientesNegocio"), {
+        chart: { type: 'donut', height: 300 },
+        labels: clientesLabels,
+        series: clientesValues,
+        colors: ['#16a34a', '#6b7280'],
+        legend: { position: 'bottom' },
+        noData: { text: 'Sin datos de clientes' }
     }).render();
 </script>
 {% endblock %}

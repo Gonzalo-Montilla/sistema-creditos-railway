@@ -1,9 +1,10 @@
 from django.shortcuts import render, redirect, get_object_or_404
 from django.urls import reverse
 from django.contrib.auth import authenticate, login, logout
+from django.contrib.auth.models import User, Group
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
-from django.db.models import Sum, Count, Q
+from django.db.models import Sum, Count, Q, Max, Exists, OuterRef
 from django.db.models.functions import TruncDate
 from django.utils import timezone
 from django.http import JsonResponse, HttpResponse
@@ -27,6 +28,65 @@ from io import BytesIO
 import json
 import re
 from decimal import Decimal
+
+ROLE_GERENTE = 'GERENTE'
+ROLE_ADMIN = 'ADMIN'
+ROLE_SUPERVISOR = 'SUPERVISOR'
+ROLE_COBRADOR = 'COBRADOR'
+ROLE_OPERADOR = 'OPERADOR'
+ROLES_SISTEMA = [ROLE_GERENTE, ROLE_ADMIN, ROLE_SUPERVISOR, ROLE_COBRADOR, ROLE_OPERADOR]
+ROLES_FORM = [
+    (ROLE_GERENTE, 'Gerente (acceso total)'),
+    (ROLE_ADMIN, 'Administrador'),
+    (ROLE_SUPERVISOR, 'Supervisor'),
+    (ROLE_COBRADOR, 'Cobrador'),
+    (ROLE_OPERADOR, 'Operador'),
+]
+
+
+def _asegurar_grupo(nombre):
+    grupo, _ = Group.objects.get_or_create(name=nombre)
+    return grupo
+
+
+def _rol_usuario(user):
+    if not user or not user.is_authenticated:
+        return None
+    if user.is_superuser:
+        return ROLE_GERENTE
+    rol = user.groups.filter(name__in=ROLES_SISTEMA).values_list('name', flat=True).first()
+    return rol or ROLE_OPERADOR
+
+
+def _asignar_rol_usuario(user, rol):
+    if rol not in ROLES_SISTEMA:
+        rol = ROLE_OPERADOR
+    user.groups.clear()
+    user.groups.add(_asegurar_grupo(rol))
+
+    if rol == ROLE_GERENTE:
+        user.is_superuser = True
+        user.is_staff = True
+    elif rol in (ROLE_ADMIN, ROLE_SUPERVISOR):
+        user.is_superuser = False
+        user.is_staff = True
+    else:
+        user.is_superuser = False
+        user.is_staff = False
+
+
+def _usuario_puede_aprobar_credito(user):
+    return _rol_usuario(user) in (ROLE_GERENTE, ROLE_ADMIN)
+
+
+def _usuario_puede_registrar_cliente_credito(user):
+    if _usuario_admin_operativo(user):
+        return True
+    return _rol_usuario(user) == ROLE_COBRADOR and _usuario_cobrador_activo(user) is not None
+
+
+def _usuario_es_gerente(user):
+    return _rol_usuario(user) == ROLE_GERENTE
 
 def _usuario_admin_operativo(user):
     """Permisos mínimos para operaciones críticas de crédito/cobranza."""
@@ -89,6 +149,50 @@ def _aplicar_pago_a_cuota_si_corresponde(pago):
         cuota.estado = 'PARCIAL'
 
     cuota.save(update_fields=['monto_pagado', 'estado', 'fecha_pago'])
+
+    # Si la cuota quedó pagada, cancelar tareas abiertas asociadas a esa cuota.
+    if cuota.estado in ['PAGADA', 'PAGADO']:
+        _cancelar_tareas_abiertas_de_cuota(cuota)
+
+    # Seguimiento operativo: si quedó parcial por pago directo, crear tarea para mañana.
+    if cuota.estado == 'PARCIAL':
+        credito = cuota.credito
+        if credito.cobrador_id and getattr(credito.cobrador, 'activo', False):
+            fecha_objetivo = timezone.now().date() + timedelta(days=1)
+            existe = TareaCobro.objects.filter(cuota=cuota, fecha_asignacion=fecha_objetivo).exists()
+            if not existe:
+                dias_mora = (fecha_objetivo - cuota.fecha_vencimiento).days
+                if dias_mora > 15:
+                    prioridad = 'ALTA'
+                elif dias_mora > 5:
+                    prioridad = 'MEDIA'
+                else:
+                    prioridad = 'BAJA'
+                orden = (
+                    TareaCobro.objects.filter(cobrador=credito.cobrador, fecha_asignacion=fecha_objetivo)
+                    .aggregate(max_orden=Max('orden_visita'))['max_orden'] or 0
+                ) + 1
+                TareaCobro.objects.create(
+                    cobrador=credito.cobrador,
+                    cuota=cuota,
+                    fecha_asignacion=fecha_objetivo,
+                    prioridad=prioridad,
+                    orden_visita=orden,
+                    estado='PENDIENTE',
+                    observaciones='Seguimiento automático por abono parcial en pago directo.'
+                )
+
+
+def _cancelar_tareas_abiertas_de_cuota(cuota, motivo='Cancelada automáticamente: cuota ya pagada.'):
+    """Evita tareas huérfanas de cobranza cuando la cuota ya está pagada."""
+    estados_abiertos = ['PENDIENTE', 'EN_PROCESO', 'NO_ENCONTRADO', 'NO_ESTABA', 'NO_PUDO_PAGAR', 'REPROGRAMADO']
+    tareas_abiertas = TareaCobro.objects.filter(cuota=cuota, estado__in=estados_abiertos)
+    for tarea in tareas_abiertas:
+        obs_prev = (tarea.observaciones or '').strip()
+        tarea.observaciones = f'{obs_prev} {motivo}'.strip()
+        tarea.estado = 'CANCELADO'
+        tarea.fecha_reprogramacion = None
+        tarea.save(update_fields=['observaciones', 'estado', 'fecha_reprogramacion', 'fecha_actualizacion'])
 
 def _resumen_soporte_pago(pago):
     """
@@ -171,7 +275,12 @@ def dashboard(request):
         return _forbidden_operacion(request)
     hoy = timezone.now().date()
     # Obtener estadísticas
-    total_clientes = Cliente.objects.filter(activo=True).count()
+    clientes_registrados_qs = Cliente.objects.filter(activo=True)
+    total_clientes = clientes_registrados_qs.count()
+    clientes_con_credito_activo = clientes_registrados_qs.filter(
+        credito__estado__in=['APROBADO', 'DESEMBOLSADO', 'VENCIDO']
+    ).distinct().count()
+    clientes_sin_credito_activo = max(total_clientes - clientes_con_credito_activo, 0)
     total_creditos = Credito.objects.exclude(estado='PAGADO').count()
     total_pagos = Pago.objects.count()
     creditos_vencidos = Credito.objects.filter(estado='VENCIDO').count()
@@ -237,6 +346,10 @@ def dashboard(request):
         'cuotas_vencen_hoy': cuotas_vencen_hoy,
         'cuotas_sin_tarea_hoy': cuotas_sin_tarea_hoy,
         'tareas_hoy_count': tareas_hoy_count,
+        'clientes_con_credito_activo': clientes_con_credito_activo,
+        'clientes_sin_credito_activo': clientes_sin_credito_activo,
+        'chart_clientes_labels': json.dumps(['Con crédito activo', 'Sin crédito activo']),
+        'chart_clientes_values': json.dumps([clientes_con_credito_activo, clientes_sin_credito_activo]),
     }
     
     return render(request, 'dashboard.html', context)
@@ -345,6 +458,66 @@ def dashboard_negocio(request):
     recaudacion_cobrador_real = [r['real'] for r in eficacia_cobradores]
     recaudacion_cobrador_eficacia = [round(r['eficacia'], 1) for r in eficacia_cobradores]
 
+    # Participación por modalidad (foto actual de cartera activa).
+    modalidad_map = {
+        'DIARIO': 'Diario',
+        'SEMANAL': 'Semanal',
+        'QUINCENAL': 'Quincenal',
+        'MENSUAL': 'Mensual',
+    }
+    modalidad_orden = ['DIARIO', 'SEMANAL', 'QUINCENAL', 'MENSUAL']
+    stats_modalidad = {
+        key: {'label': modalidad_map[key], 'cantidad': 0, 'valor': Decimal('0')}
+        for key in modalidad_orden
+    }
+
+    for credito in creditos_activos:
+        tipo = credito.tipo_plazo
+        if tipo not in stats_modalidad:
+            # Mantener robustez ante futuros tipos de plazo.
+            stats_modalidad[tipo] = {'label': tipo.title(), 'cantidad': 0, 'valor': Decimal('0')}
+            modalidad_orden.append(tipo)
+        stats_modalidad[tipo]['cantidad'] += 1
+        stats_modalidad[tipo]['valor'] += credito.saldo_pendiente()
+
+    modalidad_labels = [stats_modalidad[key]['label'] for key in modalidad_orden]
+    modalidad_valores = [float(stats_modalidad[key]['valor']) for key in modalidad_orden]
+    modalidad_cantidades = [stats_modalidad[key]['cantidad'] for key in modalidad_orden]
+    total_modalidad_valor = sum((stats_modalidad[key]['valor'] for key in modalidad_orden), Decimal('0'))
+    modalidad_porcentajes = [
+        float((stats_modalidad[key]['valor'] / total_modalidad_valor * 100) if total_modalidad_valor > 0 else 0)
+        for key in modalidad_orden
+    ]
+
+    modalidad_detalle = [
+        {
+            'label': stats_modalidad[key]['label'],
+            'cantidad': stats_modalidad[key]['cantidad'],
+            'valor': stats_modalidad[key]['valor'],
+            'participacion': modalidad_porcentajes[idx],
+        }
+        for idx, key in enumerate(modalidad_orden)
+    ]
+
+    # Composición de clientes (misma lógica del dashboard principal), para vista ejecutiva.
+    clientes_base = Cliente.objects.filter(activo=True)
+    subquery_credito_activo = Credito.objects.filter(
+        cliente_id=OuterRef('pk'),
+        estado__in=['APROBADO', 'DESEMBOLSADO', 'VENCIDO']
+    )
+    clientes_base = clientes_base.annotate(tiene_credito_activo=Exists(subquery_credito_activo))
+    clientes_con_credito_activo = clientes_base.filter(tiene_credito_activo=True).count()
+    clientes_sin_credito_activo = clientes_base.filter(tiene_credito_activo=False).count()
+    total_clientes_activos_sistema = clientes_con_credito_activo + clientes_sin_credito_activo
+    porcentaje_clientes_con_credito = (
+        (clientes_con_credito_activo / total_clientes_activos_sistema) * 100
+        if total_clientes_activos_sistema > 0 else 0
+    )
+    porcentaje_clientes_sin_credito = (
+        (clientes_sin_credito_activo / total_clientes_activos_sistema) * 100
+        if total_clientes_activos_sistema > 0 else 0
+    )
+
     # Embudo operativo como foto actual (snapshot), no por periodo.
     pipeline_labels = ['Solicitados', 'Aprobados', 'Desembolsados', 'Pagados', 'Vencidos']
     pipeline_values = [
@@ -373,6 +546,19 @@ def dashboard_negocio(request):
         'chart_cobrador_objetivo': json.dumps(recaudacion_cobrador_objetivo),
         'chart_cobrador_real': json.dumps(recaudacion_cobrador_real),
         'chart_cobrador_eficacia': json.dumps(recaudacion_cobrador_eficacia),
+        'chart_modalidad_labels': json.dumps(modalidad_labels),
+        'chart_modalidad_values': json.dumps(modalidad_valores),
+        'chart_modalidad_cantidades': json.dumps(modalidad_cantidades),
+        'chart_modalidad_porcentajes': json.dumps([round(v, 1) for v in modalidad_porcentajes]),
+        'kpi_modalidad_total_valor': total_modalidad_valor,
+        'modalidad_detalle': modalidad_detalle,
+        'chart_clientes_labels': json.dumps(['Con crédito activo', 'Sin crédito activo']),
+        'chart_clientes_values': json.dumps([clientes_con_credito_activo, clientes_sin_credito_activo]),
+        'total_clientes_dashboard_negocio': total_clientes_activos_sistema,
+        'clientes_con_credito_activo': clientes_con_credito_activo,
+        'clientes_sin_credito_activo': clientes_sin_credito_activo,
+        'pct_clientes_con_credito': porcentaje_clientes_con_credito,
+        'pct_clientes_sin_credito': porcentaje_clientes_sin_credito,
         'chart_pipeline_labels': json.dumps(pipeline_labels),
         'chart_pipeline_values': json.dumps(pipeline_values),
     }
@@ -380,17 +566,32 @@ def dashboard_negocio(request):
 
 @login_required
 def clientes(request):
-    if not _usuario_admin_operativo(request.user):
+    if not _usuario_puede_registrar_cliente_credito(request.user):
         return _forbidden_operacion(request)
+    es_admin_operativo = _usuario_admin_operativo(request.user)
     from django.core.paginator import Paginator
     from django.db.models import Q
     
     # Filtro: activos por defecto; ver_inactivos=1 para ver desactivados
     ver_inactivos = request.GET.get('ver_inactivos') == '1'
     activo_filter = False if ver_inactivos else True
-    
+
     base_queryset = Cliente.objects.filter(activo=activo_filter).select_related('codeudor').order_by('-fecha_registro')
-    
+
+    # Filtro funcional: clientes con/sin crédito activo (no confundir con cliente desactivado)
+    cartera_estado = request.GET.get('cartera_estado', 'todos').strip()
+    if cartera_estado not in ('todos', 'con_credito_activo', 'sin_credito_activo'):
+        cartera_estado = 'todos'
+    credito_activo_subquery = Credito.objects.filter(
+        cliente_id=OuterRef('pk'),
+        estado__in=['APROBADO', 'DESEMBOLSADO', 'VENCIDO']
+    )
+    base_queryset = base_queryset.annotate(tiene_credito_activo=Exists(credito_activo_subquery))
+    if cartera_estado == 'con_credito_activo':
+        base_queryset = base_queryset.filter(tiene_credito_activo=True)
+    elif cartera_estado == 'sin_credito_activo':
+        base_queryset = base_queryset.filter(tiene_credito_activo=False)
+
     # Búsqueda en servidor: q (cédula, nombres, apellidos, barrio)
     q = request.GET.get('q', '').strip()
     if q:
@@ -420,19 +621,98 @@ def clientes(request):
         'clientes_sin_codeudor': clientes_sin_codeudor,
         'q': q,
         'ver_inactivos': ver_inactivos,
+        'cartera_estado': cartera_estado,
         'per_page': per_page,
+        'es_admin_operativo': es_admin_operativo,
     }
     
     return render(request, 'clientes.html', context)
 
+
+@login_required
+def exportar_clientes_excel(request):
+    """Exporta el listado de clientes aplicando los mismos filtros de la vista clientes."""
+    if not _usuario_admin_operativo(request.user):
+        return _forbidden_operacion(request)
+
+    import io
+    import pandas as pd
+
+    ver_inactivos = request.GET.get('ver_inactivos') == '1'
+    activo_filter = False if ver_inactivos else True
+    cartera_estado = request.GET.get('cartera_estado', 'todos').strip()
+    if cartera_estado not in ('todos', 'con_credito_activo', 'sin_credito_activo'):
+        cartera_estado = 'todos'
+    q = request.GET.get('q', '').strip()
+
+    queryset = Cliente.objects.filter(activo=activo_filter).select_related('codeudor').order_by('-fecha_registro')
+    credito_activo_subquery = Credito.objects.filter(
+        cliente_id=OuterRef('pk'),
+        estado__in=['APROBADO', 'DESEMBOLSADO', 'VENCIDO']
+    )
+    queryset = queryset.annotate(tiene_credito_activo=Exists(credito_activo_subquery))
+    if cartera_estado == 'con_credito_activo':
+        queryset = queryset.filter(tiene_credito_activo=True)
+    elif cartera_estado == 'sin_credito_activo':
+        queryset = queryset.filter(tiene_credito_activo=False)
+
+    if q:
+        queryset = queryset.filter(
+            Q(cedula__icontains=q)
+            | Q(nombres__icontains=q)
+            | Q(apellidos__icontains=q)
+            | Q(barrio__icontains=q)
+        )
+
+    rows = []
+    for cliente in queryset:
+        rows.append({
+            'ID': cliente.id,
+            'Estado registro': 'Desactivado' if not cliente.activo else 'Activo',
+            'Estado cartera': 'Con crédito activo' if cliente.tiene_credito_activo else 'Sin crédito activo',
+            'Nombres': cliente.nombres,
+            'Apellidos': cliente.apellidos,
+            'Nombre completo': cliente.nombre_completo,
+            'Cédula': cliente.cedula,
+            'Celular': cliente.celular or '',
+            'Teléfono fijo': cliente.telefono_fijo or '',
+            'Email': cliente.email or '',
+            'Dirección': cliente.direccion or '',
+            'Barrio': cliente.barrio or '',
+            'Ciudad': cliente.ciudad or '',
+            'Departamento': cliente.departamento or '',
+            'Fecha registro': cliente.fecha_registro.strftime('%d/%m/%Y %H:%M') if cliente.fecha_registro else '',
+            'Codeudor asignado': 'Sí' if cliente.codeudor_id else 'No',
+            'Nombre codeudor': cliente.codeudor.nombre_completo if cliente.codeudor_id else '',
+            'Cédula codeudor': cliente.codeudor.cedula if cliente.codeudor_id else '',
+        })
+
+    df = pd.DataFrame(rows)
+    output = io.BytesIO()
+    with pd.ExcelWriter(output, engine='openpyxl') as writer:
+        df.to_excel(writer, sheet_name='Clientes', index=False)
+    output.seek(0)
+
+    stamp = timezone.now().strftime('%Y%m%d_%H%M')
+    response = HttpResponse(
+        output.getvalue(),
+        content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    )
+    response['Content-Disposition'] = f'attachment; filename="clientes_{stamp}.xlsx"'
+    return response
+
 @login_required
 def creditos(request):
-    if not _usuario_admin_operativo(request.user):
+    es_admin = _usuario_admin_operativo(request.user)
+    cobrador_usuario = _usuario_cobrador_activo(request.user)
+    if not es_admin and not cobrador_usuario:
         return _forbidden_operacion(request)
     from django.core.paginator import Paginator
     from django.db.models import Q
     
     creditos_list = Credito.objects.select_related('cliente', 'cobrador').order_by('-fecha_solicitud')
+    if not es_admin:
+        creditos_list = creditos_list.filter(cobrador=cobrador_usuario)
     
     # Búsqueda por cliente (nombre, apellidos, cédula) o por ID de crédito
     q = request.GET.get('q', '').strip()
@@ -508,8 +788,95 @@ def creditos(request):
         'filtro_fecha_desde': fecha_desde,
         'filtro_fecha_hasta': fecha_hasta,
         'per_page': per_page,
+        'puede_aprobar_credito': _usuario_puede_aprobar_credito(request.user),
+        'puede_editar_credito': _usuario_es_gerente(request.user),
     }
     return render(request, 'creditos.html', context)
+
+
+@login_required
+def exportar_creditos_excel(request):
+    """Exporta el listado de créditos aplicando los mismos filtros de la vista creditos."""
+    if not _usuario_admin_operativo(request.user):
+        return _forbidden_operacion(request)
+
+    import io
+    import pandas as pd
+
+    queryset = Credito.objects.select_related('cliente', 'cobrador').order_by('-fecha_solicitud')
+
+    q = request.GET.get('q', '').strip()
+    if q:
+        filtro = (
+            Q(cliente__nombres__icontains=q)
+            | Q(cliente__apellidos__icontains=q)
+            | Q(cliente__cedula__icontains=q)
+        )
+        if q.isdigit():
+            filtro = filtro | Q(id=int(q))
+        queryset = queryset.filter(filtro)
+
+    cobrador_id = request.GET.get('cobrador', '').strip()
+    if cobrador_id and cobrador_id.isdigit():
+        queryset = queryset.filter(cobrador_id=int(cobrador_id))
+
+    fecha_desde = request.GET.get('fecha_desde', '').strip()
+    fecha_hasta = request.GET.get('fecha_hasta', '').strip()
+    if fecha_desde:
+        try:
+            d = datetime.strptime(fecha_desde, '%Y-%m-%d').date()
+            queryset = queryset.filter(fecha_solicitud__date__gte=d)
+        except ValueError:
+            pass
+    if fecha_hasta:
+        try:
+            d = datetime.strptime(fecha_hasta, '%Y-%m-%d').date()
+            queryset = queryset.filter(fecha_solicitud__date__lte=d)
+        except ValueError:
+            pass
+
+    rows = []
+    for credito in queryset:
+        modalidad = 'Nuevo'
+        if credito.credito_retanqueado_id:
+            modalidad = 'Retanqueo'
+        elif credito.es_renovacion:
+            modalidad = 'Renovación'
+
+        rows.append({
+            'ID crédito': credito.id,
+            'Estado': credito.get_estado_display(),
+            'Modalidad': modalidad,
+            'Cliente': credito.cliente.nombre_completo,
+            'Cédula cliente': credito.cliente.cedula,
+            'Monto': float(credito.monto),
+            'Monto total': float(credito.monto_total) if credito.monto_total else float(credito.monto),
+            'Saldo pendiente': float(credito.saldo_pendiente()),
+            'Total pagado': float(credito.total_pagado()),
+            'Tasa interés (%)': float(credito.tasa_interes or 0),
+            'Tipo plazo': credito.get_tipo_plazo_display(),
+            'Cantidad cuotas': credito.cantidad_cuotas,
+            'Valor cuota': float(credito.valor_cuota()) if credito.valor_cuota() else 0,
+            'Días mora': credito.dias_mora or 0,
+            'Estado mora': credito.get_estado_mora_display() if credito.dias_mora and credito.dias_mora > 0 else 'Al día',
+            'Cobrador': credito.cobrador.nombre_completo if credito.cobrador else 'Sin asignar',
+            'Fecha solicitud': credito.fecha_solicitud.strftime('%d/%m/%Y %H:%M') if credito.fecha_solicitud else '',
+            'Fecha desembolso': credito.fecha_desembolso.strftime('%d/%m/%Y') if credito.fecha_desembolso else '',
+        })
+
+    df = pd.DataFrame(rows)
+    output = io.BytesIO()
+    with pd.ExcelWriter(output, engine='openpyxl') as writer:
+        df.to_excel(writer, sheet_name='Creditos', index=False)
+    output.seek(0)
+
+    stamp = timezone.now().strftime('%Y%m%d_%H%M')
+    response = HttpResponse(
+        output.getvalue(),
+        content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    )
+    response['Content-Disposition'] = f'attachment; filename="creditos_{stamp}.xlsx"'
+    return response
 
 @login_required
 def pagos(request):
@@ -569,16 +936,79 @@ def pagos(request):
     
     return render(request, 'pagos.html', context)
 
+
+@login_required
+def exportar_pagos_excel(request):
+    """Exporta pagos con filtros opcionales por fecha exacta y texto de búsqueda."""
+    if not _usuario_admin_operativo(request.user):
+        return _forbidden_operacion(request)
+
+    import io
+    import pandas as pd
+
+    pagos_qs = Pago.objects.select_related('credito__cliente', 'credito__cobrador').order_by('-fecha_pago')
+
+    fecha = request.GET.get('fecha', '').strip()
+    if fecha:
+        try:
+            fecha_obj = datetime.strptime(fecha, '%Y-%m-%d').date()
+            pagos_qs = pagos_qs.filter(fecha_pago__date=fecha_obj)
+        except ValueError:
+            pass
+
+    q = request.GET.get('q', '').strip()
+    if q:
+        filtros = (
+            Q(credito__cliente__nombres__icontains=q)
+            | Q(credito__cliente__apellidos__icontains=q)
+            | Q(credito__cliente__cedula__icontains=q)
+            | Q(observaciones__icontains=q)
+        )
+        if q.isdigit():
+            filtros = filtros | Q(credito__id=int(q))
+        pagos_qs = pagos_qs.filter(filtros)
+
+    rows = []
+    for pago in pagos_qs:
+        rows.append({
+            'ID pago': pago.id,
+            'Fecha pago': pago.fecha_pago.strftime('%d/%m/%Y %H:%M') if pago.fecha_pago else '',
+            'Cliente': pago.credito.cliente.nombre_completo,
+            'Cédula': pago.credito.cliente.cedula,
+            'Crédito ID': pago.credito_id,
+            'Estado crédito': pago.credito.get_estado_display(),
+            'Cobrador': pago.credito.cobrador.nombre_completo if pago.credito.cobrador else 'Sin asignar',
+            'Cuota #': pago.numero_cuota,
+            'Monto': float(pago.monto),
+            'Observaciones': pago.observaciones or '',
+        })
+
+    df = pd.DataFrame(rows)
+    output = io.BytesIO()
+    with pd.ExcelWriter(output, engine='openpyxl') as writer:
+        df.to_excel(writer, sheet_name='Pagos', index=False)
+    output.seek(0)
+
+    stamp = timezone.now().strftime('%Y%m%d_%H%M')
+    response = HttpResponse(
+        output.getvalue(),
+        content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    )
+    response['Content-Disposition'] = f'attachment; filename="pagos_{stamp}.xlsx"'
+    return response
+
 # CRUD Clientes
 @login_required
 def nuevo_cliente(request):
-    if not _usuario_admin_operativo(request.user):
+    if not _usuario_puede_registrar_cliente_credito(request.user):
         return _forbidden_operacion(request)
     if request.method == 'POST':
         form = ClienteForm(request.POST, request.FILES)
         if form.is_valid():
             cliente = form.save()
             messages.success(request, f'Cliente {cliente.nombre_completo} creado exitosamente')
+            if _rol_usuario(request.user) == ROLE_COBRADOR and _usuario_cobrador_activo(request.user):
+                return redirect(f"{reverse('nuevo_credito')}?cliente_id={cliente.id}")
             return redirect('detalle_cliente', cliente_id=cliente.id)  # Redirigir al detalle para ver los documentos
         else:
             # Mostrar errores de validación
@@ -638,11 +1068,16 @@ def reactivar_cliente(request, cliente_id):
 # CRUD Créditos
 @login_required
 def nuevo_credito(request):
-    if not _usuario_admin_operativo(request.user):
+    es_admin = _usuario_admin_operativo(request.user)
+    cobrador_usuario = _usuario_cobrador_activo(request.user)
+    if not es_admin and not cobrador_usuario:
         return _forbidden_operacion(request)
     cliente_prellenado = None
     if request.method == 'POST':
         form = CreditoForm(request.POST)
+        if cobrador_usuario and not es_admin:
+            form.fields['cobrador'].queryset = Cobrador.objects.filter(id=cobrador_usuario.id)
+            form.fields['cobrador'].initial = cobrador_usuario.id
         if form.is_valid():
             # Obtener el cliente del cleaned_data
             cliente = form.cleaned_data.get('cliente')
@@ -655,6 +1090,8 @@ def nuevo_credito(request):
                 return render(request, 'nuevo_credito.html', {'form': form, 'cliente_prellenado': cliente})
             # Crear el crédito pero no guardar aún
             credito = form.save(commit=False)
+            if cobrador_usuario and not es_admin:
+                credito.cobrador = cobrador_usuario
             credito.cliente = cliente  # Asegurar que el cliente esté asignado
             credito.save()  # Ahora sí guardar
             
@@ -688,6 +1125,9 @@ def nuevo_credito(request):
                 form = CreditoForm()
         else:
             form = CreditoForm()
+        if cobrador_usuario and not es_admin:
+            form.fields['cobrador'].queryset = Cobrador.objects.filter(id=cobrador_usuario.id)
+            form.fields['cobrador'].initial = cobrador_usuario.id
     return render(request, 'nuevo_credito.html', {
         'form': form,
         'cliente_prellenado': cliente_prellenado,
@@ -695,7 +1135,7 @@ def nuevo_credito(request):
 
 @login_required
 def editar_credito(request, credito_id):
-    if not _usuario_admin_operativo(request.user):
+    if not _usuario_es_gerente(request.user):
         return _forbidden_operacion(request)
     credito = get_object_or_404(Credito, id=credito_id)
     if request.method == 'POST':
@@ -883,7 +1323,7 @@ def _cliente_y_codeudor_tienen_habeas_data(cliente):
 @login_required
 def aprobar_credito(request, credito_id):
     """Aprobación de crédito vía POST."""
-    if not _usuario_admin_operativo(request.user):
+    if not _usuario_puede_aprobar_credito(request.user):
         return _forbidden_operacion(request)
     if request.method != 'POST':
         messages.error(request, 'Método no permitido para aprobar crédito.')
@@ -917,7 +1357,7 @@ def aprobar_credito(request, credito_id):
 
 @login_required
 def rechazar_credito(request, credito_id):
-    if not _usuario_admin_operativo(request.user):
+    if not _usuario_puede_aprobar_credito(request.user):
         return _forbidden_operacion(request)
     if request.method != 'POST':
         messages.error(request, 'Método no permitido para rechazar crédito.')
@@ -948,7 +1388,7 @@ def rechazar_credito(request, credito_id):
 
 @login_required
 def desembolsar_credito(request, credito_id):
-    if not _usuario_admin_operativo(request.user):
+    if not _usuario_puede_aprobar_credito(request.user):
         return _forbidden_operacion(request)
     if request.method != 'POST':
         messages.error(request, 'Método no permitido para desembolsar crédito.')
@@ -1101,6 +1541,11 @@ def solicitar_habeas_data(request):
         return JsonResponse({'success': False, 'message': 'El cliente ya tiene autorización Habeas Data firmada.'}, status=400)
     if tipo == 'codeudor' and obj.tiene_habeas_data_firmado():
         return JsonResponse({'success': False, 'message': 'El codeudor ya tiene autorización Habeas Data firmada.'}, status=400)
+    if tipo == 'codeudor' and not (getattr(obj, 'email', '') or '').strip():
+        return JsonResponse({
+            'success': False,
+            'message': 'El codeudor no tiene correo registrado. Actualice el correo para enviar y firmar Habeas Data.'
+        }, status=400)
     otp_plain, email_enviado, celular, email_destino = solicitar_otp_habeas_data(tipo, objeto_id)
     if not otp_plain:
         return JsonResponse({'success': False, 'message': 'Error al generar código'}, status=500)
@@ -1197,6 +1642,18 @@ def solicitar_firma_pagare(request):
         credito_id = int(_get_json_or_post(request, 'credito_id') or _get_json_or_post(request, 'id') or 0)
     except (TypeError, ValueError):
         return JsonResponse({'success': False, 'message': 'ID de crédito inválido'}, status=400)
+    credito = Credito.objects.filter(id=credito_id).select_related('cliente').first()
+    if not credito:
+        return JsonResponse({'success': False, 'message': 'Crédito no encontrado.'}, status=404)
+    try:
+        codeudor = credito.cliente.codeudor
+    except Exception:
+        codeudor = None
+    if codeudor and not (getattr(codeudor, 'email', '') or '').strip():
+        return JsonResponse({
+            'success': False,
+            'message': 'El codeudor no tiene correo registrado. Actualice el correo para enviar OTP y firmar pagaré.'
+        }, status=400)
     result = solicitar_otp_pagare(credito_id)
     if not result.get('success'):
         return JsonResponse({'success': False, 'message': result.get('message', 'Error')}, status=400)
@@ -1562,7 +2019,7 @@ def confirmacion_pago(request, pago_id):
     try:
         # Intentar usar cronograma si existe
         if hasattr(credito, 'cronograma') and credito.cronograma.exists():
-            cuotas_pagadas = credito.cronograma.filter(estado='PAGADO').count()
+            cuotas_pagadas = credito.cronograma.filter(estado__in=['PAGADO', 'PAGADA']).count()
         else:
             # Calcular basado en pagos y valor de cuota
             total_pagado = credito.total_pagado()
@@ -1633,7 +2090,7 @@ def confirmacion_pago(request, pago_id):
 @login_required
 def buscar_cliente_credito(request):
     """Vista AJAX para buscar cliente por cédula en el formulario de crédito"""
-    if not _usuario_admin_operativo(request.user):
+    if not _usuario_puede_registrar_cliente_credito(request.user):
         return JsonResponse({'success': False, 'error': 'No tiene permisos para esta operación.'}, status=403)
     cedula = request.GET.get('cedula', '').strip()
     
@@ -2297,7 +2754,7 @@ def buscar_creditos_cliente(request):
             else:
                 numero_cuota_sugerida = 1
                 monto_sugerido = credito.valor_cuota if credito.valor_cuota else credito.saldo_pendiente()
-            cuotas_pagadas = credito.cronograma.filter(estado='PAGADO').count() if credito.cronograma.exists() else 0
+            cuotas_pagadas = credito.cronograma.filter(estado__in=['PAGADO', 'PAGADA']).count() if credito.cronograma.exists() else 0
             creditos_data.append({
                 'id': credito.id,
                 'monto_total': float(credito.monto_total),
@@ -3028,10 +3485,13 @@ def lista_usuarios(request):
     """Lista todos los usuarios del sistema"""
     if not _usuario_admin_operativo(request.user):
         return _forbidden_operacion(request)
-    from django.contrib.auth.models import User
     from django.core.paginator import Paginator
     
     usuarios = User.objects.all().order_by('-date_joined')
+    roles_por_usuario = {u.id: _rol_usuario(u) for u in usuarios}
+    cobradores_por_usuario = {
+        c.usuario_id: c.nombre_completo for c in Cobrador.objects.filter(usuario__isnull=False)
+    }
     
     # Paginación configurable
     per_page_str = request.GET.get('per_page', '10').strip()
@@ -3039,9 +3499,18 @@ def lista_usuarios(request):
     paginator = Paginator(usuarios, per_page)
     page_number = request.GET.get('page')
     usuarios_paginados = paginator.get_page(page_number)
+    usuarios_rows = [
+        {
+            'usuario': u,
+            'rol': roles_por_usuario.get(u.id, ROLE_OPERADOR),
+            'cobrador': cobradores_por_usuario.get(u.id, ''),
+        }
+        for u in usuarios_paginados
+    ]
     
     context = {
         'usuarios': usuarios_paginados,
+        'usuarios_rows': usuarios_rows,
         'total_usuarios': usuarios.count(),
         'per_page': per_page,
     }
@@ -3053,19 +3522,24 @@ def nuevo_usuario(request):
     """Crear nuevo usuario"""
     if not _usuario_admin_operativo(request.user):
         return _forbidden_operacion(request)
-    from django.contrib.auth.models import User
     from django.contrib.auth.forms import UserCreationForm
     from django import forms
-    
+
     class UsuarioForm(UserCreationForm):
         email = forms.EmailField(required=True, label='Email')
         first_name = forms.CharField(max_length=30, required=True, label='Nombre')
         last_name = forms.CharField(max_length=30, required=True, label='Apellido')
-        is_staff = forms.BooleanField(required=False, label='Es administrador')
+        rol = forms.ChoiceField(choices=ROLES_FORM, required=True, label='Rol del usuario')
+        cobrador = forms.ModelChoiceField(
+            queryset=Cobrador.objects.filter(activo=True).order_by('nombres', 'apellidos'),
+            required=False,
+            label='Vincular a cobrador existente',
+            empty_label='-- Sin vincular --'
+        )
         
         class Meta:
             model = User
-            fields = ('username', 'email', 'first_name', 'last_name', 'password1', 'password2', 'is_staff')
+            fields = ('username', 'email', 'first_name', 'last_name', 'password1', 'password2', 'rol', 'cobrador')
             labels = {
                 'username': 'Nombre de usuario',
             }
@@ -3085,20 +3559,47 @@ def nuevo_usuario(request):
             
             # Agregar clases CSS
             for field_name, field in self.fields.items():
-                if field_name != 'is_staff':
+                if field_name not in ('rol', 'cobrador'):
                     field.widget.attrs.update({
                         'class': 'form-control',
                         'placeholder': field.label
                     })
                 else:
-                    field.widget.attrs.update({'class': 'form-check-input'})
+                    field.widget.attrs.update({'class': 'form-select'})
+            # Estandar visual de captura
+            self.fields['first_name'].widget.attrs.update({'style': 'text-transform: uppercase;'})
+            self.fields['last_name'].widget.attrs.update({'style': 'text-transform: uppercase;'})
+            self.fields['email'].widget.attrs.update({'style': 'text-transform: lowercase;'})
+
+        def clean(self):
+            cleaned = super().clean()
+            if cleaned.get('first_name'):
+                cleaned['first_name'] = str(cleaned['first_name']).strip().upper()
+            if cleaned.get('last_name'):
+                cleaned['last_name'] = str(cleaned['last_name']).strip().upper()
+            if cleaned.get('email'):
+                cleaned['email'] = str(cleaned['email']).strip().lower()
+            rol = cleaned.get('rol')
+            cobrador = cleaned.get('cobrador')
+            if rol == ROLE_COBRADOR and not cobrador:
+                self.add_error('cobrador', 'Para rol cobrador debe seleccionar un cobrador existente.')
+            if rol != ROLE_COBRADOR and cobrador:
+                self.add_error('cobrador', 'Solo puede vincular cobrador cuando el rol es cobrador.')
+            if cobrador and cobrador.usuario_id:
+                self.add_error('cobrador', f'El cobrador {cobrador.nombre_completo} ya está vinculado a otro usuario.')
+            return cleaned
     
     if request.method == 'POST':
         form = UsuarioForm(request.POST)
         if form.is_valid():
             usuario = form.save()
-            usuario.is_superuser = form.cleaned_data['is_staff']
+            rol = form.cleaned_data['rol']
+            cobrador = form.cleaned_data.get('cobrador')
+            _asignar_rol_usuario(usuario, rol)
             usuario.save()
+            if cobrador:
+                cobrador.usuario = usuario
+                cobrador.save(update_fields=['usuario'])
             messages.success(request, f'Usuario "{usuario.username}" creado exitosamente')
             return redirect('lista_usuarios')
     else:
@@ -3111,42 +3612,89 @@ def editar_usuario(request, user_id):
     """Editar usuario existente"""
     if not _usuario_admin_operativo(request.user):
         return _forbidden_operacion(request)
-    from django.contrib.auth.models import User
     from django import forms
     
     usuario = get_object_or_404(User, id=user_id)
-    
     class EditarUsuarioForm(forms.ModelForm):
+        rol = forms.ChoiceField(
+            choices=ROLES_FORM,
+            required=True,
+            label='Rol del usuario'
+        )
+        cobrador = forms.ModelChoiceField(
+            queryset=Cobrador.objects.filter(activo=True).order_by('nombres', 'apellidos'),
+            required=False,
+            label='Vincular a cobrador existente',
+            empty_label='-- Sin vincular --'
+        )
+
         class Meta:
             model = User
-            fields = ['username', 'email', 'first_name', 'last_name', 'is_active', 'is_staff']
+            fields = ['username', 'email', 'first_name', 'last_name', 'is_active']
             labels = {
                 'username': 'Nombre de usuario',
                 'email': 'Email',
                 'first_name': 'Nombre',
                 'last_name': 'Apellido', 
                 'is_active': 'Usuario activo',
-                'is_staff': 'Es administrador',
             }
         
         def __init__(self, *args, **kwargs):
             super().__init__(*args, **kwargs)
+            self.fields['rol'].initial = _rol_usuario(self.instance)
+            self.fields['cobrador'].initial = Cobrador.objects.filter(usuario=self.instance).first()
             # Agregar clases CSS
             for field_name, field in self.fields.items():
-                if field_name not in ['is_active', 'is_staff']:
+                if field_name not in ['is_active', 'rol', 'cobrador']:
                     field.widget.attrs.update({
                         'class': 'form-control',
                         'placeholder': field.label
                     })
+                elif field_name in ['rol', 'cobrador']:
+                    field.widget.attrs.update({'class': 'form-select'})
                 else:
                     field.widget.attrs.update({'class': 'form-check-input'})
+            # Estandar visual de captura
+            self.fields['first_name'].widget.attrs.update({'style': 'text-transform: uppercase;'})
+            self.fields['last_name'].widget.attrs.update({'style': 'text-transform: uppercase;'})
+            self.fields['email'].widget.attrs.update({'style': 'text-transform: lowercase;'})
+
+        def clean(self):
+            cleaned = super().clean()
+            if cleaned.get('first_name'):
+                cleaned['first_name'] = str(cleaned['first_name']).strip().upper()
+            if cleaned.get('last_name'):
+                cleaned['last_name'] = str(cleaned['last_name']).strip().upper()
+            if cleaned.get('email'):
+                cleaned['email'] = str(cleaned['email']).strip().lower()
+            rol = cleaned.get('rol')
+            cobrador = cleaned.get('cobrador')
+            if rol == ROLE_COBRADOR and not cobrador:
+                self.add_error('cobrador', 'Para rol cobrador debe seleccionar un cobrador existente.')
+            if rol != ROLE_COBRADOR and cobrador:
+                self.add_error('cobrador', 'Solo puede vincular cobrador cuando el rol es cobrador.')
+            if cobrador and cobrador.usuario_id and cobrador.usuario_id != self.instance.id:
+                self.add_error('cobrador', f'El cobrador {cobrador.nombre_completo} ya está vinculado a otro usuario.')
+            return cleaned
     
     if request.method == 'POST':
         form = EditarUsuarioForm(request.POST, instance=usuario)
         if form.is_valid():
             usuario = form.save()
-            usuario.is_superuser = form.cleaned_data['is_staff']
+            rol = form.cleaned_data['rol']
+            cobrador_seleccionado = form.cleaned_data.get('cobrador')
+            _asignar_rol_usuario(usuario, rol)
             usuario.save()
+
+            # Desvincular cobrador previo (si existe y cambió)
+            Cobrador.objects.filter(usuario=usuario).exclude(
+                id=cobrador_seleccionado.id if cobrador_seleccionado else None
+            ).update(usuario=None)
+
+            if cobrador_seleccionado:
+                cobrador_seleccionado.usuario = usuario
+                cobrador_seleccionado.save(update_fields=['usuario'])
+
             messages.success(request, f'Usuario "{usuario.username}" actualizado exitosamente')
             return redirect('lista_usuarios')
     else:
@@ -3591,13 +4139,58 @@ def agenda_cobrador(request, cobrador_id=None):
     else:
         fecha = date.today()
     
-    # Obtener tareas del cobrador para la fecha
+    # Saneo preventivo: cancelar tareas abiertas cuya cuota ya está pagada.
+    cuotas_pagadas_estado = ['PAGADA', 'PAGADO']
+    tareas_huerfanas = TareaCobro.objects.filter(
+        cobrador=cobrador,
+        fecha_asignacion=fecha,
+        estado__in=['PENDIENTE', 'EN_PROCESO', 'NO_ENCONTRADO', 'NO_ESTABA', 'NO_PUDO_PAGAR', 'REPROGRAMADO'],
+        cuota__estado__in=cuotas_pagadas_estado
+    ).select_related('cuota')
+    cuotas_huerfanas_ids = set(tareas_huerfanas.values_list('cuota_id', flat=True))
+    if cuotas_huerfanas_ids:
+        for cuota in CronogramaPago.objects.filter(id__in=cuotas_huerfanas_ids):
+            _cancelar_tareas_abiertas_de_cuota(cuota)
+
+    # Obtener tareas del cobrador para la fecha (sin canceladas)
     tareas = TareaCobro.objects.filter(
         cobrador=cobrador,
         fecha_asignacion=fecha
+    ).exclude(
+        estado='CANCELADO'
     ).select_related(
         'cuota__credito__cliente'
     ).order_by('orden_visita', 'prioridad')
+
+    # Red de seguridad operativa:
+    # Si hoy no hay tareas para el cobrador, intentar generar automáticamente una vez.
+    # La generación usa deduplicación por cuota/fecha, evitando tareas duplicadas.
+    if fecha == date.today() and not tareas.exists():
+        tiene_cuotas_hoy = CronogramaPago.objects.filter(
+            credito__cobrador=cobrador,
+            estado__in=['PENDIENTE', 'PARCIAL'],
+            credito__estado__in=['DESEMBOLSADO', 'VENCIDO'],
+            fecha_vencimiento=fecha
+        ).exists()
+        tiene_reprogramadas_hoy = TareaCobro.objects.filter(
+            cobrador=cobrador,
+            fecha_reprogramacion=fecha
+        ).exists()
+        if tiene_cuotas_hoy or tiene_reprogramadas_hoy:
+            TareaCobro.generar_tareas_diarias(fecha, verbose=False)
+            tareas = TareaCobro.objects.filter(
+                cobrador=cobrador,
+                fecha_asignacion=fecha
+            ).exclude(
+                estado='CANCELADO'
+            ).select_related(
+                'cuota__credito__cliente'
+            ).order_by('orden_visita', 'prioridad')
+            if tareas.exists():
+                messages.info(
+                    request,
+                    'Se generaron automáticamente las tareas del día para evitar omisiones operativas.'
+                )
     
     # Estadísticas del día
     total_tareas = tareas.count()
@@ -3637,13 +4230,50 @@ def agenda_cobrador(request, cobrador_id=None):
     fecha_siguiente = (fecha + timedelta(days=1)).strftime('%Y-%m-%d')
     es_hoy = (fecha == date.today())
     
+    # Agrupar visualmente por cliente para evitar doble gestión (parcial + cuota del día).
+    grupos = []
+    tareas_por_cliente = {}
+    for tarea in tareas:
+        cliente_id = tarea.cuota.credito.cliente_id
+        tareas_por_cliente.setdefault(cliente_id, []).append(tarea)
+
+    for _, tareas_cliente in tareas_por_cliente.items():
+        tareas_cliente.sort(key=lambda t: (t.cuota.fecha_vencimiento, t.cuota.numero_cuota))
+        principal = tareas_cliente[0]
+        total_cliente = sum((t.monto_a_cobrar for t in tareas_cliente if t.estado != 'COBRADO'), Decimal('0'))
+        cuotas_pendientes = [t.cuota.numero_cuota for t in tareas_cliente if t.estado != 'COBRADO']
+        if not cuotas_pendientes:
+            cuotas_pendientes = [t.cuota.numero_cuota for t in tareas_cliente]
+        estado_grupo = 'COBRADO' if all(t.estado == 'COBRADO' for t in tareas_cliente) else 'PENDIENTE'
+        color_estado = 'success' if estado_grupo == 'COBRADO' else 'secondary'
+        prioridad_grupo = 'ALTA' if any(t.prioridad == 'ALTA' for t in tareas_cliente) else ('MEDIA' if any(t.prioridad == 'MEDIA' for t in tareas_cliente) else 'BAJA')
+
+        grupos.append({
+            'id': principal.id,
+            'task_ids': [t.id for t in tareas_cliente],
+            'cliente_nombre': principal.cuota.credito.cliente.nombre_completo,
+            'cliente_celular': principal.cuota.credito.cliente.celular,
+            'cliente_direccion': principal.cuota.credito.cliente.direccion,
+            'monto_a_cobrar': total_cliente if total_cliente > 0 else principal.monto_a_cobrar,
+            'cuotas_resumen': ', '.join([str(n) for n in cuotas_pendientes]),
+            'cuota_referencia': cuotas_pendientes[0] if cuotas_pendientes else principal.cuota.numero_cuota,
+            'cuotas_count': len(cuotas_pendientes),
+            'estado': estado_grupo,
+            'estado_display': 'Cobrado' if estado_grupo == 'COBRADO' else 'Pendiente',
+            'color_estado': color_estado,
+            'prioridad': prioridad_grupo,
+            'intentos_cobro': sum((t.intentos_cobro for t in tareas_cliente)),
+            'observaciones': principal.observaciones,
+            'puede_cobrar': any(t.estado != 'COBRADO' for t in tareas_cliente),
+        })
+
     context = {
         'cobrador': cobrador,
         'fecha': fecha,
         'fecha_anterior': fecha_anterior,
         'fecha_siguiente': fecha_siguiente,
         'es_hoy': es_hoy,
-        'tareas': tareas_list,
+        'tareas': grupos,
         'total_tareas': total_tareas,
         'tareas_completadas': tareas_completadas,
         'monto_total_cobrar': monto_total_cobrar,
@@ -3731,69 +4361,86 @@ def procesar_cobro_completo(request, tarea_id):
         
         from decimal import Decimal
         
-        # Validar contra la cuota de la tarea (no contra todo el crédito)
-        saldo_cuota = tarea.cuota.saldo_pendiente()
-        if monto_decimal > saldo_cuota:
+        # Cobro agrupado por cliente/día: aplicar primero a cuotas más antiguas.
+        tareas_cliente = TareaCobro.objects.filter(
+            cobrador=tarea.cobrador,
+            fecha_asignacion=tarea.fecha_asignacion,
+            cuota__credito__cliente=tarea.cuota.credito.cliente
+        ).exclude(estado='COBRADO').select_related('cuota', 'cuota__credito').order_by(
+            'cuota__fecha_vencimiento', 'cuota__numero_cuota'
+        )
+        saldo_total_cliente = sum((t.cuota.saldo_pendiente() for t in tareas_cliente), Decimal('0'))
+        if monto_decimal > saldo_total_cliente:
             return JsonResponse({
                 'success': False,
-                'error': f'El monto (${monto_decimal:,.0f}) supera el saldo pendiente de la cuota (${saldo_cuota:,.0f}).'
+                'error': f'El monto (${monto_decimal:,.0f}) supera el saldo pendiente total del cliente (${saldo_total_cliente:,.0f}).'
             })
         
-        # Registrar pago de la gestión de campo
-        pago = Pago.objects.create(
-            credito=tarea.credito,
-            cuota=tarea.cuota,
-            monto=monto_decimal,  # Usar directamente el Decimal ya validado
-            numero_cuota=tarea.cuota.numero_cuota,
-            observaciones=f"📱 Cobro por {tarea.cobrador.nombre_completo}\n{observaciones}".strip()
-        )
+        pagos_creados = []
+        restante = monto_decimal
+        fecha_manana = timezone.now().date() + timedelta(days=1)
+        for t in tareas_cliente:
+            if restante <= 0:
+                break
+            saldo_cuota = t.cuota.saldo_pendiente()
+            if saldo_cuota <= 0:
+                continue
+            aplicado = min(restante, saldo_cuota)
+
+            pago = Pago.objects.create(
+                credito=t.cuota.credito,
+                cuota=t.cuota,
+                monto=aplicado,
+                numero_cuota=t.cuota.numero_cuota,
+                observaciones=f"📱 Cobro agrupado por {t.cobrador.nombre_completo}\n{observaciones}".strip()
+            )
+            pagos_creados.append(pago)
+
+            t.cuota.monto_pagado += aplicado
+            if t.cuota.monto_pagado >= t.cuota.monto_cuota:
+                t.cuota.monto_pagado = t.cuota.monto_cuota
+                t.cuota.estado = 'PAGADA'
+                t.cuota.fecha_pago = timezone.now().date()
+                t.estado = 'COBRADO'
+                t.fecha_reprogramacion = None
+            else:
+                t.cuota.estado = 'PARCIAL'
+                t.estado = 'REPROGRAMADO'
+                t.fecha_reprogramacion = fecha_manana
+
+            t.cuota.save()
+
+            t.fecha_visita = timezone.now()
+            t.monto_cobrado = aplicado
+            t.observaciones = observaciones
+            if latitud:
+                t.latitud = float(latitud)
+            if longitud:
+                t.longitud = float(longitud)
+            t.usuario_ultima_accion = request.user
+            t.save()
+
+            TareaCobroLog.objects.create(
+                tarea=t,
+                usuario=request.user,
+                accion='COBRADO' if t.estado == 'COBRADO' else 'REPROGRAMADO',
+                observaciones=observaciones,
+                monto_registrado=aplicado,
+            )
+
+            credito_tmp = t.cuota.credito
+            if credito_tmp.esta_al_dia():
+                credito_tmp.estado = 'PAGADO'
+                credito_tmp.save()
+
+            restante -= aplicado
+
+        if not pagos_creados:
+            return JsonResponse({'success': False, 'error': 'No se pudo aplicar el pago a cuotas pendientes del cliente.'})
+        pago = pagos_creados[-1]
+        
+        # Enviar comprobante por correo (del último pago aplicado) si hay email
         credito = pago.credito
-        
-        # 🎯 ACTUALIZAR ESTADO DEL CRÉDITO - MISMA LÓGICA QUE nuevo_pago
-        if credito.esta_al_dia():
-            credito.estado = 'PAGADO'
-            credito.save()
-        
-        # Actualizar tarea:
-        # - Si la cuota se cubrió totalmente => COBRADO
-        # - Si quedó saldo => REPROGRAMADO automático para mañana
-        es_parcial = tarea.cuota.estado == 'PARCIAL'
-        tarea.estado = 'REPROGRAMADO' if es_parcial else 'COBRADO'
-        tarea.fecha_visita = timezone.now()
-        tarea.monto_cobrado = monto_decimal  # Usar directamente el Decimal ya validado
-        tarea.observaciones = observaciones
-        if es_parcial:
-            tarea.fecha_reprogramacion = (timezone.now().date() + timedelta(days=1))
-            nota_parcial = f'Pago parcial de ${monto_decimal:,.0f}. Reprogramado automáticamente para {tarea.fecha_reprogramacion.strftime("%d/%m/%Y")}.'
-            tarea.observaciones = f"{(observaciones or '').strip()} {nota_parcial}".strip()
-        else:
-            tarea.fecha_reprogramacion = None
-        if latitud:
-            tarea.latitud = float(latitud)
-        if longitud:
-            tarea.longitud = float(longitud)
-        tarea.usuario_ultima_accion = request.user
-        tarea.save()
-        
-        # Auditoría: log de la acción
-        TareaCobroLog.objects.create(
-            tarea=tarea,
-            usuario=request.user,
-            accion='REPROGRAMADO' if es_parcial else 'COBRADO',
-            observaciones=observaciones,
-            monto_registrado=monto_decimal,
-        )
-        
-        # Actualizar cuota
-        tarea.cuota.monto_pagado += monto_decimal  # Usar directamente el Decimal ya validado
-        if tarea.cuota.monto_pagado >= tarea.cuota.monto_cuota:
-            tarea.cuota.estado = 'PAGADA'
-            tarea.cuota.fecha_pago = timezone.now().date()
-        else:
-            tarea.cuota.estado = 'PARCIAL'
-        tarea.cuota.save()
-        
-        # Enviar comprobante por correo si el cliente tiene email (misma lógica que nuevo_pago)
         cliente = credito.cliente
         email_cliente = (cliente.email or '').strip()
         email_enviado = False
@@ -3842,17 +4489,13 @@ def procesar_cobro_completo(request, tarea_id):
         # 🎯 REDIRIGIR AL MISMO FLUJO QUE nuevo_pago
         return JsonResponse({
             'success': True,
-            'mensaje': (
-                f'Pago parcial registrado. Tarea reprogramada automáticamente para {tarea.fecha_reprogramacion.strftime("%d/%m/%Y")}.'
-                if es_parcial else
-                'Pago registrado exitosamente'
-            ),
+            'mensaje': f'Cobro aplicado correctamente. Se registraron {len(pagos_creados)} pago(s) para el cliente.',
             'pago_id': pago.id,
             'redirect_url': f'/confirmacion-pago/{pago.id}/',
             'email_enviado': email_enviado,
             'tiene_email': bool(email_cliente),
-            'es_parcial': es_parcial,
-            'fecha_reprogramacion': tarea.fecha_reprogramacion.strftime('%Y-%m-%d') if tarea.fecha_reprogramacion else None,
+            'es_parcial': any(t.estado == 'REPROGRAMADO' for t in tareas_cliente),
+            'fecha_reprogramacion': fecha_manana.strftime('%Y-%m-%d') if any(t.estado == 'REPROGRAMADO' for t in tareas_cliente) else None,
         })
         
     except Exception as e:
@@ -4097,6 +4740,25 @@ def panel_supervisor(request):
     # Tareas por estado (todas, sin filtrar para mostrar totales por estado)
     todas_tareas = TareaCobro.objects.filter(fecha_asignacion=fecha)
     estadisticas_estado = todas_tareas.values('estado').annotate(cantidad=Count('id'))
+    # Lista detallada dinámica (se recalcula en cada carga y refleja pagos/cambios del día).
+    tareas_detalle_qs = todas_tareas.exclude(estado='CANCELADO').select_related(
+        'cobrador', 'cuota__credito__cliente'
+    ).order_by('cobrador__nombres', 'cobrador__apellidos', 'orden_visita', 'id')
+    if filtro_estado and filtro_estado in estados_validos:
+        tareas_detalle_qs = tareas_detalle_qs.filter(estado=filtro_estado)
+    tareas_detalle = []
+    for t in tareas_detalle_qs:
+        tareas_detalle.append({
+            'cobrador': t.cobrador.nombre_completo,
+            'cliente': t.cuota.credito.cliente.nombre_completo,
+            'cuota_numero': t.cuota.numero_cuota,
+            'fecha_vencimiento': t.cuota.fecha_vencimiento,
+            'estado_tarea': t.estado,
+            'estado_tarea_display': t.get_estado_display(),
+            'estado_cuota': t.cuota.estado,
+            'estado_cuota_display': t.cuota.get_estado_display(),
+            'monto_pendiente': t.cuota.saldo_pendiente(),
+        })
     
     # Fechas anterior/siguiente para navegación (Django template no tiene add days)
     fecha_anterior = (fecha - timedelta(days=1)).strftime('%Y-%m-%d')
@@ -4121,6 +4783,7 @@ def panel_supervisor(request):
     
     context = {
         'fecha': fecha,
+        'today': hoy,
         'filtro_estado': filtro_estado,
         'estados_tarea': TareaCobro.ESTADOS,
         'fecha_anterior': fecha_anterior,
@@ -4131,6 +4794,7 @@ def panel_supervisor(request):
         'total_general_monto': total_general_monto,
         'porcentaje_general': porcentaje_general,
         'estadisticas_estado': {item['estado']: item['cantidad'] for item in estadisticas_estado},
+        'tareas_detalle': tareas_detalle,
         'alertas_pendientes_hoy': alertas_pendientes_hoy,
         'alertas_reprogramadas_problema': reprogramadas_problema,
         'alertas_meta_bajo': alertas_meta_bajo,
